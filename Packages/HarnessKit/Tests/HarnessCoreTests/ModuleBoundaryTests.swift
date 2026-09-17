@@ -51,6 +51,20 @@ import HarnessCore
     #expect(PermissionMode(rawValue: "acceptEdit") == nil)
 }
 
+/// Mesmo alarme dos testes acima, agora para o fluxo efêmero. Este arquivo NÃO
+/// importa `ClaudeHarness`: se `SessionEvent` ou `MappedOutput` acabarem lá,
+/// ele deixa de compilar — e um segundo adaptador precisaria importar o
+/// primeiro só para mandar um delta de texto à UI.
+@Test func theEphemeralStreamTypesLiveInHarnessCore() {
+    let output = MappedOutput(
+        events: [.sessionInitialized(model: "m", harnessSessionID: "s"),
+                 .notice(subtype: "status", text: "pensando")],
+        entries: []
+    )
+    #expect(output.events.count == 2)
+    #expect(output.entries.isEmpty)
+}
+
 /// Item 8 do review final: o portão estrutural do próprio plano, agora
 /// automático.
 ///

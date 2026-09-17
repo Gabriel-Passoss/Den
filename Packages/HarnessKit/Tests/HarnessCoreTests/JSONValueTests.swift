@@ -82,3 +82,18 @@ private func roundTrip(_ json: String) throws -> String {
     #expect(JSONValue.string("oi").stringValue == "oi")
     #expect(JSONValue.int(1).stringValue == nil)
 }
+
+@Test func theNumericAccessorsBridgeTheIntDoubleAmbiguity() {
+    // Um consumidor JSON cuja representação numérica não distingue inteiro de
+    // ponto flutuante escreve `0` onde o esquema diz "número". Ler um custo
+    // como `.int(0)` e devolver `nil` de `doubleValue` perderia o valor.
+    #expect(JSONValue.int(7).intValue == 7)
+    #expect(JSONValue.int(7).doubleValue == 7.0)
+    #expect(JSONValue.double(7.0).intValue == 7)
+    #expect(JSONValue.double(7.5).intValue == nil)
+    #expect(JSONValue.double(0.0227).doubleValue == 0.0227)
+    #expect(JSONValue.bool(true).boolValue == true)
+    #expect(JSONValue.string("7").intValue == nil)
+    #expect(JSONValue.string("true").boolValue == nil)
+    #expect(JSONValue.null.doubleValue == nil)
+}

@@ -51,6 +51,38 @@ public extension JSONValue {
         guard case .array(let a) = self else { return nil }
         return a
     }
+
+    /// O valor como inteiro.
+    ///
+    /// Aceita `.double` com resto fracionário zero pela mesma razão que a doc
+    /// do tipo já explica no sentido inverso: do outro lado do pipe pode haver
+    /// um runtime cuja representação numérica não distingue `1` de `1.0`, e o
+    /// mesmo campo pode chegar de um jeito ou do outro entre versões. Um
+    /// `.double(7.5)` continua devolvendo `nil` — isso é um erro de esquema,
+    /// não uma ambiguidade de grafia.
+    var intValue: Int? {
+        switch self {
+        case .int(let i): return i
+        case .double(let d): return Int(exactly: d)
+        default: return nil
+        }
+    }
+
+    /// O valor como ponto flutuante. Aceita `.int` pelo mesmo motivo acima —
+    /// um custo de zero chega como `0`, não como `0.0`.
+    var doubleValue: Double? {
+        switch self {
+        case .double(let d): return d
+        case .int(let i): return Double(i)
+        default: return nil
+        }
+    }
+
+    /// O valor como booleano. Estrito: a string `"true"` não é um booleano.
+    var boolValue: Bool? {
+        guard case .bool(let b) = self else { return nil }
+        return b
+    }
 }
 
 extension JSONValue: Codable {
