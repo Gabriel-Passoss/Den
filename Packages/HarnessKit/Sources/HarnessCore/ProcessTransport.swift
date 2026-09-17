@@ -359,11 +359,27 @@ public actor ProcessTransport {
     /// pode ser fatiada, e um `control_request` vindo do outro caminho se
     /// enfiaria na fresta: o harness receberia uma única linha NDJSON
     /// corrompida, perdendo as duas mensagens de uma vez.
+    ///
+    /// Saída de emergência: a escrita delegada é bloqueante, e este método é
+    /// membro do ator. Se o harness parar de ler o próprio stdin e o pipe de
+    /// 64 KiB encher, esta chamada segura o job do ator — e `terminate()`,
+    /// que é o último recurso para derrubar o filho, é método deste **mesmo**
+    /// ator e fica na fila atrás dela. Nesse estado não há como alcançar o
+    /// transporte por nenhuma porta. A correção sistêmica (`O_NONBLOCK` mais
+    /// uma fila de escrita) é trabalho da Etapa 5; até lá, isto é uma
+    /// limitação conhecida e não uma garantia.
     public func write(_ line: Data) throws {
         guard standardInput != nil, process?.isRunning == true else { throw TransportError.notRunning }
         try writeSync(line)
     }
 
+    /// Fecha o stdin do harness.
+    ///
+    /// Saída de emergência: isto **não** destrava uma escrita presa. O fecho
+    /// acontece dentro do mesmo mutex em que a escrita acontece — é o que
+    /// garante que o handle nunca seja fechado no meio de uma linha —, então
+    /// uma escrita bloqueada num pipe cheio segura este método junto. "Fecha o
+    /// stdin para o filho desistir" não é um plano de recuperação disponível.
     public func endInput() {
         // Limpar o espelho antes de fechar, não depois: assim um `writeSync`
         // concorrente ou vê o handle ainda aberto, ou vê `nil` — nunca um

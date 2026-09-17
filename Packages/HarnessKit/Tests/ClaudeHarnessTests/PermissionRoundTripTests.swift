@@ -60,6 +60,8 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
             case .conversation(let data):
                 let v = try JSONDecoder().decode(JSONValue.self, from: data)
                 if let d = v["decidiu"]?.stringValue { decided = d }
+            case .unrecognizedControl(let u):
+                Issue.record("quadro inesperado neste harness falso: \(u.raw)")
             }
         }
         return decided
@@ -81,6 +83,8 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
             case .conversation(let data):
                 let v = try JSONDecoder().decode(JSONValue.self, from: data)
                 if let d = v["decidiu"]?.stringValue { decided = d }
+            case .unrecognizedControl(let u):
+                Issue.record("quadro inesperado neste harness falso: \(u.raw)")
             }
         }
         return decided
@@ -108,6 +112,8 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
             case .conversation(let data):
                 let v = try JSONDecoder().decode(JSONValue.self, from: data)
                 if let e = v["eco"] { echoed = e }
+            case .unrecognizedControl(let u):
+                Issue.record("quadro inesperado neste harness falso: \(u.raw)")
             }
         }
         return echoed

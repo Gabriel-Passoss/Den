@@ -31,6 +31,15 @@ while IFS= read -r l; do
 done
 """#
 
+/// Pede permissão para "Write" uma única vez e depois lê o stdin até o EOF —
+/// fica vivo o bastante para o teste responder duas vezes sem que o canal
+/// feche no meio.
+private let askingHarnessForWrite = #"""
+printf '{"type":"control_request","request_id":"ask-dup","request":{"subtype":"can_use_tool","tool_name":"Write","input":{}}}
+'
+cat > /dev/null
+"""#
+
 @Test func conversationLinesReachTheConsumer() async throws {
     let channel = ControlChannel(transport: ProcessTransport())
     let stream = try await channel.start(launch(#"printf '{"type":"assistant"}\n{"type":"result"}\n'"#))
@@ -252,4 +261,197 @@ private actor SingleSignal {
 
     let payload = try await withTimeout(seconds: 3) { try await sendTask.value }
     #expect(payload["ok"] == .bool(true))
+}
+
+/// Item 1 do review final, e o portão real desta correção.
+///
+/// O harness falso manda um `control_request` de subtipo que não conhecemos e
+/// **bloqueia no `read`**, exatamente como o CLI real faz — ele mantém uma
+/// tabela de pendentes e espera. Antes desta correção o quadro era classificado
+/// certo e então descartado: o `read` nunca voltava, o fluxo nunca terminava, e
+/// a sessão congelava sem uma linha de log. Era o sintoma que a spec §4.4 nomeia
+/// e o inverso da §5.4, onde conteúdo desconhecido deve degradar.
+///
+/// Duas afirmações, e as duas importam: o harness **destrava** (a linha
+/// `destravou` só é escrita depois de a resposta chegar) e o consumidor **vê** o
+/// caso novo, com o `raw` preservado para o transcript.
+@Test func anUnknownControlRequestIsRefusedSoTheHarnessUnblocks() async throws {
+    let blockingHarness = #"""
+    printf '{"type":"control_request","request_id":"u-1","request":{"subtype":"coisa_nova","x":1}}\n'
+    IFS= read -r resposta
+    sub=$(printf '%s' "$resposta" | sed -n 's/.*"subtype":"\([^"]*\)".*/\1/p')
+    id=$(printf '%s' "$resposta" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+    printf '{"type":"result","destravou":"%s","para":"%s"}\n' "$sub" "$id"
+    """#
+    let channel = ControlChannel(transport: ProcessTransport())
+    let stream = try await channel.start(launch(blockingHarness))
+
+    // Sem a rede, uma regressão aqui trava a suíte inteira em vez de falhar —
+    // que é precisamente o defeito sob teste, um passo acima.
+    let (seen, unblocked) = try await withTimeout(seconds: 3) {
+        () async throws -> (UnrecognizedControl?, JSONValue?) in
+        var seen: UnrecognizedControl?
+        var unblocked: JSONValue?
+        for try await output in stream {
+            switch output {
+            case .unrecognizedControl(let u): seen = u
+            case .conversation(let data):
+                unblocked = try? JSONDecoder().decode(JSONValue.self, from: data)
+            case .permissionRequest:
+                Issue.record("um subtipo desconhecido não é pedido de permissão")
+            }
+        }
+        return (seen, unblocked)
+    }
+
+    let u = try #require(seen, "o consumidor tem que ver o quadro que recusamos")
+    #expect(u.requestID == "u-1")
+    #expect(u.wasAnswered)
+    #expect(u.automaticReply == ControlChannel.refusalMessage)
+    // Spec §5.4: o quadro original fica inteiro para o transcript.
+    #expect(u.raw["request"]?["subtype"] == .string("coisa_nova"))
+
+    #expect(unblocked?["destravou"] == .string("error"))
+    #expect(unblocked?["para"] == .string("u-1"))
+    await channel.stop()
+}
+
+/// Item 4, do lado do canal: um `can_use_tool` sem `request_id` não pode virar
+/// diálogo. Ele chega como registro, e sem resposta automática — porque não há
+/// id para responder, e fingir que há seria escrever `request_id: ""` no fio.
+@Test func anIDLessPermissionRequestIsLoggedRatherThanOfferedForApproval() async throws {
+    let harness = #"""
+    printf '{"type":"control_request","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}\n'
+    printf '{"type":"result"}\n'
+    """#
+    let channel = ControlChannel(transport: ProcessTransport())
+    let stream = try await channel.start(launch(harness))
+
+    let seen = try await withTimeout(seconds: 3) { () async throws -> UnrecognizedControl? in
+        var seen: UnrecognizedControl?
+        for try await output in stream {
+            switch output {
+            case .unrecognizedControl(let u): seen = u
+            case .permissionRequest:
+                Issue.record("um pedido sem id não é respondível — não pode virar diálogo")
+            case .conversation: break
+            }
+        }
+        return seen
+    }
+    let u = try #require(seen)
+    #expect(u.requestID == nil)
+    #expect(!u.wasAnswered)
+    #expect(u.raw["request"]?["tool_name"] == .string("Bash"))
+}
+
+/// Item 2 do review final. O canal entregava o pedido e o esquecia, então
+/// `respond` escrevia resposta para qualquer string: id obsoleto, id inventado,
+/// id já respondido. O vetor concreto é a resposta dupla — o usuário clica
+/// Permitir e um "negar tudo" em lote dispara logo atrás — chegando à tabela de
+/// pendentes do CLI, cujo comportamento nessa situação nunca observamos.
+@Test func respondingTwiceToTheSameRequestIsRefusedTheSecondTime() async throws {
+    let channel = ControlChannel(transport: ProcessTransport())
+    let stream = try await channel.start(launch(askingHarnessForWrite))
+
+    try await withTimeout(seconds: 3) {
+        for try await output in stream {
+            guard case .permissionRequest(let r) = output else { continue }
+            try await channel.respond(to: r.id, with: .allow(updatedInput: nil))
+            await #expect(throws: ControlChannel.ChannelError.unknownRequest(r.id)) {
+                try await channel.respond(to: r.id, with: .deny(message: "tudo não", interrupt: true))
+            }
+            // O harness falso continua vivo lendo o stdin de propósito — é isso
+            // que mantém `liveness` em `.running` para a segunda resposta. Sair
+            // do laço aqui, e não esperar o fluxo terminar.
+            return
+        }
+        Issue.record("o harness falso nunca pediu permissão")
+    }
+    await channel.stop()
+}
+
+/// E um id que este canal nunca entregou também é recusado — com o canal vivo,
+/// que é o que separa esta guarda da guarda de `liveness`.
+@Test func respondingToAnIDTheChannelNeverDeliveredIsRefused() async throws {
+    let channel = ControlChannel(transport: ProcessTransport())
+    let stream = try await channel.start(launch("cat > /dev/null"))
+    let drain = Task { for try await _ in stream {} }
+    defer { drain.cancel() }
+
+    await #expect(throws: ControlChannel.ChannelError.unknownRequest("inventado")) {
+        try await withTimeout(seconds: 3) {
+            try await channel.respond(to: "inventado", with: .allow(updatedInput: nil))
+        }
+    }
+    await channel.stop()
+}
+
+/// Item 3 do review final — a janela que os comentários juravam não existir.
+///
+/// `liveness` só vira `.closed` quando a **bomba** observa o EOF do stdout. Este
+/// harness falso abre a janela de propósito e a mantém aberta: fecha o próprio
+/// stdin (`exec 0<&-`, o que faz o `write(2)` do lado de cá devolver EPIPE),
+/// anuncia que fechou, e **continua vivo** com o stdout aberto — então a bomba
+/// nunca vê EOF, `markClosed()` nunca roda, e a guarda de `liveness` passa
+/// alegremente. É a mesma situação de um filho que morreu um milissegundo atrás,
+/// só que sem depender de relógio nenhum: a linha `fechei` é a sincronização.
+///
+/// O teste existente (`respondAfterTheHarnessExitsOnItsOwnFailsWithChannelClosed`)
+/// não alcança isto porque drena o fluxo até o fim antes de responder, o que
+/// garante que `markClosed()` já correu.
+private let harnessThatClosesItsStdinAndStaysAlive = #"""
+exec 0<&-
+printf '{"type":"control_request","request_id":"p-1","request":{"subtype":"can_use_tool","tool_name":"Write","input":{}}}\n'
+printf '{"type":"fechei"}\n'
+sleep 30
+"""#
+
+@Test func respondFailsWithChannelClosedWhenTheWriteHitsADeadPipe() async throws {
+    let channel = ControlChannel(transport: ProcessTransport())
+    let stream = try await channel.start(launch(harnessThatClosesItsStdinAndStaysAlive))
+
+    try await withTimeout(seconds: 3) {
+        var requestID: String?
+        for try await output in stream {
+            switch output {
+            case .permissionRequest(let r):
+                requestID = r.id
+            case .conversation(let data):
+                // A prova de que o stdin do filho já está fechado. Só agora a
+                // escrita é garantidamente um EPIPE — e o filho segue vivo, logo
+                // `liveness` segue `.running`.
+                guard String(decoding: data, as: UTF8.self).contains("fechei") else { continue }
+                let id = try #require(requestID)
+                await #expect(throws: ControlChannel.ChannelError.channelClosed) {
+                    try await channel.respond(to: id, with: .allow(updatedInput: nil))
+                }
+                return
+            case .unrecognizedControl:
+                Issue.record("esperava um pedido de permissão bem formado")
+            }
+        }
+        Issue.record("o harness falso nunca anunciou que fechou o stdin")
+    }
+    await channel.stop()
+}
+
+/// O mesmo para `send(_:)`, que tem a mesma guarda e a mesma janela.
+@Test func sendFailsWithChannelClosedWhenTheWriteHitsADeadPipe() async throws {
+    let channel = ControlChannel(transport: ProcessTransport())
+    let stream = try await channel.start(launch(harnessThatClosesItsStdinAndStaysAlive))
+
+    try await withTimeout(seconds: 3) {
+        for try await output in stream {
+            guard case .conversation(let data) = output,
+                  String(decoding: data, as: UTF8.self).contains("fechei")
+            else { continue }
+            await #expect(throws: ControlChannel.ChannelError.channelClosed) {
+                _ = try await channel.send(.interrupt)
+            }
+            return
+        }
+        Issue.record("o harness falso nunca anunciou que fechou o stdin")
+    }
+    await channel.stop()
 }

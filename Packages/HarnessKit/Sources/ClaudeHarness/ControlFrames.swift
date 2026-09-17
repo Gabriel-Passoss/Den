@@ -9,9 +9,25 @@ public enum ControlFrame: Equatable, Sendable {
     case permissionRequest(PermissionRequest)
     /// Resposta a um request que nós enviamos.
     case response(requestID: String, ControlResponseResult)
-    /// Quadro de controle de subtipo que não conhecemos. Spec §5.4: preservar,
-    /// não falhar.
-    case unknownControl(requestID: String, raw: JSONValue)
+    /// Um `control_request` que não sabemos atender **e que trouxe um
+    /// `request_id` respondível**. Spec §5.4: preservar, não falhar — e, por
+    /// cima disso, destravar: do outro lado do fio há um harness parado
+    /// esperando resposta para este id. É `ControlChannel.consume` quem paga
+    /// essa dívida, respondendo `subtype: "error"`.
+    ///
+    /// O id é `String` não-vazia por construção (ver `classify`): é essa
+    /// garantia que torna a resposta automática possível sem checagem em
+    /// tempo de execução.
+    case unansweredControlRequest(requestID: String, raw: JSONValue)
+    /// Quadro de controle que não sabemos atender e ao qual **não há como**
+    /// responder: ou não é um request (um `control_response` que não conseguimos
+    /// ler), ou é um request que chegou sem `request_id`.
+    ///
+    /// Caso distinto de `.unansweredControlRequest` de propósito, e não um
+    /// `requestID: ""` como antes: uma string vazia é exatamente o sentinela
+    /// que fazia uma resposta sair com `request_id: ""` — que o CLI nunca casa
+    /// — em vez de o chamador descobrir que não havia id nenhum.
+    case unknownControl(raw: JSONValue)
 
     public static func classify(_ line: Data) -> ControlFrame {
         guard let value = try? JSONDecoder().decode(JSONValue.self, from: line),
@@ -20,18 +36,30 @@ public enum ControlFrame: Equatable, Sendable {
 
         switch type {
         case "control_request":
-            let id = value["request_id"]?.stringValue ?? ""
+            // Um `request_id` ausente ou vazio não é respondível: qualquer
+            // resposta nossa sairia com `request_id: ""` e a tabela de
+            // pendentes do CLI nunca a casaria. Entregar isso como
+            // `.permissionRequest` abriria um diálogo na UI cuja resposta é
+            // garantidamente descartada — o harness bloqueia para sempre e o
+            // usuário acha que aprovou. Sem id, o quadro só pode ser
+            // registrado.
+            guard let id = value["request_id"]?.stringValue, !id.isEmpty else {
+                return .unknownControl(raw: value)
+            }
             guard let request = value["request"],
                   request["subtype"]?.stringValue == "can_use_tool",
                   let parsed = PermissionRequest(id: id, request: request)
-            else { return .unknownControl(requestID: id, raw: value) }
+            else { return .unansweredControlRequest(requestID: id, raw: value) }
             return .permissionRequest(parsed)
 
         case "control_response":
             // Spec §5.4, mesma regra que control_request: um quadro que não
-            // conseguimos interpretar é preservado, não descartado.
+            // conseguimos interpretar é preservado, não descartado. Mas não é
+            // respondível: uma resposta a uma resposta não existe no
+            // protocolo, e o `request_id` mora justamente dentro do corpo que
+            // está faltando.
             guard let response = value["response"] else {
-                return .unknownControl(requestID: "", raw: value)
+                return .unknownControl(raw: value)
             }
             let id = response["request_id"]?.stringValue ?? ""
             let subtype = response["subtype"]?.stringValue
@@ -54,6 +82,33 @@ public enum ControlFrame: Equatable, Sendable {
         default:
             return .conversation
         }
+    }
+}
+
+/// A recusa que mandamos de volta quando não sabemos atender um
+/// `control_request`.
+///
+/// É o mesmo envelope que o CLI usa para recusar um request *nosso* — ver o
+/// ramo `control_response`/`error` de `ControlFrame.classify` —, aqui na
+/// direção oposta. O protocolo já tem esta forma; não estamos inventando
+/// mensagem nova, só usando a que existe no sentido que ainda não usávamos.
+///
+/// Existe porque o silêncio não é uma opção: o CLI mantém uma tabela de
+/// pendentes e **espera**. Um request que descartamos é uma sessão congelada
+/// sem uma linha de log — exatamente o sintoma que a spec §4.4 nomeia.
+struct ControlErrorResponse: Equatable {
+    let requestID: String
+    let message: String
+
+    func data() throws -> Data {
+        try JSONEncoder().encode(JSONValue.object([
+            "type": .string("control_response"),
+            "response": .object([
+                "subtype": .string("error"),
+                "request_id": .string(requestID),
+                "error": .string(message),
+            ]),
+        ]))
     }
 }
 

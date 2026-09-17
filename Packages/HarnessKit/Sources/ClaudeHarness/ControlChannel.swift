@@ -7,6 +7,46 @@ public enum ChannelOutput: Sendable {
     case conversation(Data)
     /// O harness pediu permissão. Responda com `respond(to:with:)`.
     case permissionRequest(PermissionRequest)
+    /// Chegou um quadro de controle que não sabemos atender. O canal já
+    /// resolveu o lado do protocolo (ver `UnrecognizedControl`); este caso
+    /// existe para que o lado humano também seja resolvido.
+    case unrecognizedControl(UnrecognizedControl)
+}
+
+/// Um quadro de controle que o canal não soube interpretar, mais o que ele
+/// fez a respeito.
+///
+/// Este tipo existe porque a camada era honesta sobre tudo que reconhece e
+/// silenciosa sobre a única coisa que não reconhece. O consumidor é uma UI
+/// que precisa mostrar **alguma coisa** ao usuário quando uma ferramenta foi
+/// recusada por não termos entendido o pedido — e "alguma coisa" não pode ser
+/// inventada pela UI, senão ela e o harness contam histórias diferentes sobre
+/// a mesma recusa.
+public struct UnrecognizedControl: Equatable, Sendable {
+    /// O `request_id` do quadro, quando havia um respondível. `nil` significa
+    /// que não havia — e portanto que **não há como destravar o harness**.
+    public let requestID: String?
+    /// O quadro inteiro, como veio do fio. Spec §5.4: nada é perdido; o
+    /// transcript guarda o original e um mapper corrigido o reinterpreta depois.
+    public let raw: JSONValue
+    /// A mensagem de erro que respondemos ao harness, ou `nil` se não
+    /// respondemos.
+    ///
+    /// Carregar a mensagem, em vez de só registrá-la no log, é deliberado: é
+    /// literalmente o que o harness recebeu, então é o texto que mantém a UI e
+    /// a sessão contando a mesma história.
+    public let automaticReply: String?
+
+    /// `false` quer dizer que o harness **continua esperando** por este quadro
+    /// — uma sessão travada, não uma sessão degradada. São dois estados de UI
+    /// muito diferentes, e esta é a bandeira que os separa.
+    public var wasAnswered: Bool { automaticReply != nil }
+
+    public init(requestID: String?, raw: JSONValue, automaticReply: String?) {
+        self.requestID = requestID
+        self.raw = raw
+        self.automaticReply = automaticReply
+    }
 }
 
 /// Fala o protocolo de controle por cima de um `ProcessTransport`.
@@ -28,11 +68,27 @@ public actor ControlChannel {
         case channelClosed
         /// O harness respondeu com `subtype: "error"`.
         case requestFailed(String)
+        /// `respond(to:with:)` recebeu um id que este canal não entregou, ou
+        /// que já foi respondido. Sem esta guarda, dois `control_response`
+        /// para o mesmo `request_id` — o usuário clica Permitir e logo em
+        /// seguida um "negar tudo" em lote dispara — chegariam à tabela de
+        /// pendentes do CLI, cujo comportamento nessa situação nunca
+        /// observamos.
+        case unknownRequest(String)
     }
 
     private let transport: ProcessTransport
     private let requestTimeout: Duration
     private var pending: [String: CheckedContinuation<JSONValue, Error>] = [:]
+    /// Os `request_id` de permissão que já entregamos ao consumidor e que
+    /// ainda não foram respondidos.
+    ///
+    /// Sem este conjunto, `respond` escreve uma resposta para qualquer string:
+    /// id obsoleto, id inventado, id já respondido. E a spec §5.6 ("permissão
+    /// pendente no fechamento ... registrada como `.expired`") fica impossível
+    /// de implementar de qualquer outra camada — este ator é o único
+    /// componente que enxerga o conjunto em aberto.
+    private var outstandingPermissions: Set<String> = []
     private var nextRequestNumber = 0
     private var liveness: Liveness = .notStarted
 
@@ -85,14 +141,64 @@ public actor ControlChannel {
         case .conversation:
             return .conversation(line)
         case .permissionRequest(let request):
+            // Antes de entregar, e não depois: `consume` roda isolado neste
+            // ator e retorna antes de a bomba fazer o `yield`, então não existe
+            // instante em que o consumidor enxergue um pedido cujo id `respond`
+            // ainda recusaria.
+            outstandingPermissions.insert(request.id)
             return .permissionRequest(request)
         case .response(let id, let result):
             resolve(id, result)
             return nil
-        case .unknownControl:
-            // Spec §5.4: desconhecido não é erro. Não é conversa e não é nosso;
-            // descartamos sem derrubar a sessão.
-            return nil
+        case .unansweredControlRequest(let id, let raw):
+            return .unrecognizedControl(refuse(id, raw))
+        case .unknownControl(let raw):
+            // Spec §5.4: desconhecido não é erro. Aqui não há id para
+            // responder, então tudo que podemos fazer é não mentir sobre isso:
+            // `automaticReply` nil diz ao consumidor que o harness pode estar
+            // esperando por algo que nunca vai chegar.
+            return .unrecognizedControl(
+                UnrecognizedControl(requestID: nil, raw: raw, automaticReply: nil)
+            )
+        }
+    }
+
+    /// O texto da recusa automática. Uma constante, e não uma string montada
+    /// no ponto de uso, porque ela sai por dois caminhos ao mesmo tempo — pelo
+    /// fio, para o harness, e pelo `ChannelOutput`, para a UI — e os dois
+    /// precisam dizer exatamente a mesma coisa.
+    static let refusalMessage =
+        "DevSpace não reconheceu este control_request e não consegue atendê-lo"
+
+    /// Responde `subtype: "error"` a um request que não sabemos atender, e
+    /// devolve o registro do que aconteceu.
+    ///
+    /// Isto é o oposto de descartar: o CLI manda um `control_request` e
+    /// **espera**. Um subtipo futuro, ou um `can_use_tool` cujo `tool_name` foi
+    /// renomeado depois de um `brew upgrade`, congelaria toda sessão que
+    /// tocasse uma ferramenta com portão — o usuário veria um spinner e nada
+    /// mais. Respondendo erro, a sessão degrada para "aquela ferramenta foi
+    /// recusada" (spec §5.4) e o `raw` fica preservado para o transcript.
+    ///
+    /// A escrita é `writeSync` e acontece dentro da bomba. Vale aqui a mesma
+    /// ressalva de `send(_:)`: é um `write(2)` bloqueante, e um harness que
+    /// parasse de ler o próprio stdin com o pipe cheio travaria a bomba. A
+    /// alternativa — despachar num `Task` — abriria a janela em que a recusa
+    /// chega depois de o canal já ter sido fechado, e trocaria um risco raro
+    /// por um comum.
+    private func refuse(_ requestID: String, _ raw: JSONValue) -> UnrecognizedControl {
+        do {
+            try transport.writeSync(
+                ControlErrorResponse(requestID: requestID, message: Self.refusalMessage).data()
+            )
+            return UnrecognizedControl(
+                requestID: requestID, raw: raw, automaticReply: Self.refusalMessage
+            )
+        } catch {
+            // Não conseguimos escrever — o harness já saiu, ou o stdin já foi
+            // fechado. `automaticReply` nil é a diferença entre "recusamos" e
+            // "nem isso deu".
+            return UnrecognizedControl(requestID: requestID, raw: raw, automaticReply: nil)
         }
     }
 
@@ -128,6 +234,11 @@ public actor ControlChannel {
     private func markClosed() {
         liveness = .closed
         failAllPending(.channelClosed)
+        // Spec §5.6: uma permissão pendente morre com o processo. Quem quiser
+        // registrá-la como `.expired` lê o conjunto antes de o canal fechar —
+        // depois disso ela não é mais respondível, e mantê-la aqui só faria
+        // `respond` escolher entre dois erros igualmente verdadeiros.
+        outstandingPermissions.removeAll()
     }
 
     /// Envia um request de controle e espera a resposta correlacionada.
@@ -186,7 +297,14 @@ public actor ControlChannel {
                 try transport.writeSync(data)
             } catch {
                 pending.removeValue(forKey: id)
-                continuation.resume(throwing: error)
+                // `ChannelError`, e não o erro cru: a guarda de `liveness`
+                // acima não fecha a janela em que o filho já morreu e a bomba
+                // ainda não viu o EOF. Nessa janela `writeSync` devolve um
+                // `NSError`/EPIPE do Foundation, e ele chegaria a um chamador a
+                // quem esta API prometeu `ChannelError.channelClosed`. Um pipe
+                // que não aceita mais bytes é o canal fechado, não importa qual
+                // dos dois lados percebeu primeiro.
+                continuation.resume(throwing: ChannelError.channelClosed)
             }
         }
     }
@@ -215,10 +333,41 @@ public actor ControlChannel {
         case .closed: throw ChannelError.channelClosed
         case .running: break
         }
-        try transport.writeSync(try decision.responseData(requestID: requestID))
+        // O id tem que ser um que *nós* entregamos e que ainda está em aberto.
+        // A verificação vem depois da de `liveness` de propósito: quando o
+        // canal fechou, "o canal fechou" é a explicação mais útil para o
+        // chamador, e o conjunto já foi esvaziado de qualquer forma.
+        guard outstandingPermissions.contains(requestID) else {
+            throw ChannelError.unknownRequest(requestID)
+        }
+        let data = try decision.responseData(requestID: requestID)
+        do {
+            try transport.writeSync(data)
+        } catch {
+            // Mesma janela que `send(_:)` documenta, e pela mesma razão.
+            throw ChannelError.channelClosed
+        }
+        // Só depois de a resposta ter de fato chegado ao fio. Se a escrita
+        // falhou, o harness não foi respondido — e marcar o pedido como
+        // respondido aqui apagaria justamente o que a spec §5.6 quer registrar.
+        outstandingPermissions.remove(requestID)
     }
 
     /// Escreve um turno do usuário no stdin do harness.
+    ///
+    /// Saída de emergência — o pior caso da família. `transport.write(_:)` é
+    /// membro do `ProcessTransport`, e a escrita que ele delega é bloqueante
+    /// (ver o contrato de `ProcessTransport.writeSync(_:)`). Um harness que
+    /// pare de ler o próprio stdin com o pipe de 64 KiB cheio trava esta
+    /// chamada **segurando o job do `ProcessTransport`** — e `terminate()` é
+    /// método desse mesmo ator. Ou seja: aqui não some só o prazo, como em
+    /// `send(_:)`; some a última saída de emergência em que o comentário de
+    /// `send(_:)` se apoia. E um turno de usuário é justamente o que mais
+    /// facilmente passa de `PIPE_BUF`.
+    ///
+    /// A correção sistêmica (`O_NONBLOCK` + fila de escrita) é trabalho da
+    /// Etapa 5. Isto está registrado aqui para que ninguém confie numa
+    /// garantia que o código não dá.
     public func writeTurn(_ line: Data) async throws {
         try await transport.write(line)
     }
@@ -230,6 +379,11 @@ public actor ControlChannel {
     /// muito bem receber sua resposta legítima depois disso — encerrar a
     /// nossa escrita não encerra a leitura do stdout dele, e é a bomba, não
     /// este método, quem sabe quando essa leitura de fato acaba.
+    ///
+    /// Saída de emergência: isto **não** serve para destravar uma escrita
+    /// presa. `transport.endInput()` espera o mesmo mutex que a escrita segura
+    /// (ver `ProcessTransport.endInput()`), então fechar o stdin de um harness
+    /// que parou de lê-lo bloqueia aqui também.
     public func endInput() async {
         liveness = .closed
         await transport.endInput()
@@ -246,6 +400,7 @@ public actor ControlChannel {
         // Foundation vazando por uma API que promete `ChannelError`.
         liveness = .closed
         failAllPending(.channelClosed)
+        outstandingPermissions.removeAll()
         await transport.terminate()
     }
 }

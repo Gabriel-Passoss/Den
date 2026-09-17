@@ -69,10 +69,9 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     let line = Data(#"""
     {"type":"control_response","oops":true}
     """#.utf8)
-    guard case .unknownControl(let id, let raw) = ControlFrame.classify(line) else {
+    guard case .unknownControl(let raw) = ControlFrame.classify(line) else {
         Issue.record("esperava .unknownControl"); return
     }
-    #expect(id == "")
     #expect(raw["oops"] == .bool(true))
 }
 
@@ -116,11 +115,50 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     let line = Data(#"""
     {"type":"control_request","request_id":"z","request":{"subtype":"coisa_nova","x":1}}
     """#.utf8)
-    guard case .unknownControl(let id, let raw) = ControlFrame.classify(line) else {
-        Issue.record("esperava .unknownControl"); return
+    guard case .unansweredControlRequest(let id, let raw) = ControlFrame.classify(line) else {
+        Issue.record("esperava .unansweredControlRequest"); return
     }
     #expect(id == "z")
     #expect(raw["request"]?["subtype"] == .string("coisa_nova"))
+}
+
+/// Item 4 do review final. Um `can_use_tool` sem `request_id` chegava à UI
+/// como pedido de permissão normal: o diálogo aparecia, o usuário decidia, e a
+/// resposta saía com `request_id: ""` — que o CLI nunca casa. O harness
+/// bloqueava para sempre e o usuário achava que tinha aprovado. Sem id, o
+/// quadro não é um pedido de permissão; é um registro.
+@Test func aPermissionRequestWithoutARequestIDIsNotOfferedToTheUI() throws {
+    let line = Data(#"""
+    {"type":"control_request","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}
+    """#.utf8)
+    guard case .unknownControl(let raw) = ControlFrame.classify(line) else {
+        Issue.record("esperava .unknownControl"); return
+    }
+    #expect(raw["request"]?["tool_name"] == .string("Bash"))
+}
+
+/// E um `request_id` presente mas vazio é o mesmo caso: `""` é tão
+/// irrespondível quanto ausente, e é justamente o valor que o código antigo
+/// fabricava sozinho com `?? ""`.
+@Test func anEmptyRequestIDIsTreatedAsNoRequestIDAtAll() throws {
+    let line = Data(#"""
+    {"type":"control_request","request_id":"","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}
+    """#.utf8)
+    guard case .unknownControl = ControlFrame.classify(line) else {
+        Issue.record("esperava .unknownControl"); return
+    }
+}
+
+/// A recusa automática do item 1 usa o envelope de erro que o próprio
+/// protocolo já define — o mesmo que `classify` lê na direção oposta. Este
+/// teste fecha o círculo: o que escrevemos é o que sabemos ler.
+@Test func theAutomaticRefusalUsesTheProtocolsOwnErrorEnvelope() throws {
+    let data = try ControlErrorResponse(requestID: "r-7", message: "não entendi").data()
+    guard case .response(let id, let result) = ControlFrame.classify(data) else {
+        Issue.record("esperava .response"); return
+    }
+    #expect(id == "r-7")
+    #expect(result.errorMessage == "não entendi")
 }
 
 @Test func malformedJSONIsTreatedAsConversationNotAsAFailure() throws {
