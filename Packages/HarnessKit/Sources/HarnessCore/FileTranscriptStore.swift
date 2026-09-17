@@ -103,11 +103,57 @@ public actor FileTranscriptStore: TranscriptStore {
         // honra `O_APPEND` atomicamente entre escritores — um `root` num
         // compartilhamento de rede está trocando essa garantia fora.
         let file = segmentFile(segmentID, in: sessionID)
-        let fd = open(file.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+        // O_RDWR, não O_WRONLY: a guarda de newline abaixo precisa ler o
+        // último byte do arquivo pelo MESMO descritor antes de escrever.
+        let fd = open(file.path, O_RDWR | O_CREAT | O_APPEND, 0o644)
         guard fd != -1 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
         defer { close(fd) }
+
+        // Guarda de newline: se o processo morreu no meio de uma escrita
+        // anterior, a última linha do arquivo ficou sem `\n` final. Sem essa
+        // guarda, o próximo `append` — depois de um restart que resume o
+        // MESMO segmento (spec §5.1: idle → hot é `--resume` da mesma
+        // harness session, então o mesmo arquivo é reaberto) — escreveria os
+        // bytes novos GRUDADOS no fragmento truncado. `entries(of:in:)`
+        // decodifica por linha (`split(separator: "\n")`), então o
+        // fragmento e a entrada nova virariam UMA linha só, ilegível: a
+        // entrada nova, completa e íntegra, seria perdida junto com o
+        // fragmento que já estava perdido por direito. A garantia deste
+        // tipo — "uma linha truncada custa uma entrada, não a sessão" — só
+        // vale de fato se a próxima escrita não puder contaminar a que veio
+        // antes dela.
+        //
+        // `fstat` + `pread` no descritor já aberto (não um `stat`/leitura
+        // via `FileManager` separados) para não abrir o arquivo duas vezes;
+        // `pread` não mexe no offset de leitura/escrita do descritor, então
+        // não interfere com o `O_APPEND` da escrita logo abaixo.
+        //
+        // Isso tem uma janela de corrida entre duas INSTÂNCIAS concorrentes
+        // (o `pread` e o `write` não são atômicos juntos), mas o pior caso é
+        // benigno: uma linha em branco a mais, que `entries(of:in:)` já
+        // filtra (`.filter { !$0.isEmpty }`). O caso que esta guarda existe
+        // para fechar — um processo reiniciando sozinho e resumindo seu
+        // próprio segmento — não tem escritor concorrente, então não tem
+        // essa corrida.
+        var status = stat()
+        guard fstat(fd, &status) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        if status.st_size > 0 {
+            var lastByte: UInt8 = 0
+            let bytesRead = withUnsafeMutableBytes(of: &lastByte) { buffer in
+                pread(fd, buffer.baseAddress, 1, status.st_size - 1)
+            }
+            guard bytesRead >= 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            if bytesRead == 1 && lastByte != 0x0A {
+                line.insert(0x0A, at: line.startIndex)
+            }
+        }
+
         try line.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
             guard var pointer = buffer.baseAddress else { return }
             var remaining = buffer.count
@@ -137,6 +183,15 @@ public actor FileTranscriptStore: TranscriptStore {
         return session
     }
 
+    /// Lista as sessões sem carregar o transcript de nenhuma delas.
+    ///
+    /// - Important: `SessionSummary.entryCount` conta LINHAS em disco, não
+    ///   entradas decodificadas — ver a nota em `lineCount(of:in:)`. Sobre um
+    ///   segmento com uma linha danificada, este número pode vir MAIOR que
+    ///   `load(_:).allEntries.count` para a mesma sessão. Não é um bug: são
+    ///   duas perguntas diferentes ("quantas linhas o arquivo tem" vs.
+    ///   "quantas entradas dessas eu consigo de fato ler de volta") que só
+    ///   coincidem quando o arquivo está inteiro.
     public func list() throws -> [SessionSummary] {
         let manager = FileManager.default
         guard let directories = try? manager.contentsOfDirectory(
@@ -152,7 +207,8 @@ public actor FileTranscriptStore: TranscriptStore {
                 .contentModificationDate ?? Date(timeIntervalSince1970: 0)
             // O metadado guarda segmentos SEM entradas, então
             // `SessionSummary(session:)` contaria zero. A contagem vem das
-            // linhas dos NDJSON — barata, sem decodificar nada.
+            // linhas dos NDJSON — barata, sem decodificar nada. Ver a nota
+            // de divergência com `load()` na doc de `lineCount(of:in:)`.
             let count = session.segments.reduce(0) { total, segment in
                 total + lineCount(of: segment.id, in: session.id)
             }
@@ -187,7 +243,9 @@ public actor FileTranscriptStore: TranscriptStore {
     ///
     /// - Note: a entrada ilegível é perdida, não recuperada. Se o transcript
     ///   precisar um dia ser à prova de perda, o caminho é escrever tamanho +
-    ///   linha, não tentar reparar JSON.
+    ///   linha, não tentar reparar JSON. Esse mesmo dia faria
+    ///   `lineCount(of:in:)` e esta função voltarem a concordar (ver a nota
+    ///   de divergência lá).
     private func entries(of segmentID: UUID, in sessionID: UUID) -> [TranscriptEntry] {
         let file = segmentFile(segmentID, in: sessionID)
         guard let text = try? String(contentsOf: file, encoding: .utf8) else { return [] }
@@ -196,6 +254,27 @@ public actor FileTranscriptStore: TranscriptStore {
             .compactMap { try? decoder.decode(TranscriptEntry.self, from: Data($0.utf8)) }
     }
 
+    /// Conta linhas não vazias em disco — barato de propósito, para servir
+    /// `list()` sem decodificar um NDJSON inteiro por sessão só para contar.
+    ///
+    /// - Important: **Diverge de propósito de `entries(of:in:).count`.** Esta
+    ///   função conta LINHAS: `split(separator: "\n")` inclui a última
+    ///   subsequência mesmo sem `\n` final, então uma linha truncada (a
+    ///   última escrita de um processo morto no meio) ou uma linha corrompida
+    ///   no meio do arquivo ainda soma 1 aqui — ela existe nos bytes, mesmo
+    ///   sem decodificar. `entries(of:in:)` conta o oposto: só o que passou
+    ///   por `JSONDecoder` com sucesso. Sobre um segmento com uma linha
+    ///   danificada, `list()`'s `entryCount` (que soma este número) fica
+    ///   MAIOR que `load(_:).allEntries.count` para a mesma sessão — mesmos
+    ///   bytes, duas perguntas diferentes ("quantas linhas existem" vs.
+    ///   "quantas eu consigo ler de volta"). `listCountsRawLinesWhileLoadCountsDecodableEntries`
+    ///   em `FileTranscriptStoreResilienceTests.swift` fixa esse número para
+    ///   que a divergência não vire uma surpresa silenciosa se um dos dois
+    ///   lados mudar de comportamento no futuro. Fechar essa lacuna do jeito
+    ///   certo — fazer os dois concordarem sempre — pede o mesmo write-side
+    ///   fix já anotado em `entries(of:in:)`: tamanho + linha em vez de JSON
+    ///   solto, para que "quantas linhas existem" pare de poder incluir uma
+    ///   que não é de fato uma linha.
     private func lineCount(of segmentID: UUID, in sessionID: UUID) -> Int {
         guard let text = try? String(contentsOf: segmentFile(segmentID, in: sessionID),
                                      encoding: .utf8) else { return 0 }

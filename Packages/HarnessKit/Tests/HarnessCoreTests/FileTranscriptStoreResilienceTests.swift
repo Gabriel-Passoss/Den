@@ -75,6 +75,78 @@ private func entry(_ text: String) -> TranscriptEntry {
     #expect(texts == ["um", "tres"])
 }
 
+@Test func aTruncatedTailDoesNotSwallowTheEntryAppendedAfterARestart() async throws {
+    // O processo morre no meio da escrita de "dois": a última linha fica sem
+    // `\n` final. O app reinicia e resume o MESMO segmento (spec §5.1: idle
+    // → hot é `--resume` da mesma harness session) — reabre o mesmo arquivo
+    // e dá append de novo. Sem uma guarda de newline, `O_APPEND` escreve os
+    // bytes novos GRUDADOS no fragmento truncado, e a entrada nova ("tres"),
+    // completa e íntegra, é arrastada para dentro do blob ilegível e
+    // perdida junto com "dois" — que essa, sim, já estava perdida por
+    // direito.
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = FileTranscriptStore(root: root)
+
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
+                          segments: [segment])
+    try await store.saveMetadata(session)
+    try await store.append(entry("um"), to: segment.id, in: session.id)
+
+    let file = root.appendingPathComponent(session.id.uuidString)
+        .appendingPathComponent("\(segment.id.uuidString).ndjson")
+    let handle = try FileHandle(forWritingTo: file)
+    try handle.seekToEnd()
+    try handle.write(contentsOf: Data(#"{"id":"partial"#.utf8))
+    try handle.close()
+
+    try await store.append(entry("tres"), to: segment.id, in: session.id)
+
+    let loaded = try await store.load(session.id)
+    let texts = loaded.allEntries.compactMap { e -> String? in
+        if case .assistantText(let t) = e.kind { return t }
+        return nil
+    }
+    #expect(texts == ["um", "tres"],
+             "a entrada nova não pode ser perdida junto com o fragmento truncado")
+}
+
+@Test func listCountsRawLinesWhileLoadCountsDecodableEntries() async throws {
+    // `list()` conta linhas em disco (barato, sem decodificar); `load()`
+    // conta entradas que decodificaram. Sobre bytes danificados os dois
+    // números legitimamente discordam: a fatia truncada existe no arquivo
+    // (`split` a inclui mesmo sem `\n` final) mas não decodifica. A
+    // divergência é documentada em `FileTranscriptStore.list()` e
+    // `entries(of:in:)` — este teste fixa o número exato para que uma
+    // mudança futura em qualquer um dos dois lados não passe despercebida.
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = FileTranscriptStore(root: root)
+
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
+                          segments: [segment])
+    try await store.saveMetadata(session)
+    try await store.append(entry("um"), to: segment.id, in: session.id)
+    try await store.append(entry("dois"), to: segment.id, in: session.id)
+
+    let file = root.appendingPathComponent(session.id.uuidString)
+        .appendingPathComponent("\(segment.id.uuidString).ndjson")
+    let handle = try FileHandle(forWritingTo: file)
+    try handle.seekToEnd()
+    try handle.write(contentsOf: Data(#"{"id":"partial"#.utf8))
+    try handle.close()
+
+    let summaries = try await store.list()
+    let loaded = try await store.load(session.id)
+
+    #expect(summaries.first?.entryCount == 3,
+             "list() conta a linha truncada como uma linha em disco")
+    #expect(loaded.allEntries.count == 2,
+             "load() só conta o que de fato decodificou")
+}
+
 @Test func aSegmentWithNoFileYetLoadsAsEmpty() async throws {
     // Um segmento recém-aberto ainda não tem arquivo. Isso é normal, não erro.
     let root = try makeRoot()
