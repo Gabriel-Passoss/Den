@@ -82,6 +82,12 @@ enum PermissionDecision {
 }
 ```
 
+**`HarnessCapabilities` passa a existir na Etapa 3** (decisão de 2026-09-17).
+A §10 já o listava como a mitigação "desde o dia 1" contra a abstração virar
+ficção, e a fundação o adiou por não ter superfície de controle onde declará-lo.
+A Etapa 3 cria essa superfície, então é onde ele nasce — declarado pelo
+adaptador, lido pela UI.
+
 `HarnessCapabilities` declara o que cada harness suporta: trocar modelo em
 sessão, alterar modo de permissão a quente, retomar sessão, fork. A UI lê as
 capabilities e oculta o que não é suportado, em vez de oferecer ações que
@@ -299,12 +305,33 @@ sem gastar token nem tocar na rede.
 DevSpace/
 ├── Packages/HarnessKit/          # headless, zero dependências
 │   ├── Sources/
-│   │   ├── HarnessCore/          # protocolos, domínio, TranscriptStore
-│   │   ├── ClaudeHarness/        # transporte, protocolo de controle, mapper
+│   │   ├── HarnessCore/          # protocolos, domínio, TranscriptStore,
+│   │   │                         # transporte de processo, execução de comando
+│   │   ├── ClaudeHarness/        # SÓ o que é do Claude Code: descoberta,
+│   │   │                         # protocolo de controle, mapper
+│   │   ├── HarnessProbeArguments/# parsing e preflight puros do probe
 │   │   └── harness-probe/        # executável de diagnóstico
 │   └── Tests/
 └── DevSpace/                     # app SwiftUI, consome HarnessKit
 ```
+
+### 7.1 Revisão de 2026-09-17 — o que é neutro mora em HarnessCore
+
+A versão original desta seção atribuía "transporte" a `ClaudeHarness/`, o que
+punha três tipos sem nada de Claude dentro do módulo específico do Claude:
+`ProcessTransport`, `CommandRunner`/`SystemCommandRunner` e
+`HarnessInstallation`. O review da fundação apontou a consequência: um
+adaptador do Codex precisaria importar `ClaudeHarness` só para dar spawn num
+processo — o que faz a §2 ("orquestrador, nunca harness") virar letra morta na
+prática.
+
+**Decisão: os três migram para `HarnessCore`.** `ClaudeHarness` fica com o que
+é genuinamente específico — `ClaudeDiscovery` (a string `command -v claude` e o
+regex de versão), o protocolo de controle na forma que este CLI fala, e o
+mapper.
+
+O teste da regra: se um tipo não menciona Claude e um segundo adaptador
+precisaria dele, ele é de `HarnessCore`.
 
 ## 8. Ordem de construção
 
