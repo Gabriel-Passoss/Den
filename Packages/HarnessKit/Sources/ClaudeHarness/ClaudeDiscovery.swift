@@ -16,6 +16,13 @@ public struct ClaudeDiscovery: Sendable {
     public enum DiscoveryError: Error, Equatable {
         case notFound
         case unreadableVersion(String)
+        /// O binário existe e foi executado, mas `--version` saiu com código de
+        /// erro. Carrega o stderr porque é a única evidência que distingue um
+        /// `claude` quebrado (node ausente, shim falhando, EACCES) de uma falha
+        /// de autenticação — e a spec §5.3 diz que `AuthFailure` "é a causa
+        /// mais provável de falha inicial". Sem isto, um binário instalado e
+        /// quebrado era reportado como `.notFound`, ou seja, "não instalado".
+        case versionCommandFailed(exitCode: Int32, stderr: String)
     }
 
     public static let defaultFallbackPaths = [
@@ -45,6 +52,13 @@ public struct ClaudeDiscovery: Sendable {
         // diferente de "não instalado" — mas um candidato ruim no meio da
         // lista não pode impedir que os fallbacks seguintes sejam tentados.
         var firstUnreadableVersion: DiscoveryError?
+        // Mesma ideia, para o candidato que rodou e saiu com erro. O
+        // `SystemCommandRunner` monta um `CommandFailure` com código e stderr
+        // justamente para este momento; descartá-lo (o que o `catch` genérico
+        // abaixo fazia) transformava a única evidência acionável em silêncio.
+        // Um caminho que simplesmente não existe não passa por aqui: o
+        // `Process.run()` lança antes, e cai no `catch` genérico.
+        var firstCommandFailure: DiscoveryError?
         for candidate in try await candidates() {
             do {
                 let version = try await readVersion(of: candidate)
@@ -54,11 +68,25 @@ public struct ClaudeDiscovery: Sendable {
                     firstUnreadableVersion = error
                 }
                 continue
+            } catch let failure as CommandFailure {
+                if firstCommandFailure == nil {
+                    firstCommandFailure = .versionCommandFailed(
+                        exitCode: failure.exitCode,
+                        stderr: failure.stderr
+                    )
+                }
+                continue
             } catch {
                 continue
             }
         }
-        throw firstUnreadableVersion ?? DiscoveryError.notFound
+        // Precedência: `unreadableVersion` primeiro por ser o candidato que
+        // chegou mais longe (saiu com 0, só não soubemos ler a saída); depois a
+        // falha com stderr; `notFound` só quando nenhum candidato chegou a
+        // rodar. As duas primeiras só competem entre si se a máquina tiver dois
+        // `claude` diferentes quebrados de formas diferentes — e qualquer uma
+        // delas é mais útil que "não instalado".
+        throw firstUnreadableVersion ?? firstCommandFailure ?? DiscoveryError.notFound
     }
 
     /// Um app aberto pelo Finder não herda o PATH do shell, então perguntamos

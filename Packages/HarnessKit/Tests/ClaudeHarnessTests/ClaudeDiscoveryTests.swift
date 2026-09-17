@@ -7,10 +7,18 @@ extension Tag {
 }
 
 /// Runner falso: mapeia comando+args para uma saída fixa, ou lança se não mapeado.
+///
+/// `failures` existe para separar os dois modos de falha que a descoberta trata
+/// de formas diferentes: um caminho que nem chega a executar (o `NSError`
+/// abaixo, análogo ao que `Process.run()` lança para um executável ausente) e um
+/// binário que **executou** e saiu com erro (`CommandFailure`, com stderr).
 struct FakeCommandRunner: CommandRunner {
     var responses: [String: String] = [:]
+    var failures: [String: CommandFailure] = [:]
+
     func run(_ executable: String, _ arguments: [String]) async throws -> String {
         let key = ([executable] + arguments).joined(separator: " ")
+        if let failure = failures[key] { throw failure }
         guard let out = responses[key] else {
             throw NSError(domain: "fake", code: 127)
         }
@@ -71,6 +79,43 @@ struct FakeCommandRunner: CommandRunner {
     ).discover()
     #expect(install.executable == "/usr/local/bin/claude")
     #expect(install.version == "2.0.9")
+}
+
+/// Um `claude` instalado mas quebrado (node ausente, shim falhando, EACCES,
+/// sessão não autenticada) era reportado como `.notFound` — "não instalado" —
+/// sobre um binário que está ali, e o stderr que dizia o porquê era jogado fora
+/// pelo `catch` genérico. A spec §5.3 conta com essa evidência: `AuthFailure` é
+/// "a causa mais provável de falha inicial" e não tem outra origem.
+@Test func preservaOStderrDeUmBinarioQueExisteMasFalha() async {
+    let runner = FakeCommandRunner(
+        responses: ["/bin/zsh -l -c command -v claude": "/opt/homebrew/bin/claude\n"],
+        failures: [
+            "/opt/homebrew/bin/claude --version":
+                CommandFailure(exitCode: 1, stderr: "Invalid API key · Run /login")
+        ]
+    )
+    await #expect(throws: ClaudeDiscovery.DiscoveryError.versionCommandFailed(
+        exitCode: 1, stderr: "Invalid API key · Run /login"
+    )) {
+        _ = try await ClaudeDiscovery(runner: runner, shell: "/bin/zsh", fallbackPaths: []).discover()
+    }
+}
+
+/// Mesma regra do Ruling B, aplicada à falha nova: um candidato quebrado no meio
+/// da lista não pode abortar a busca nem sobreviver a um sucesso posterior.
+@Test func descartaAFalhaDeComandoQuandoUmFallbackFunciona() async throws {
+    let runner = FakeCommandRunner(
+        responses: ["/usr/local/bin/claude --version": "2.0.9 (Claude Code)\n"],
+        failures: [
+            "/opt/homebrew/bin/claude --version": CommandFailure(exitCode: 126, stderr: "permission denied")
+        ]
+    )
+    let install = try await ClaudeDiscovery(
+        runner: runner,
+        shell: "/bin/zsh",
+        fallbackPaths: ["/opt/homebrew/bin/claude", "/usr/local/bin/claude"]
+    ).discover()
+    #expect(install.executable == "/usr/local/bin/claude")
 }
 
 @Test func naoResolveOSymlinkParaOCaminhoVersionado() async throws {
