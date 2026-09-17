@@ -26,7 +26,7 @@ struct FakeCommandRunner: CommandRunner {
     }
 }
 
-@Test func achaOBinarioPeloShellDeLogin() async throws {
+@Test func findsTheBinaryViaTheLoginShell() async throws {
     let runner = FakeCommandRunner(responses: [
         "/bin/zsh -l -c command -v claude": "/opt/homebrew/bin/claude\n",
         "/opt/homebrew/bin/claude --version": "2.1.236 (Claude Code)\n",
@@ -36,7 +36,7 @@ struct FakeCommandRunner: CommandRunner {
     #expect(install.version == "2.1.236")
 }
 
-@Test func caiNoFallbackQuandoOShellNaoAcha() async throws {
+@Test func fallsBackWhenTheShellFindsNothing() async throws {
     let runner = FakeCommandRunner(responses: [
         "/usr/local/bin/claude --version": "2.0.9 (Claude Code)\n",
     ])
@@ -47,14 +47,14 @@ struct FakeCommandRunner: CommandRunner {
     #expect(install.version == "2.0.9")
 }
 
-@Test func falhaComNotFoundQuandoNadaResponde() async {
+@Test func failsWithNotFoundWhenNothingResponds() async {
     let runner = FakeCommandRunner()
     await #expect(throws: ClaudeDiscovery.DiscoveryError.notFound) {
         _ = try await ClaudeDiscovery(runner: runner, shell: "/bin/zsh", fallbackPaths: []).discover()
     }
 }
 
-@Test func falhaQuandoAVersaoNaoEhLegivel() async {
+@Test func failsWhenTheVersionIsUnreadable() async {
     let runner = FakeCommandRunner(responses: [
         "/bin/zsh -l -c command -v claude": "/opt/homebrew/bin/claude\n",
         "/opt/homebrew/bin/claude --version": "não sou uma versão\n",
@@ -67,7 +67,7 @@ struct FakeCommandRunner: CommandRunner {
 // Ruling B: um candidato com versão ilegível não pode abortar a busca — os
 // fallbacks seguintes ainda precisam ter a vez, e a falha registrada é
 // descartada assim que algum candidato funciona.
-@Test func descartaFalhaDeVersaoQuandoUmFallbackFunciona() async throws {
+@Test func discardsAVersionFailureWhenAFallbackWorks() async throws {
     let runner = FakeCommandRunner(responses: [
         "/opt/homebrew/bin/claude --version": "não sou uma versão\n",
         "/usr/local/bin/claude --version": "2.0.9 (Claude Code)\n",
@@ -86,7 +86,7 @@ struct FakeCommandRunner: CommandRunner {
 /// sobre um binário que está ali, e o stderr que dizia o porquê era jogado fora
 /// pelo `catch` genérico. A spec §5.3 conta com essa evidência: `AuthFailure` é
 /// "a causa mais provável de falha inicial" e não tem outra origem.
-@Test func preservaOStderrDeUmBinarioQueExisteMasFalha() async {
+@Test func preservesStderrFromABinaryThatExistsButFails() async {
     let runner = FakeCommandRunner(
         responses: ["/bin/zsh -l -c command -v claude": "/opt/homebrew/bin/claude\n"],
         failures: [
@@ -103,7 +103,7 @@ struct FakeCommandRunner: CommandRunner {
 
 /// Mesma regra do Ruling B, aplicada à falha nova: um candidato quebrado no meio
 /// da lista não pode abortar a busca nem sobreviver a um sucesso posterior.
-@Test func descartaAFalhaDeComandoQuandoUmFallbackFunciona() async throws {
+@Test func discardsACommandFailureWhenAFallbackWorks() async throws {
     let runner = FakeCommandRunner(
         responses: ["/usr/local/bin/claude --version": "2.0.9 (Claude Code)\n"],
         failures: [
@@ -118,7 +118,7 @@ struct FakeCommandRunner: CommandRunner {
     #expect(install.executable == "/usr/local/bin/claude")
 }
 
-@Test func naoResolveOSymlinkParaOCaminhoVersionado() async throws {
+@Test func doesNotResolveTheSymlinkToTheVersionedPath() async throws {
     // O caminho lógico precisa sobreviver a um `brew upgrade` (spec §4.4):
     // resolver o symlink perderia esse caminho na próxima atualização. Um
     // teste que só olhasse para "não contém Caskroom" não pinaria isso — a
@@ -151,7 +151,7 @@ struct FakeCommandRunner: CommandRunner {
 // Ruling C: a tag sozinha só filtra, não desliga por padrão — por isso o
 // `.enabled(if:)` explícito. Sem HARNESSKIT_INTEGRATION=1 este teste não roda.
 @Test(.tags(.integration), .enabled(if: ProcessInfo.processInfo.environment["HARNESSKIT_INTEGRATION"] != nil))
-func achaOClaudeDeVerdade() async throws {
+func findsTheRealClaude() async throws {
     let install = try await ClaudeDiscovery().discover()
     #expect(install.executable.hasSuffix("claude"))
     #expect(!install.version.isEmpty)

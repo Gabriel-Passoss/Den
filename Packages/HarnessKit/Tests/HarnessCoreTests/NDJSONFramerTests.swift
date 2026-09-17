@@ -2,21 +2,21 @@ import Testing
 import Foundation
 @testable import HarnessCore
 
-@Test func entregaUmaLinhaCompleta() throws {
+@Test func deliversOneCompleteLine() throws {
     var framer = NDJSONFramer()
     let lines = try framer.push(Data(#"{"a":1}"# .utf8) + Data("\n".utf8))
     #expect(lines.count == 1)
     #expect(String(decoding: lines[0], as: UTF8.self) == #"{"a":1}"#)
 }
 
-@Test func seguraLinhaPartidaEntreChunks() throws {
+@Test func holdsALineSplitAcrossChunks() throws {
     var framer = NDJSONFramer()
     #expect(try framer.push(Data(#"{"a":"# .utf8)).isEmpty)
     let lines = try framer.push(Data("1}\n".utf8))
     #expect(lines.map { String(decoding: $0, as: UTF8.self) } == [#"{"a":1}"#])
 }
 
-@Test func entregaVariasLinhasDeUmChunkSo() throws {
+@Test func deliversSeveralLinesFromASingleChunk() throws {
     var framer = NDJSONFramer()
     let lines = try framer.push(Data("{\"a\":1}\n{\"b\":2}\n".utf8))
     #expect(lines.map { String(decoding: $0, as: UTF8.self) } == [#"{"a":1}"#, #"{"b":2}"#])
@@ -25,7 +25,7 @@ import Foundation
 /// Alvo direto da otimização: um chunk com centenas de linhas precisa
 /// preservar conteúdo e ordem exatos. Um erro de rebase de índice na
 /// reescrita corromperia isso silenciosamente, sem crashar.
-@Test func entregaMuitasLinhasDeUmChunkSo() throws {
+@Test func deliversManyLinesFromASingleChunk() throws {
     var framer = NDJSONFramer()
     let expected = (0..<300).map { #"{"n":\#($0)}"# }
     let chunk = expected.map { $0 + "\n" }.joined()
@@ -36,7 +36,7 @@ import Foundation
 /// Intercala uma linha parcial entre chunks com múltiplas linhas completas
 /// no mesmo push, para cobrir o caso em que o resíduo de um push anterior
 /// precisa se combinar corretamente com várias linhas extraídas de uma vez.
-@Test func combinaResiduoDeChunkAnteriorComVariasLinhasNoMesmoPush() throws {
+@Test func combinesPreviousResidueWithSeveralLinesInTheSamePush() throws {
     var framer = NDJSONFramer()
     let firstLines = try framer.push(Data("{\"a\":1}\n{\"b\":2}\n{\"c\":".utf8))
     #expect(firstLines.map { String(decoding: $0, as: UTF8.self) } == [#"{"a":1}"#, #"{"b":2}"#])
@@ -44,33 +44,33 @@ import Foundation
     #expect(secondLines.map { String(decoding: $0, as: UTF8.self) } == [#"{"c":3}"#])
 }
 
-@Test func ignoraLinhasVazias() throws {
+@Test func ignoresEmptyLines() throws {
     var framer = NDJSONFramer()
     let lines = try framer.push(Data("\n\n{\"a\":1}\n\n".utf8))
     #expect(lines.count == 1)
 }
 
-@Test func removeCarriageReturnFinal() throws {
+@Test func stripsTrailingCarriageReturn() throws {
     var framer = NDJSONFramer()
     let lines = try framer.push(Data("{\"a\":1}\r\n".utf8))
     #expect(String(decoding: lines[0], as: UTF8.self) == #"{"a":1}"#)
 }
 
-@Test func estouraQuandoALinhaPassaDoTeto() {
+@Test func throwsWhenAnUnterminatedLineExceedsTheCeiling() {
     var framer = NDJSONFramer(limit: 16)
     #expect(throws: NDJSONFramer.FramingError.lineTooLong(limit: 16)) {
         _ = try framer.push(Data(String(repeating: "x", count: 32).utf8))
     }
 }
 
-@Test func estouraQuandoLinhaTerminadaPassaDoTeto() {
+@Test func throwsWhenATerminatedLineExceedsTheCeiling() {
     var framer = NDJSONFramer(limit: 16)
     #expect(throws: NDJSONFramer.FramingError.lineTooLong(limit: 16)) {
         _ = try framer.push(Data((String(repeating: "x", count: 20) + "\n").utf8))
     }
 }
 
-@Test func naoEstouraQuandoOTotalPassaMasCadaLinhaCabe() throws {
+@Test func doesNotThrowWhenTheTotalExceedsButEachLineFits() throws {
     var framer = NDJSONFramer(limit: 16)
     let lines = try framer.push(Data("{\"a\":1}\n{\"b\":2}\n{\"c\":3}\n".utf8))
     #expect(lines.count == 3)
@@ -87,7 +87,7 @@ import Foundation
 /// diferentes e mesmo assim são igualmente terminais: o de dentro do laço
 /// (linha completa acima do teto, `removeSubrange` pulado) e o de depois dele
 /// (residual parcial acima do teto, com o prefixo já consumido).
-@Test func umThrowDeEnquadramentoEhTerminal() throws {
+@Test func aFramingThrowIsTerminal() throws {
     var porLinhaCompleta = NDJSONFramer(limit: 8)
     #expect(throws: NDJSONFramer.FramingError.self) {
         _ = try porLinhaCompleta.push(Data("ok\nxxxxxxxxxxxxxxxxxxxx\n".utf8))

@@ -29,7 +29,7 @@ private func floodScript(writers: Int) -> String {
     """
 }
 
-@Test func leAsLinhasQueOProcessoEmite() async throws {
+@Test func readsTheLinesTheProcessEmits() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         let stream = try await transport.start(shellLaunch(#"printf '{"a":1}\n{"b":2}\n'"#))
@@ -42,7 +42,7 @@ private func floodScript(writers: Int) -> String {
     }
 }
 
-@Test func capturaOStandardError() async throws {
+@Test func capturesStandardError() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         let stream = try await transport.start(shellLaunch(#"echo aviso >&2; printf '{"a":1}\n'"#))
@@ -52,7 +52,7 @@ private func floodScript(writers: Int) -> String {
     }
 }
 
-@Test func escreveNoStdinEOProcessoResponde() async throws {
+@Test func writesToStdinAndTheProcessResponds() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         // Ecoa cada linha recebida de volta, envelopada.
@@ -72,7 +72,7 @@ private func floodScript(writers: Int) -> String {
     }
 }
 
-@Test func registraOCodigoDeSaida() async throws {
+@Test func recordsTheExitCode() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         let stream = try await transport.start(shellLaunch("exit 3"))
@@ -87,7 +87,7 @@ private func floodScript(writers: Int) -> String {
 /// custar o prazo inteiro até a escalada. O nome antigo
 /// ("derrubaUmProcessoQueNaoTermina") prometia o ramo de SIGKILL, que este
 /// script nunca alcança; quem cobre aquele ramo é o teste logo abaixo.
-@Test func terminateColheNaHoraUmProcessoQueObedeceAoSIGTERM() async throws {
+@Test func terminateReapsImmediatelyAProcessThatObeysSIGTERM() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         let stream = try await transport.start(shellLaunch("sleep 60"))
@@ -124,7 +124,7 @@ private func floodScript(writers: Int) -> String {
 /// Os orçamentos curtos vêm do `init`, não de um limiar de tempo medido — é a
 /// injeção que torna o ramo barato, exatamente como `framingLimit` faz com o
 /// teto de enquadramento.
-@Test func terminateEscalaParaSIGKILLQuandoOSIGTERMEhIgnorado() async throws {
+@Test func terminateEscalatesToSIGKILLWhenSIGTERMIsIgnored() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport(
             terminationGracePeriod: .milliseconds(50),
@@ -154,7 +154,7 @@ private func floodScript(writers: Int) -> String {
 ///
 /// Além do erro, o teste fixa a consequência: depois da recusa, o processo que o
 /// transporte ainda governa é o **primeiro**, e `terminate()` o derruba.
-@Test func startRecusaUmSegundoUsoDoMesmoTransporte() async throws {
+@Test func startRefusesASecondUseOfTheSameTransport() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         let stream = try await transport.start(shellLaunch("sleep 60"))
@@ -174,7 +174,7 @@ private func floodScript(writers: Int) -> String {
 /// Um spawn que falha não queima o transporte: `process` só é preenchido depois
 /// de `run()` voltar, então a guarda de uso único não pode transformar uma
 /// tentativa malsucedida numa recusa permanente.
-@Test func umStartQueFalhaNaoQueimaOTransporte() async throws {
+@Test func aFailedStartDoesNotBurnTheTransport() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         var quebrado = shellLaunch("exit 0")
@@ -193,7 +193,7 @@ private func floodScript(writers: Int) -> String {
     }
 }
 
-@Test func propagaErroDeEnquadramento() async throws {
+@Test func propagatesAFramingError() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport(framingLimit: 16)
         let stream = try await transport.start(shellLaunch(#"printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'"#))
@@ -205,7 +205,7 @@ private func floodScript(writers: Int) -> String {
 
 /// Saída corrompida não pode deixar um harness órfão: o fluxo já terminou com
 /// erro, ninguém mais lê o stdout dele, e ele ficaria vivo travado na escrita.
-@Test func erroDeEnquadramentoDerrubaOProcesso() async throws {
+@Test func aFramingErrorTearsTheProcessDown() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport(framingLimit: 16)
         let stream = try await transport.start(
@@ -228,7 +228,7 @@ private func floodScript(writers: Int) -> String {
 /// Um spawn que falha não pode deixar o transporte num estado meio montado:
 /// perguntar o `terminationStatus` de um `Process` que nunca rodou levanta
 /// exceção, e os leitores ficariam armados em pipes sem ninguém do outro lado.
-@Test func falhaAoSubirUmExecutavelQueNaoExiste() async throws {
+@Test func failsToLaunchAnExecutableThatDoesNotExist() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         var launch = shellLaunch("exit 0")
@@ -244,7 +244,7 @@ private func floodScript(writers: Int) -> String {
 
 /// Nada pode se perder entre o último callback de leitura e a saída do
 /// processo: as linhas que ainda estavam no pipe nesse instante contam.
-@Test func naoPerdeLinhasDeUmaRajadaQueTerminaNaHora() async throws {
+@Test func doesNotLoseLinesFromABurstThatEndsImmediately() async throws {
     try await withTimeout(seconds: 10) {
         let transport = ProcessTransport()
         let stream = try await transport.start(
@@ -264,7 +264,7 @@ private func floodScript(writers: Int) -> String {
 /// O dreno final não pode esperar o pipe fechar de verdade: um neto que herdou
 /// stdout/stderr sobrevive ao harness, e esperar por ele travaria o fluxo para
 /// sempre — uma sessão congelada sem erro nenhum (spec §4.4).
-@Test func terminaOFluxoSemEsperarUmNetoQueHerdouOsPipes() async throws {
+@Test func endsTheStreamWithoutWaitingForAGrandchildHoldingThePipes() async throws {
     try await withTimeout(seconds: 3) {
         let transport = ProcessTransport()
         let stream = try await transport.start(
@@ -286,7 +286,7 @@ private func floodScript(writers: Int) -> String {
 /// 0: `continuation.finish()` nunca é alcançado, o fluxo nunca termina e a
 /// sessão congela sem erro nenhum — tudo isso com o lock na mão e o buffer
 /// crescendo na velocidade do pipe. O outro lado do neto que só segura os fds.
-@Test func terminaOFluxoComUmNetoQueNaoParaDeEscrever() async throws {
+@Test func endsTheStreamWithAGrandchildThatKeepsWriting() async throws {
     try await withTimeout(seconds: 3) {
         let transport = ProcessTransport()
         // Os netos despejam linhas de 4 KiB: o que interessa aqui é volume de
@@ -309,7 +309,7 @@ private func floodScript(writers: Int) -> String {
 /// São várias varreduras porque uma só é uma amostra: quando o pipe fica vazio
 /// por um instante, `poll` devolve 0 e mesmo uma varredura sem teto volta cedo.
 /// O teto vale para *toda* varredura, então basta insistir.
-@Test func aVarreduraFinalTemTeto() async throws {
+@Test func theFinalSweepIsBounded() async throws {
     try await withTimeout(seconds: 10) {
         let target = Pipe()
         let flooder = Process()
@@ -332,7 +332,7 @@ private func floodScript(writers: Int) -> String {
 /// Um pipe de stderr cheio trava o filho dentro do `write`, e o sintoma é uma
 /// sessão que congela sem erro nenhum (spec §4.4). Drenar só no fim não basta:
 /// o dreno tem que ser contínuo, em paralelo com o stdout.
-@Test func drenaStderrContinuamenteEnquantoOStdoutFlui() async throws {
+@Test func drainsStderrContinuouslyWhileStdoutFlows() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         // 100 blocos de 4 KiB em stderr — muito acima dos 64 KiB que um pipe do
@@ -364,7 +364,7 @@ private func floodScript(writers: Int) -> String {
 
 /// Escrever num pipe sem leitor dispara SIGPIPE, que por padrão mata o processo
 /// *pai* — ou seja, o DevSpace inteiro. Tem que virar um erro comum.
-@Test func escreverDepoisQueOFilhoFechouOStdinFalhaSemMatarOPai() async throws {
+@Test func writingAfterTheChildClosedStdinFailsWithoutKillingTheParent() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         // Fecha o stdin, avisa que fechou, e segue vivo — então a escrita passa

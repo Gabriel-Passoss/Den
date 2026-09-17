@@ -6,7 +6,7 @@ import Foundation
 /// stderr em paralelo. Se voltar a ler só um dos dois, um filho que escreve
 /// mais que o teto do pipe do SO (~64 KiB) no outro trava para sempre — e sem
 /// isso, essa suíte trava com ele em vez de falhar.
-@Test func drenaStderrConcorrentementeParaNaoTravar() async throws {
+@Test func drainsStderrConcurrentlySoItCannotDeadlock() async throws {
     let runner = SystemCommandRunner()
     let output = try await withTimeout(seconds: 5) {
         // Escreve bem mais que 64 KiB em stderr antes de sair.

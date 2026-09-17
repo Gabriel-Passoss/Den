@@ -12,8 +12,8 @@ private func probe(directories: Set<String> = [], files: Set<String> = []) -> Fi
 
 @Suite("preflightRecord")
 struct RecordPreflightTests {
-    @Test("--cwd existente e --out inédito passam")
-    func caminhoFeliz() {
+    @Test("an existing --cwd and an unused --out pass")
+    func happyPath() {
         let problem = preflightRecord(
             RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratch", outputPath: "/tmp/novo.ndjson"),
             on: probe(directories: ["/tmp/probe-scratch"])
@@ -21,8 +21,8 @@ struct RecordPreflightTests {
         #expect(problem == nil)
     }
 
-    @Test("--out ausente é opcional de verdade")
-    func semOut() {
+    @Test("a missing --out really is optional")
+    func withoutOut() {
         let problem = preflightRecord(
             RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratch"),
             on: probe(directories: ["/tmp/probe-scratch"])
@@ -30,8 +30,8 @@ struct RecordPreflightTests {
         #expect(problem == nil)
     }
 
-    @Test("--cwd inexistente é recusado")
-    func cwdInexistente() {
+    @Test("a nonexistent --cwd is refused")
+    func nonexistentCwd() {
         let problem = preflightRecord(
             RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratchh"),
             on: probe(directories: ["/tmp/probe-scratch"])
@@ -40,8 +40,8 @@ struct RecordPreflightTests {
         #expect(problem?.exitCode == 66)
     }
 
-    @Test("--cwd apontando para um arquivo é recusado")
-    func cwdNaoEhDiretorio() {
+    @Test("a --cwd pointing at a file is refused")
+    func cwdPointingAtAFile() {
         let problem = preflightRecord(
             RecordArguments(prompt: "oi", cwd: "/tmp/arquivo.txt"),
             on: probe(files: ["/tmp/arquivo.txt"])
@@ -49,8 +49,8 @@ struct RecordPreflightTests {
         #expect(problem == .cwdNotADirectory("/tmp/arquivo.txt"))
     }
 
-    @Test("--out existente nunca é sobrescrito")
-    func outExistente() {
+    @Test("an existing --out is never overwritten")
+    func existingOut() {
         let fixture = "Tests/ClaudeHarnessTests/Fixtures/hello.ndjson"
         let problem = preflightRecord(
             RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratch", outputPath: fixture),
@@ -63,8 +63,8 @@ struct RecordPreflightTests {
     /// O cenário exato do review: um caractere a mais no `--cwd`, um `--out`
     /// correto apontando para um fixture que existe. Ambas as checagens falham;
     /// a que o operador precisa ler é a do argumento que ele digitou errado.
-    @Test("com --cwd errado e --out existente, o erro reportado é o do --cwd")
-    func aOrdemDasChecagensEhCwdPrimeiro() {
+    @Test("with a bad --cwd and an existing --out, the reported error is the --cwd one")
+    func cwdIsCheckedBeforeOut() {
         let fixture = "Tests/ClaudeHarnessTests/Fixtures/hello.ndjson"
         let problem = preflightRecord(
             RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratchh", outputPath: fixture),
@@ -75,8 +75,8 @@ struct RecordPreflightTests {
 
     /// As mensagens são a única saída que o operador vê; um erro que não nomeia
     /// o caminho não é acionável.
-    @Test("toda mensagem nomeia o caminho ofensor")
-    func mensagensNomeiamOCaminho() {
+    @Test("every message names the offending path")
+    func everyMessageNamesTheOffendingPath() {
         #expect(RecordPreflightError.cwdNotFound("/x/y").message.contains("/x/y"))
         #expect(RecordPreflightError.cwdNotADirectory("/x/y").message.contains("/x/y"))
         #expect(RecordPreflightError.outputAlreadyExists("/x/y").message.contains("/x/y"))
