@@ -11,7 +11,7 @@
 /// A leitura do formato de fio de cada CLI fica no adaptador, como extensão.
 /// É a mesma forma que a Task 1 usou para `ProcessTransport`: o valor é
 /// neutro, a codificação é específica.
-public struct PermissionRequest: Equatable, Sendable {
+public struct PermissionRequest: Equatable, Sendable, Codable {
     public let id: String
     public let toolName: String
     public let displayName: String?
@@ -42,7 +42,7 @@ public struct PermissionRequest: Equatable, Sendable {
 }
 
 /// Uma regra que o harness sugere junto do pedido.
-public struct PermissionSuggestion: Equatable, Sendable {
+public struct PermissionSuggestion: Equatable, Sendable, Codable {
     public let type: String?
     public let mode: String?
     public let destination: String?
@@ -76,7 +76,7 @@ public struct PermissionSuggestion: Equatable, Sendable {
 /// um harness específico, um segundo adaptador tinha que importar esse módulo
 /// só para dizer a palavra "allow" — exatamente o modo de falha que a §7.1
 /// matou uma camada abaixo, reaparecendo uma camada acima.
-public enum PermissionDecision: Equatable, Sendable {
+public enum PermissionDecision: Equatable, Sendable, Codable {
     case allow(updatedInput: JSONValue?)
     case deny(message: String, interrupt: Bool)
 }
