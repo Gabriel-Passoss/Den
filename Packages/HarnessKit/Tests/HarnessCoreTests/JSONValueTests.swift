@@ -6,9 +6,10 @@ private func roundTrip(_ json: String) throws -> String {
     let value = try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
     let encoder = JSONEncoder()
     // .withoutEscapingSlashes: sem isso, Foundation's JSONEncoder escapa "/"
-    // como "\/" nesta toolchain, e roundTripsTheRealPermissionRequestInput
-    // (que compara a string bruta) falharia mesmo com a implementação correta
-    // — um efeito colateral do encoder, não do JSONValue.
+    // como "\/" por padrão, e roundTripsTheRealPermissionRequestInput (cujo
+    // fixture tem um file_path de verdade, com barras) falharia comparando a
+    // string bruta mesmo com a implementação correta — efeito colateral do
+    // encoder, não do JSONValue. Não remova sem checar esse teste.
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     return String(decoding: try encoder.encode(value), as: UTF8.self)
 }
@@ -29,6 +30,14 @@ private func roundTrip(_ json: String) throws -> String {
     #expect(try roundTrip(#"{"count":1}"#) == #"{"count":1}"#)
     #expect(try roundTrip(#"{"count":0}"#) == #"{"count":0}"#)
     #expect(try roundTrip(#"{"count":-7}"#) == #"{"count":-7}"#)
+}
+
+@Test func preservesIntegersBeyondDoublePrecision() throws {
+    // Double representa inteiros exatamente só até 2^53. 9007199254740993
+    // (2^53 + 1) é o menor inteiro que um Double não consegue representar —
+    // se o decoder tentasse Double antes de Int, este valor arredondaria
+    // silenciosamente para 9007199254740992 no round-trip.
+    #expect(try roundTrip(#"{"id":9007199254740993}"#) == #"{"id":9007199254740993}"#)
 }
 
 @Test func preservesFractionalNumbers() throws {

@@ -2,9 +2,13 @@ import Foundation
 
 /// Um valor JSON qualquer, preservado sem esquema.
 ///
-/// Inteiro e ponto flutuante são casos distintos de propósito: o `input` de uma
-/// ferramenta é devolvido ao CLI quando o usuário permite a chamada, e um
-/// `{"count":1}` que voltasse como `{"count":1.0}` mudaria a chamada.
+/// Inteiro e ponto flutuante são casos distintos de propósito: `Double`
+/// representa inteiros exatamente só até 2^53 — acima disso, a precisão se
+/// perde de forma silenciosa (sem erro, sem crash). O `input` de uma
+/// ferramenta é devolvido ao CLI quando o usuário permite a chamada, e esse
+/// input pode carregar ids, offsets de byte ou timestamps em nanossegundos
+/// grandes o bastante para passar de 2^53. Um único caso `.number(Double)`
+/// corromperia esses valores silenciosamente no round-trip.
 public enum JSONValue: Sendable, Equatable {
     case null
     case bool(Bool)
@@ -42,7 +46,9 @@ extension JSONValue: Codable {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() { self = .null; return }
         if let b = try? container.decode(Bool.self) { self = .bool(b); return }
-        // Int antes de Double: a ordem é o que preserva a inteireza.
+        // Int antes de Double: acima de 2^53, Double perde precisão inteira de
+        // forma silenciosa (9007199254740993 viraria 9007199254740992). Essa
+        // ordem é o que impede essa corrupção — não "simplifique" trocando-a.
         if let i = try? container.decode(Int.self) { self = .int(i); return }
         if let d = try? container.decode(Double.self) { self = .double(d); return }
         if let s = try? container.decode(String.self) { self = .string(s); return }
