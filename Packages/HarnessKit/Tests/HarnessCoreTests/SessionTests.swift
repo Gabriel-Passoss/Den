@@ -97,10 +97,33 @@ private func segment(
                     usage: UsageTotals(inputTokens: 7)),
             segment(harnessB, entries: [entry("c")]),
         ])
-    let summary = SessionSummary(session: session, updatedAt: when)
+    let summary = SessionSummary(session: session, entryCount: session.allEntries.count, updatedAt: when)
     #expect(summary.id == session.id)
     #expect(summary.entryCount == 3)
     #expect(summary.harnesses == [harnessA, harnessB])
     #expect(summary.usage.inputTokens == 7)
     #expect(summary.updatedAt == when)
+}
+
+@Test func aSummaryOfAPartiallyLoadedSessionTrustsTheCallersEntryCountNotTheEmptyArrays() {
+    // O cenário motivador do finding do reviewer: a Task 4 carrega sessões
+    // com segmentos que têm `usage`/`harness`/`seededBy` preenchidos mas
+    // `entries: []`, porque as entradas moram em arquivos NDJSON separados.
+    // Se `SessionSummary` calculasse `entryCount` a partir de
+    // `session.allEntries.count` aqui, reportaria zero — exatamente o
+    // cenário em que este tipo existe para ser útil. `usage` não sofre disso
+    // porque mora em `Segment` diretamente, independente das `entries`
+    // estarem carregadas.
+    let session = Session(
+        id: UUID(), title: "sessão parcialmente carregada",
+        workingDirectory: URL(fileURLWithPath: "/tmp"),
+        segments: [
+            segment(harnessA, entries: [], usage: UsageTotals(inputTokens: 100)),
+            segment(harnessB, entries: [], usage: UsageTotals(inputTokens: 50)),
+        ])
+    #expect(session.allEntries.isEmpty) // pré-condição: nenhuma entrada carregada
+
+    let summary = SessionSummary(session: session, entryCount: 347, updatedAt: when)
+    #expect(summary.usage.inputTokens == 150) // usage é correto mesmo sem entries
+    #expect(summary.entryCount == 347) // vem do chamador, não das entries vazias
 }

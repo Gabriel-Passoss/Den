@@ -96,12 +96,30 @@ public struct SessionSummary: Sendable, Equatable, Codable, Identifiable {
         self.updatedAt = updatedAt
     }
 
-    public init(session: Session, updatedAt: Date) {
+    /// Deriva de uma `Session` tudo que É derivável de metadado —
+    /// `id`, `title`, `workingDirectory`, `harnesses`, `usage` — e exige
+    /// `entryCount` como parâmetro em vez de calculá-lo internamente.
+    ///
+    /// A razão é o próprio propósito deste tipo: "listar uma sessão sem
+    /// carregar o transcript dela." A Task 4 carrega sessões desse jeito —
+    /// os segmentos vêm com `usage`, `harness` e `seededBy` preenchidos, mas
+    /// `entries: []`, porque as entradas moram em arquivos NDJSON separados
+    /// por design. Se este inicializador calculasse `entryCount` a partir de
+    /// `session.allEntries.count`, ele reportaria zero exatamente no cenário
+    /// em que este tipo existe para ser usado — uma sessão com centenas de
+    /// entradas relatada como vazia. `usage` não sofre desse problema porque
+    /// mora diretamente em `Segment`, independente de os `entries` estarem
+    /// carregados; só `entryCount` pode mentir. Por isso ele não é derivado
+    /// aqui: um chamador com a sessão inteira carregada passa
+    /// `session.allEntries.count` e diz isso explicitamente no call site; um
+    /// chamador com só metadado passa a contagem de onde quer que ele
+    /// realmente a conheça (por exemplo, do índice persistido).
+    public init(session: Session, entryCount: Int, updatedAt: Date) {
         self.init(id: session.id, title: session.title,
                   workingDirectory: session.workingDirectory,
                   harnesses: session.segments.map(\.harness),
                   usage: session.totalUsage,
-                  entryCount: session.allEntries.count,
+                  entryCount: entryCount,
                   updatedAt: updatedAt)
     }
 }
