@@ -30,6 +30,9 @@ public struct NDJSONFramer: Sendable {
         while let index = buffer.firstIndex(of: Self.newline) {
             var line = Data(buffer[buffer.startIndex..<index])
             buffer = Data(buffer[buffer.index(after: index)...])
+            if line.count > limit {
+                throw FramingError.lineTooLong(limit: limit)
+            }
             if line.last == Self.carriageReturn { line.removeLast() }
             if !line.isEmpty { lines.append(line) }
         }

@@ -41,6 +41,13 @@ import Foundation
     }
 }
 
+@Test func estouraQuandoLinhaTerminadaPassaDoTeto() {
+    var framer = NDJSONFramer(limit: 16)
+    #expect(throws: NDJSONFramer.FramingError.lineTooLong(limit: 16)) {
+        _ = try framer.push(Data((String(repeating: "x", count: 20) + "\n").utf8))
+    }
+}
+
 @Test func naoEstouraQuandoOTotalPassaMasCadaLinhaCabe() throws {
     var framer = NDJSONFramer(limit: 16)
     let lines = try framer.push(Data("{\"a\":1}\n{\"b\":2}\n{\"c\":3}\n".utf8))
