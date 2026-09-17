@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// Um diretório por sessão: `session.json` com os metadados e um NDJSON
 /// append-only por segmento.
@@ -62,21 +63,64 @@ public actor FileTranscriptStore: TranscriptStore {
 
     public func append(_ entry: TranscriptEntry, to segmentID: Segment.ID,
                        in sessionID: Session.ID) throws {
-        let file = segmentFile(segmentID, in: sessionID)
+        // Valida contra os metadados persistidos ANTES de escrever: sem
+        // isso, um `segmentID`/`sessionID` que nunca esteve no
+        // `session.json` (bug de ordenação a montante, segmento removido dos
+        // metadados) escreve silenciosamente num arquivo que `load()` e
+        // `list()` nunca vão enumerar, porque os dois só andam pelos
+        // segmentos que o `session.json` lista. `StoreError.segmentNotFound`
+        // existe exatamente para fechar esse buraco.
+        let metadata = metadataFile(for: sessionID)
+        guard FileManager.default.fileExists(atPath: metadata.path) else {
+            throw StoreError.sessionNotFound(sessionID)
+        }
+        let session = try decoder.decode(Session.self, from: Data(contentsOf: metadata))
+        guard session.segments.contains(where: { $0.id == segmentID }) else {
+            throw StoreError.segmentNotFound(segmentID)
+        }
+
         var line = try encoder.encode(entry)
         line.append(0x0A)
 
-        let manager = FileManager.default
-        if !manager.fileExists(atPath: file.path) {
-            try manager.createDirectory(at: directory(for: sessionID),
-                                        withIntermediateDirectories: true)
-            try line.write(to: file, options: .atomic)
-            return
+        // Uma única rota, aberta com O_APPEND — não duas (fileExists ? write
+        // atômico baseado em rename : seekToEnd + write). O actor só
+        // serializa chamadas DENTRO de uma instância; duas instâncias sobre
+        // o MESMO root (duas janelas do DevSpace, ou uma janela e a sonda de
+        // diagnóstico) só compartilham o arquivo, não o isolamento do actor.
+        // As duas rotas antigas tinham corrida entre instâncias: a primeira
+        // escrita (ambas veem !fileExists, ambas fazem o write atômico —
+        // quem renomeia por último vence, a outra entrada some sem erro) e
+        // toda escrita seguinte (seek e write são dois passos — duas
+        // instâncias podem calcular o mesmo offset de fim-de-arquivo antes
+        // de qualquer uma escrever, e a segunda pisa em cima da primeira).
+        // `O_APPEND` empurra o seek-até-o-fim para dentro do próprio kernel,
+        // que o faz atomicamente em relação a outros escritores do mesmo
+        // arquivo — fechando as duas corridas de uma vez. E não precisa mais
+        // decidir entre duas rotas, então o código fica menor, não maior.
+        //
+        // A garantia é do sistema de arquivos, não da linguagem: vale para
+        // filesystems locais (APFS, ext4, ...). Nem todo filesystem de rede
+        // honra `O_APPEND` atomicamente entre escritores — um `root` num
+        // compartilhamento de rede está trocando essa garantia fora.
+        let file = segmentFile(segmentID, in: sessionID)
+        let fd = open(file.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+        guard fd != -1 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
-        let handle = try FileHandle(forWritingTo: file)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: line)
+        defer { close(fd) }
+        try line.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+            guard var pointer = buffer.baseAddress else { return }
+            var remaining = buffer.count
+            while remaining > 0 {
+                let written = write(fd, pointer, remaining)
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                }
+                pointer = pointer.advanced(by: written)
+                remaining -= written
+            }
+        }
     }
 
     public func load(_ sessionID: Session.ID) throws -> Session {
