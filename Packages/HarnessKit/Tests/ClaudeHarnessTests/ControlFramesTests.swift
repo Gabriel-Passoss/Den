@@ -36,6 +36,46 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(result.errorMessage == "deu ruim")
 }
 
+@Test func classifiesAResponseWithAnUnrecognizedSubtypeAsFailure() throws {
+    // Controller ruling (Finding 1): falhar alto em vez de suceder quieto —
+    // um subtipo que não é "success" nem "error" (ex.: um futuro "cancelled")
+    // não pode virar sucesso silencioso.
+    let line = Data(#"""
+    {"type":"control_response","response":{"subtype":"cancelled","request_id":"r1"}}
+    """#.utf8)
+    guard case .response(let id, let result) = ControlFrame.classify(line) else {
+        Issue.record("esperava .response"); return
+    }
+    #expect(id == "r1")
+    #expect(!result.isSuccess)
+    #expect(result.errorMessage == "resposta com subtipo desconhecido: cancelled")
+}
+
+@Test func classifiesAResponseWithAMissingSubtypeAsFailure() throws {
+    let line = Data(#"""
+    {"type":"control_response","response":{"request_id":"r2"}}
+    """#.utf8)
+    guard case .response(let id, let result) = ControlFrame.classify(line) else {
+        Issue.record("esperava .response"); return
+    }
+    #expect(id == "r2")
+    #expect(!result.isSuccess)
+    #expect(result.errorMessage == "resposta com subtipo desconhecido: ausente")
+}
+
+@Test func aControlResponseMissingItsResponseBodyIsPreservedNotDiscarded() throws {
+    // Controller ruling (Finding 2): o irmão control_request preserva o
+    // quadro inteiro via .unknownControl; control_response fazia o oposto.
+    let line = Data(#"""
+    {"type":"control_response","oops":true}
+    """#.utf8)
+    guard case .unknownControl(let id, let raw) = ControlFrame.classify(line) else {
+        Issue.record("esperava .unknownControl"); return
+    }
+    #expect(id == "")
+    #expect(raw["oops"] == .bool(true))
+}
+
 @Test func parsesTheRealPermissionRequestFromTheFixture() throws {
     let frames = try fixtureLines("permission-request").map(ControlFrame.classify)
     let requests = frames.compactMap { frame -> PermissionRequest? in
@@ -54,6 +94,21 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(r.suggestions.first?.mode == "acceptEdits")
     #expect(r.suggestions.first?.destination == "session")
     #expect(!r.id.isEmpty)
+}
+
+@Test func aPermissionSuggestionMissingItsTypeIsPreservedNotDropped() throws {
+    // Controller ruling (Finding 3): compactMap descartava sugestões sem
+    // "type", fazendo suggestions.count mentir sobre o que o harness enviou.
+    let line = Data(#"""
+    {"type":"control_request","request_id":"a1","request":{"subtype":"can_use_tool","tool_name":"Bash","permission_suggestions":[{"mode":"acceptEdits"}]}}
+    """#.utf8)
+    guard case .permissionRequest(let r) = ControlFrame.classify(line) else {
+        Issue.record("esperava .permissionRequest"); return
+    }
+    #expect(r.suggestions.count == 1)
+    #expect(r.suggestions.first?.type == nil)
+    #expect(r.suggestions.first?.mode == "acceptEdits")
+    #expect(r.suggestions.first?.raw["mode"] == .string("acceptEdits"))
 }
 
 @Test func anUnknownControlSubtypeIsPreservedNotRejected() throws {

@@ -28,13 +28,28 @@ public enum ControlFrame: Equatable, Sendable {
             return .permissionRequest(parsed)
 
         case "control_response":
-            guard let response = value["response"] else { return .conversation }
+            // Spec §5.4, mesma regra que control_request: um quadro que não
+            // conseguimos interpretar é preservado, não descartado.
+            guard let response = value["response"] else {
+                return .unknownControl(requestID: "", raw: value)
+            }
             let id = response["request_id"]?.stringValue ?? ""
-            if response["subtype"]?.stringValue == "error" {
+            let subtype = response["subtype"]?.stringValue
+            switch subtype {
+            case "success":
+                return .response(requestID: id, .success(response["response"] ?? .null))
+            case "error":
                 return .response(requestID: id,
                                  .failure(response["error"]?.stringValue ?? "erro sem mensagem"))
+            default:
+                // Controller ruling (Finding 1): falhar alto em vez de suceder
+                // quieto. Um subtipo que não é "success" nem "error" — ausente
+                // ou um futuro "cancelled"/"timeout" — não pode virar sucesso
+                // silencioso: quem espera essa resposta seguiria em frente com
+                // dados ruins em vez de investigar.
+                return .response(requestID: id,
+                                 .failure("resposta com subtipo desconhecido: \(subtype ?? "ausente")"))
             }
-            return .response(requestID: id, .success(response["response"] ?? .null))
 
         default:
             return .conversation
@@ -72,21 +87,24 @@ public struct PermissionRequest: Equatable, Sendable {
         self.input = request["input"] ?? .null
         self.toolUseID = request["tool_use_id"]?.stringValue
         self.suggestions = (request["permission_suggestions"]?.arrayValue ?? [])
-            .compactMap(PermissionSuggestion.init(raw:))
+            .map(PermissionSuggestion.init(raw:))
     }
 }
 
 public struct PermissionSuggestion: Equatable, Sendable {
-    public let type: String
+    public let type: String?
     public let mode: String?
     public let destination: String?
     public let behavior: String?
     /// Payload original preservado — nem todo campo de sugestão é conhecido.
+    /// Controller ruling (Finding 3): uma sugestão sem "type" ainda é
+    /// preservada aqui, não descartada — um diálogo que ignora o que não
+    /// entende é melhor que um `suggestions.count` que mente sobre o que o
+    /// harness realmente ofereceu.
     public let raw: JSONValue
 
-    init?(raw: JSONValue) {
-        guard let type = raw["type"]?.stringValue else { return nil }
-        self.type = type
+    init(raw: JSONValue) {
+        self.type = raw["type"]?.stringValue
         self.mode = raw["mode"]?.stringValue
         self.destination = raw["destination"]?.stringValue
         self.behavior = raw["behavior"]?.stringValue
