@@ -130,6 +130,30 @@ lado do protocolo.
   sobe. Achado do re-review da onda de correção, fora do escopo do que ele
   media; barato de fazer no primeiro plano que tocar o store.
 
+## Menores da Etapa 4a que sobreviveram às correções
+
+Registrados aqui porque o workspace do plano que os guardava é descartável.
+
+- **`Handoff.replay(throughEntry:)` não valida que a entrada existe.** Nada
+  impede um replay apontando para um `UUID` que não está em segmento nenhum da
+  sessão. Vira relevante no plano de handoff — é a feature de trocar de harness
+  mantendo a sessão, e um ponteiro de corte inválido só apareceria na hora de
+  montar o prompt de retomada.
+- **`Session.segments` documenta ordem cronológica sem impor.** O tipo aceita
+  qualquer ordem; `allEntries` concatena na ordem do array. Quem montar a
+  retomada depende disso estar certo.
+- **O formato de data é decidido pelo store, não pelos tipos.** `.iso8601` está
+  fixado pelos testes do `FileTranscriptStore`; nada em `TranscriptEntry` ou
+  `Session` guia outro codificador. Um segundo escritor (export, IPC) escolheria
+  sozinho.
+- **O default de `Segment.seededBy` não é exercitado por teste direto** — os
+  helpers sempre o passam explicitamente. Mutá-lo passa despercebido; mutar a
+  atribuição é pego. Lacuna no código de teste do plano, não no de produção.
+- **A janela de corrida da guarda de newline não tem teste.** Combinar processo
+  morto no meio de uma escrita com um segundo escritor simultâneo é o único
+  cenário vivo; o pior resultado é uma linha em branco que o filtro já descarta.
+  Reconhecida e benigna, não coberta.
+
 ## Teste instável observado
 
 - `respondFailsWithChannelClosedWhenTheWriteHitsADeadPipe` falhou **uma vez em
