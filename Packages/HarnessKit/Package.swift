@@ -22,6 +22,13 @@ let package = Package(
             // fonte automaticamente — precisam ser declarados como recurso.
             resources: [.copy("Fixtures")]
         ),
-        .executableTarget(name: "harness-probe", dependencies: ["ClaudeHarness"]),
+        // Lógica de parsing de `harness-probe record`, isolada de main.swift
+        // porque um alvo executável com um arquivo `main.swift` (código de
+        // topo) não pode ser importado por um alvo de teste. A ambiguidade
+        // que causou dois lançamentos reais não intencionais do `claude`
+        // vivia exatamente nessa lógica — precisa ser testável.
+        .target(name: "HarnessProbeArguments"),
+        .testTarget(name: "HarnessProbeArgumentsTests", dependencies: ["HarnessProbeArguments"]),
+        .executableTarget(name: "harness-probe", dependencies: ["ClaudeHarness", "HarnessProbeArguments"]),
     ]
 )

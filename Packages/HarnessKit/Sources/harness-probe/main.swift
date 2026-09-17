@@ -1,5 +1,6 @@
 import Foundation
 import ClaudeHarness
+import HarnessProbeArguments
 
 /// Ferramenta de diagnóstico: descobre o binário `claude` real e grava uma
 /// sessão `stream-json` em disco. Sem ArgumentParser — a restrição global do
@@ -13,25 +14,6 @@ func usage() -> Never {
 
     """.utf8))
     exit(64)
-}
-
-/// Devolve o valor de `flag` em `args`, ou `nil` se a flag não aparecer.
-///
-/// Uma flag que aparece mas sem valor depois dela (por ser o último
-/// argumento, ou por vir seguida de outra flag reconhecida) é sempre um erro
-/// de uso — nunca um `nil` silencioso indistinguível de "flag omitida". Foi
-/// exatamente essa ambiguidade que, na revisão desta tarefa, fez
-/// `--cwd` (sem valor, no fim da linha) cair no fallback para o diretório de
-/// trabalho real do shell e apontar o `claude` de verdade para dentro do
-/// repositório — sem aviso nenhum.
-func value(_ flag: String, in args: [String]) -> String? {
-    guard let i = args.firstIndex(of: flag) else { return nil }
-    let next = args.index(after: i)
-    guard next < args.endIndex else {
-        errLine("\(flag) foi informado sem um valor.")
-        usage()
-    }
-    return args[next]
 }
 
 func errLine(_ message: String) {
@@ -56,17 +38,22 @@ case "discover":
     print("versão:     \(install.version)")
 
 case "record":
-    guard let prompt = value("--prompt", in: args) else { usage() }
-    // --cwd é obrigatório, não tem fallback para o diretório de trabalho do
-    // shell. Este comando sobe um `claude` de verdade, com ferramentas de
-    // arquivo e bash reais — deixar "esqueceu a flag" e "typei-a e apaguei o
-    // valor" caírem silenciosamente no cwd do operador é exatamente o
-    // incidente que motivou este fix (ver relatório da Task 4, rodada de
-    // correções). Cada gravação real feita nesta tarefa já passava --cwd
-    // explicitamente; não há caso de uso legítimo para omiti-lo aqui.
-    guard let cwdArgument = value("--cwd", in: args) else { usage() }
-    let cwd = URL(fileURLWithPath: cwdArgument)
-    let outputPath = value("--out", in: args)
+    // Parseia tudo de uma vez em vez de escanear `args` independentemente
+    // por flag (essa era a falha: um único token como "--cwd" podia servir
+    // ao mesmo tempo de valor de --prompt e de flag --cwd de verdade, e as
+    // duas buscas separadas passavam). Ver HarnessProbeArguments para o
+    // contrato completo e os testes que provam os quatro modos de falha.
+    let parsedArguments: RecordArguments
+    switch parseRecordArguments(Array(args.dropFirst())) {
+    case .success(let parsed):
+        parsedArguments = parsed
+    case .failure(let error):
+        errLine(error.message)
+        usage()
+    }
+    let prompt = parsedArguments.prompt
+    let cwd = URL(fileURLWithPath: parsedArguments.cwd)
+    let outputPath = parsedArguments.outputPath
     let sessionID = UUID()
 
     // Impresso antes de qualquer coisa que possa falhar — inclusive antes da
