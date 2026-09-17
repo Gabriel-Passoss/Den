@@ -19,7 +19,29 @@ import Foundation
 @Test func entregaVariasLinhasDeUmChunkSo() throws {
     var framer = NDJSONFramer()
     let lines = try framer.push(Data("{\"a\":1}\n{\"b\":2}\n".utf8))
-    #expect(lines.count == 2)
+    #expect(lines.map { String(decoding: $0, as: UTF8.self) } == [#"{"a":1}"#, #"{"b":2}"#])
+}
+
+/// Alvo direto da otimização: um chunk com centenas de linhas precisa
+/// preservar conteúdo e ordem exatos. Um erro de rebase de índice na
+/// reescrita corromperia isso silenciosamente, sem crashar.
+@Test func entregaMuitasLinhasDeUmChunkSo() throws {
+    var framer = NDJSONFramer()
+    let expected = (0..<300).map { #"{"n":\#($0)}"# }
+    let chunk = expected.map { $0 + "\n" }.joined()
+    let lines = try framer.push(Data(chunk.utf8))
+    #expect(lines.map { String(decoding: $0, as: UTF8.self) } == expected)
+}
+
+/// Intercala uma linha parcial entre chunks com múltiplas linhas completas
+/// no mesmo push, para cobrir o caso em que o resíduo de um push anterior
+/// precisa se combinar corretamente com várias linhas extraídas de uma vez.
+@Test func combinaResiduoDeChunkAnteriorComVariasLinhasNoMesmoPush() throws {
+    var framer = NDJSONFramer()
+    let firstLines = try framer.push(Data("{\"a\":1}\n{\"b\":2}\n{\"c\":".utf8))
+    #expect(firstLines.map { String(decoding: $0, as: UTF8.self) } == [#"{"a":1}"#, #"{"b":2}"#])
+    let secondLines = try framer.push(Data("3}\n".utf8))
+    #expect(secondLines.map { String(decoding: $0, as: UTF8.self) } == [#"{"c":3}"#])
 }
 
 @Test func ignoraLinhasVazias() throws {
