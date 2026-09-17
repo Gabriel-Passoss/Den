@@ -76,6 +76,73 @@ refutar isso, do mesmo jeito que a Etapa 2 confirmou o formato de entrada.
 Não desenhe em cima da suposição de que uma sessão vai travar esperando
 aprovação: sob as condições testadas, nenhuma travou.
 
+## Verificação do protocolo de controle (2026-09-17)
+
+A hipótese acima foi testada. **Refutada na forma simples.**
+
+### Estabelecido empiricamente
+
+O canal de controle **está vivo** em modo headless `stream-json`. Um
+`control_request` de `initialize` escrito no stdin recebe resposta:
+
+```jsonc
+// enviado
+{"type":"control_request","request_id":"init-1","request":{"subtype":"initialize"}}
+// recebido
+{"type":"control_response","response":{"subtype":"success","request_id":"init-1",
+  "response":{"commands":[...]}}}
+```
+
+Mas **enviar `initialize` não habilita o roteamento de `can_use_tool`.** Duas
+sessões idênticas, uma com handshake e outra sem, terminaram ambas em
+`system/permission_denied` sem nenhum `control_request` vindo do CLI.
+
+### Estabelecido por análise do binário
+
+O CLI 2.1.236 tem a instalação completa do lado servidor:
+
+- `sendRequest({subtype:"can_use_tool", tool_name, display_name, input, permission_suggestions})`
+- tabela de pendentes, detecção de descasamento de nome, `control_cancel_request`
+- subtipos presentes: `initialize`, `can_use_tool`, `interrupt`,
+  `set_permission_mode`, `set_model`, `hook_callback`, `mcp_message`
+
+O request de `initialize` aceita `hooks`, `sdkMcpServers` e
+`webSearchIsolationExemptMcpServers` — **não há campo declarando suporte a
+permissões**.
+
+A negação é governada por `toolPermissionContext.shouldAvoidPermissionPrompts`,
+ligado por uma camada de permissão `avoid_prompts`. E a escolha do avaliador é
+`canUseTool: contexto.canUseTool ?? hasPermissionsToUseTool` — ou seja, o
+callback do cliente é uma **opção** do contexto, com a lógica embutida como
+padrão.
+
+### Confundidor que limita a conclusão
+
+As duas sessões rodaram sob as configurações da máquina de teste, que têm
+`permissions.defaultMode: "auto"`, e o `--permission-mode manual` passado na
+linha de comando **não surtiu efeito** — o `system/init` reportou
+`permissionMode: "default"` nas duas. Hooks do usuário também rodaram dentro
+da sessão.
+
+Portanto: **não está demonstrado que o modo `manual` não pergunta.** Está
+demonstrado que `initialize` sozinho não é o interruptor.
+
+### Em aberto, e por onde continuar
+
+O que instala o cliente como `canUseTool` no contexto do CLI segue
+desconhecido. O próximo passo é **gratuito e não foi feito**: ler o código do
+SDK oficial em TypeScript e observar exatamente o que ele escreve no stdin
+antes do primeiro turno. Isso responde a pergunta sem gastar nada.
+
+Até lá, não desenhe assumindo que uma sessão trava esperando aprovação.
+
+### Achado lateral com valor imediato
+
+O CLI aceita **`--max-budget-usd <amount>`**, um teto de gasto por sessão que
+só funciona com `--print`. O DevSpace deveria passá-lo por padrão: é a
+proteção mais direta contra uma sessão descontrolada, e teria evitado os dois
+incidentes de custo desta implementação.
+
 ## Nota operacional
 
 O transporte nunca inspeciona conteúdo — ele entrega linhas de `Data` cruas,
