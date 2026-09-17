@@ -383,3 +383,33 @@ private func floodScript(writers: Int) -> String {
         await transport.terminate()
     }
 }
+
+/// `writeSync` existe para quem precisa registrar estado antes de a resposta
+/// poder chegar: ser `nonisolated` significa que o chamador não suspende entre
+/// registrar e escrever. Ver `ControlChannel.send(_:)`.
+@Test func writeSyncReachesTheChildWithoutSuspending() async throws {
+    try await withTimeout(seconds: 5) {
+        let transport = ProcessTransport()
+        let stream = try await transport.start(
+            shellLaunch(#"while read -r l; do printf '{"eco":%s}\n' "$l"; done"#)
+        )
+        try transport.writeSync(Data(#"{"a":1}"#.utf8))
+        await transport.endInput()
+
+        var received: [String] = []
+        for try await line in stream { received.append(String(decoding: line, as: UTF8.self)) }
+        #expect(received == [#"{"eco":{"a":1}}"#])
+    }
+}
+
+@Test func writeSyncFailsAfterInputIsClosed() async throws {
+    try await withTimeout(seconds: 5) {
+        let transport = ProcessTransport()
+        let stream = try await transport.start(shellLaunch("cat > /dev/null"))
+        await transport.endInput()
+        #expect(throws: ProcessTransport.TransportError.notRunning) {
+            try transport.writeSync(Data("{}".utf8))
+        }
+        for try await _ in stream {}
+    }
+}

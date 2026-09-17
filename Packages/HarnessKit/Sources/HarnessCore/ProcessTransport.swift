@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import Synchronization
 
 /// Segura o enquadrador, os handles e o stderr acumulado atrás de um lock.
 ///
@@ -213,6 +214,12 @@ public actor ProcessTransport {
     private var standardInput: FileHandle?
     private var io: StreamIO?
 
+    /// O mesmo handle de `standardInput`, alcançável sem `await`.
+    ///
+    /// Existe por causa de `writeSync(_:)`: há chamadores que precisam escrever
+    /// *sem* atravessar um ponto de suspensão. Ver o contrato lá.
+    private let syncStandardInput = Mutex<FileHandle?>(nil)
+
     /// - Parameters:
     ///   - terminationGracePeriod: quanto `terminate()` espera pelo SIGTERM
     ///     antes de escalar para SIGKILL. Default 5 s (spec §5.5).
@@ -335,6 +342,7 @@ public actor ProcessTransport {
         // exceção quando alguém pergunta o `terminationStatus` dele.
         self.process = process
         self.standardInput = input.fileHandleForWriting
+        syncStandardInput.withLock { $0 = input.fileHandleForWriting }
         self.io = io
         return stream
     }
@@ -345,8 +353,32 @@ public actor ProcessTransport {
     }
 
     public func endInput() {
+        // Limpar o espelho antes de fechar, não depois: assim um `writeSync`
+        // concorrente ou vê o handle ainda aberto, ou vê `nil` — nunca um
+        // descritor já fechado.
+        syncStandardInput.withLock { $0 = nil }
         try? standardInput?.close()
         standardInput = nil
+    }
+
+    /// Escrita sem suspensão, para chamadores que precisam registrar estado
+    /// antes de a resposta poder chegar. Mesmo contrato de `write(_:)`.
+    ///
+    /// `write(_:)` é membro de ator: chega-se a ele com `await`, e uma suspensão
+    /// entre "registrar quem espera a resposta" e "escrever o pedido" abre a
+    /// janela em que a resposta chega e é descartada por não ter dono. Sendo
+    /// `nonisolated` sobre um handle guardado por lock, esta versão não tem
+    /// essa janela.
+    ///
+    /// Diferente de `write(_:)`, não verifica se o processo ainda está vivo —
+    /// esse campo é isolado no ator. Escrever num filho já morto devolve EPIPE
+    /// (o `F_SETNOSIGPIPE` de `start(_:)` garante erro em vez de sinal), então
+    /// o caso continua sendo um `throw`, só com outro erro.
+    nonisolated public func writeSync(_ line: Data) throws {
+        guard let handle = syncStandardInput.withLock({ $0 }) else {
+            throw TransportError.notRunning
+        }
+        try handle.write(contentsOf: line + Data("\n".utf8))
     }
 
     /// SIGTERM, depois SIGKILL se necessário (spec §5.5).
