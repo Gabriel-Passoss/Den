@@ -139,3 +139,208 @@ func json(_ text: String) throws -> JSONValue {
     #expect(try makeMapper().map(json(#"{"type":"control_request","request_id":"1"}"#)) == .empty)
     #expect(try makeMapper().map(json(#"{"type":"control_response","response":{}}"#)) == .empty)
 }
+
+// MARK: - Durável: assistant
+
+@Test func anAssistantTextBlockBecomesOneDurableEntryAndNoEvent() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","timestamp":"2026-09-17T02:16:56.133Z",
+     "message":{"role":"assistant","content":[{"type":"text","text":"OK"}]}}
+    """#))
+    #expect(out.events.isEmpty)
+    #expect(out.entries.count == 1)
+    #expect(out.entries[0].kind == .assistantText("OK"))
+    // D4: o `raw` de uma entrada derivada de bloco é o bloco.
+    #expect(out.entries[0].raw == .object(["type": .string("text"), "text": .string("OK")]))
+}
+
+/// A linha traz `timestamp` próprio — o relógio injetado não é usado.
+@Test func anAssistantEntryUsesTheLineTimestamp() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","timestamp":"2026-09-17T02:20:59.447Z",
+     "message":{"content":[{"type":"text","text":"x"}]}}
+    """#))
+    // Tolerância, não igualdade: `Date` compara `Double`, e o valor que sai
+    // do parser não é bit a bit o mesmo que o literal. Isto afere a análise do
+    // carimbo, não o relógio de parede.
+    let expected = Date(timeIntervalSince1970: 1_789_611_659.447)
+    #expect(abs(out.entries[0].timestamp.timeIntervalSince(expected)) < 0.001)
+}
+
+@Test func anAssistantTimestampThatDoesNotParseFallsBackToTheClock() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","timestamp":"ontem de tarde",
+     "message":{"content":[{"type":"text","text":"x"}]}}
+    """#))
+    #expect(out.entries[0].timestamp == fixedNow)
+}
+
+@Test func aThinkingBlockBecomesAssistantThinking() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","message":{"content":[
+      {"type":"thinking","thinking":"deixa eu ver","signature":"abc"}]}}
+    """#))
+    #expect(out.entries.count == 1)
+    #expect(out.entries[0].kind == .assistantThinking("deixa eu ver"))
+    // A assinatura sobrevive no raw, que é o que o D7 prometeu.
+    #expect(out.entries[0].raw["signature"]?.stringValue == "abc")
+}
+
+@Test func aToolUseBlockBecomesAToolCallWithItsCanonicalVerb() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","message":{"content":[
+      {"type":"tool_use","id":"toolu_1","name":"Bash",
+       "input":{"command":"ls","description":"listar"}}]}}
+    """#))
+    guard case .toolCall(let call) = try #require(out.entries.first).kind else {
+        Issue.record("esperava .toolCall"); return
+    }
+    #expect(call.id == "toolu_1")
+    #expect(call.rawName == "Bash")
+    #expect(call.canonical == .execute)
+    #expect(call.input["command"]?.stringValue == "ls")
+}
+
+@Test func aToolWithoutACanonicalVerbKeepsItsRawName() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","message":{"content":[
+      {"type":"tool_use","id":"toolu_2","name":"Skill","input":{}}]}}
+    """#))
+    guard case .toolCall(let call) = try #require(out.entries.first).kind else {
+        Issue.record("esperava .toolCall"); return
+    }
+    #expect(call.canonical == nil)
+    #expect(call.rawName == "Skill")
+}
+
+@Test func aMessageWithSeveralBlocksBecomesOneEntryPerBlockInOrder() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","message":{"content":[
+      {"type":"thinking","thinking":"hm"},
+      {"type":"text","text":"vou listar"},
+      {"type":"tool_use","id":"t1","name":"Bash","input":{}}]}}
+    """#))
+    #expect(out.entries.count == 3)
+    #expect(out.entries[0].kind == .assistantThinking("hm"))
+    #expect(out.entries[1].kind == .assistantText("vou listar"))
+    if case .toolCall = out.entries[2].kind {} else { Issue.record("esperava .toolCall em 2") }
+}
+
+/// Spec §5.4: nenhum bloco é descartado, nem o que não sabemos ler.
+@Test func anUnknownOrMalformedBlockIsPreservedNotDropped() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","message":{"content":[
+      {"type":"bloco_novo","seja_o_que_for":1},
+      {"type":"text"},
+      {"sem":"tipo"}]}}
+    """#))
+    #expect(out.entries.count == 3)
+    for entry in out.entries {
+        guard case .unrecognized(let discriminator, _) = entry.kind else {
+            Issue.record("esperava .unrecognized, veio \(entry.kind)"); continue
+        }
+        #expect(discriminator.hasPrefix("claude:content/"))
+    }
+}
+
+@Test func anAssistantLineWithoutContentIsPreservedWhole() throws {
+    let line = try json(#"{"type":"assistant","message":{"role":"assistant"}}"#)
+    let entry = try #require(makeMapper().map(line).entries.first)
+    #expect(entry.kind == .unrecognized(discriminator: "claude:assistant", payload: line))
+}
+
+// MARK: - Durável: user
+
+@Test func aToolResultBlockBecomesAToolResultEntry() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"user","timestamp":"2026-09-17T02:20:59.447Z","message":{"role":"user","content":[
+      {"type":"tool_result","tool_use_id":"toolu_1","content":"total 16","is_error":false}]}}
+    """#))
+    guard case .toolResult(let result) = try #require(out.entries.first).kind else {
+        Issue.record("esperava .toolResult"); return
+    }
+    #expect(result.callID == "toolu_1")
+    #expect(result.isError == false)
+    #expect(result.content.stringValue == "total 16")
+}
+
+/// `is_error` chega ausente em parte das linhas do corpus. Ausente significa
+/// "deu certo" — não "não sabemos".
+@Test func aToolResultWithoutIsErrorIsNotAnError() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"user","message":{"content":[
+      {"type":"tool_result","tool_use_id":"t","content":"ok"}]}}
+    """#))
+    guard case .toolResult(let result) = try #require(out.entries.first).kind else {
+        Issue.record("esperava .toolResult"); return
+    }
+    #expect(result.isError == false)
+}
+
+@Test func aFailedToolResultCarriesItsErrorFlag() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"user","message":{"content":[
+      {"type":"tool_result","tool_use_id":"t","content":"blocked","is_error":true}]}}
+    """#))
+    guard case .toolResult(let result) = try #require(out.entries.first).kind else {
+        Issue.record("esperava .toolResult"); return
+    }
+    #expect(result.isError == true)
+}
+
+/// Forma sintética: o CLI observado não ecoa o turno que escrevemos. Ver a
+/// nota da task.
+@Test func aUserLineWithStringContentBecomesAUserMessage() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"user","message":{"role":"user","content":"liste a pasta"}}
+    """#))
+    #expect(out.entries.count == 1)
+    #expect(out.entries[0].kind == .userMessage(text: "liste a pasta", attachments: []))
+}
+
+// MARK: - Durável: result
+
+@Test func aResultLineBecomesATurnResultWithItsUsage() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"result","subtype":"success","is_error":false,"stop_reason":"end_turn",
+     "result":"OK","total_cost_usd":0.133027,
+     "usage":{"input_tokens":2,"output_tokens":4,
+              "cache_read_input_tokens":0,"cache_creation_input_tokens":13197}}
+    """#))
+    #expect(out.events.isEmpty)
+    #expect(out.entries.count == 1)
+    guard case .turnResult(let turn) = out.entries[0].kind else {
+        Issue.record("esperava .turnResult"); return
+    }
+    #expect(turn.usage == UsageTotals(inputTokens: 2, outputTokens: 4,
+                                      cacheReadTokens: 0, cacheCreationTokens: 13197,
+                                      costUSD: 0.133027))
+    #expect(turn.stopReason == "end_turn")
+    #expect(turn.isError == false)
+    // A linha não traz timestamp: vale o relógio injetado.
+    #expect(out.entries[0].timestamp == fixedNow)
+}
+
+/// D3: a prosa final da linha `result` é a MESMA do último bloco `text` da
+/// linha `assistant`. Mapeá-la duplicaria o último parágrafo de todo turno.
+@Test func theFinalProseIsNotDuplicatedAsAssistantText() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"result","is_error":false,"result":"OK","usage":{}}
+    """#))
+    #expect(out.entries.count == 1)
+    for entry in out.entries {
+        if case .assistantText = entry.kind { Issue.record("prosa final duplicada") }
+    }
+    // Mas continua recuperável: o raw guarda a linha inteira.
+    #expect(out.entries[0].raw["result"]?.stringValue == "OK")
+}
+
+@Test func aResultWithoutUsageCountsZeroInsteadOfFailing() throws {
+    let out = makeMapper().map(try json(#"{"type":"result","is_error":true}"#))
+    guard case .turnResult(let turn) = try #require(out.entries.first).kind else {
+        Issue.record("esperava .turnResult"); return
+    }
+    #expect(turn.usage == .zero)
+    #expect(turn.isError == true)
+    #expect(turn.stopReason == nil)
+}

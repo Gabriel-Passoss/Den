@@ -44,6 +44,12 @@ public struct ClaudeEventMapper: Sendable {
         switch type {
         case "stream_event":
             return ephemeral(line)
+        case "assistant":
+            return assistant(line)
+        case "user":
+            return user(line)
+        case "result":
+            return result(line)
         case "control_request", "control_response":
             // O `ControlChannel` é o dono destes quadros (Etapa 3). Mapeá-los
             // aqui também poria o mesmo pedido de permissão duas vezes no
@@ -125,5 +131,133 @@ public struct ClaudeEventMapper: Sendable {
                                 payload: payload),
             raw: payload
         )
+    }
+}
+
+// MARK: - Durável
+
+private extension ClaudeEventMapper {
+    /// Uma entrada por bloco de conteúdo.
+    ///
+    /// A linha `assistant` é a forma CONSOLIDADA do mesmo turno que os
+    /// `stream_event` entregaram delta a delta. É ela que vai para o
+    /// transcript, e são eles que vão para a UI — as duas fontes carregam o
+    /// mesmo texto (D1).
+    func assistant(_ line: JSONValue) -> MappedOutput {
+        let moment = timestamp(of: line)
+        guard let blocks = line["message"]?["content"]?.arrayValue else {
+            return MappedOutput(entries: [unrecognized("assistant", line, at: moment)])
+        }
+        return MappedOutput(entries: blocks.map { assistantBlock($0, at: moment) })
+    }
+
+    func assistantBlock(_ block: JSONValue, at moment: Date) -> TranscriptEntry {
+        switch block["type"]?.stringValue {
+        case "text":
+            guard let text = block["text"]?.stringValue else { break }
+            return TranscriptEntry(timestamp: moment, kind: .assistantText(text), raw: block)
+        case "thinking":
+            // A assinatura criptográfica do bloco fica no `raw` — ver D7.
+            guard let text = block["thinking"]?.stringValue else { break }
+            return TranscriptEntry(timestamp: moment, kind: .assistantThinking(text), raw: block)
+        case "tool_use":
+            guard let id = block["id"]?.stringValue,
+                  let name = block["name"]?.stringValue else { break }
+            let call = ToolCall(
+                id: id,
+                rawName: name,
+                canonical: ClaudeToolVocabulary.canonical(for: name),
+                input: block["input"] ?? .null
+            )
+            return TranscriptEntry(timestamp: moment, kind: .toolCall(call), raw: block)
+        default:
+            break
+        }
+        return unrecognizedBlock(block, at: moment)
+    }
+
+    /// Uma entrada por bloco `tool_result` — ou uma só, quando o conteúdo é a
+    /// mensagem em texto.
+    func user(_ line: JSONValue) -> MappedOutput {
+        let moment = timestamp(of: line)
+        guard let content = line["message"]?["content"] else {
+            return MappedOutput(entries: [unrecognized("user", line, at: moment)])
+        }
+        // A forma em string é a que NÓS escrevemos no stdin; o CLI observado
+        // não a ecoa de volta, então o corpus não a exercita. Mapeá-la mesmo
+        // assim não inventa nada: `role: "user"` com conteúdo em texto é
+        // exatamente o que `.userMessage` significa.
+        if let text = content.stringValue {
+            return MappedOutput(entries: [
+                TranscriptEntry(timestamp: moment,
+                                kind: .userMessage(text: text, attachments: []),
+                                raw: line)
+            ])
+        }
+        guard let blocks = content.arrayValue else {
+            return MappedOutput(entries: [unrecognized("user", line, at: moment)])
+        }
+        return MappedOutput(entries: blocks.map { userBlock($0, at: moment) })
+    }
+
+    func userBlock(_ block: JSONValue, at moment: Date) -> TranscriptEntry {
+        guard block["type"]?.stringValue == "tool_result",
+              let callID = block["tool_use_id"]?.stringValue
+        else { return unrecognizedBlock(block, at: moment) }
+
+        let result = ToolResult(
+            callID: callID,
+            // Ausente significa "deu certo". O CLI só escreve a chave quando
+            // a ferramenta falhou.
+            isError: block["is_error"]?.boolValue ?? false,
+            content: block["content"] ?? .null
+        )
+        return TranscriptEntry(timestamp: moment, kind: .toolResult(result), raw: block)
+    }
+
+    /// Como o turno fechou, com a contabilidade daquele turno.
+    ///
+    /// O campo `result` da linha NÃO vira `.assistantText`: ele repete a prosa
+    /// do último bloco `text` da linha `assistant` anterior, e mapeá-lo
+    /// duplicaria o último parágrafo de todo turno (D3). A linha inteira fica
+    /// no `raw`, então nada se perde.
+    func result(_ line: JSONValue) -> MappedOutput {
+        let usage = line["usage"]
+        let totals = UsageTotals(
+            inputTokens: usage?["input_tokens"]?.intValue ?? 0,
+            outputTokens: usage?["output_tokens"]?.intValue ?? 0,
+            cacheReadTokens: usage?["cache_read_input_tokens"]?.intValue ?? 0,
+            cacheCreationTokens: usage?["cache_creation_input_tokens"]?.intValue ?? 0,
+            costUSD: line["total_cost_usd"]?.doubleValue ?? 0
+        )
+        let turn = TurnResult(
+            usage: totals,
+            stopReason: line["stop_reason"]?.stringValue,
+            isError: line["is_error"]?.boolValue ?? false
+        )
+        return MappedOutput(entries: [
+            TranscriptEntry(timestamp: timestamp(of: line), kind: .turnResult(turn), raw: line)
+        ])
+    }
+
+    func unrecognizedBlock(_ block: JSONValue, at moment: Date) -> TranscriptEntry {
+        unrecognized("content/" + (block["type"]?.stringValue ?? "?"), block, at: moment)
+    }
+
+    /// O `timestamp` da linha, quando ela traz um.
+    ///
+    /// Só `assistant` e `user` trazem; `system`, `result`, `stream_event` e
+    /// `rate_limit_event` não trazem nenhum, e para essas vale o relógio
+    /// injetado. Um carimbo que não analisa também cai no relógio, em vez de
+    /// derrubar a entrada (spec §5.4).
+    func timestamp(of line: JSONValue) -> Date {
+        guard let text = line["timestamp"]?.stringValue else { return now() }
+        if let date = try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
+            return date
+        }
+        if let date = try? Date(text, strategy: Date.ISO8601FormatStyle()) {
+            return date
+        }
+        return now()
     }
 }
