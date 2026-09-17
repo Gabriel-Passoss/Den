@@ -168,8 +168,8 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
         /// `Known` → `CodingKeys` — NÃO é imposto pelo compilador (medido:
         /// compila, e `encode` estoura em tempo de execução com "Case 'x'
         /// cannot be encoded because it is not defined in CodingKeys"). Quem
-        /// fecha esse elo é `theKindCasesAndTheKnownDiscriminatorsDoNotDiverge`
-        /// em `TranscriptEntryTests.swift`.
+        /// fecha esse elo é `theOpenEnumsDoNotDivergeFromTheirKnownDiscriminators`
+        /// em `TranscriptFormatGoldenTests.swift`.
         static let knownDiscriminators: Set<String> =
             Set(Known.CodingKeys.allCases.map(\.stringValue))
 

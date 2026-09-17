@@ -115,6 +115,21 @@ lado do protocolo.
   pelo chamador.** A spec §4.2 escreve `UUID` literalmente, então o código é
   fiel — mas é o vazamento de forma a vigiar quando o segundo adaptador chegar.
 
+## Do store
+
+- **`list()` engole a falha de ler a RAIZ.** O `try?` sobre
+  `contentsOfDirectory(at: root,…)` devolve `SessionListing()` — a mesma
+  resposta que uma raiz vazia. Para a raiz AUSENTE isso é deliberado e está
+  pinado por `listOnAnEmptyOrMissingRootIsEmptyNotAnError`: no primeiro uso do
+  app o diretório ainda não existe, e "nenhuma sessão" é a resposta certa. O
+  que não se distingue dela é permissão negada ou disco ilegível — aí "nenhuma
+  sessão" é mentira, e é a mesma forma de perda silenciosa que o
+  `SessionListing.unreadable` acabou de consertar um nível ABAIXO, por sessão.
+  Some-se que `list()` é declarado `throws` e hoje não lança de lugar nenhum.
+  O conserto é distinguir `ENOENT` do resto: ausente devolve vazio, o resto
+  sobe. Achado do re-review da onda de correção, fora do escopo do que ele
+  media; barato de fazer no primeiro plano que tocar o store.
+
 ## Teste instável observado
 
 - `respondFailsWithChannelClosedWhenTheWriteHitsADeadPipe` falhou **uma vez em
