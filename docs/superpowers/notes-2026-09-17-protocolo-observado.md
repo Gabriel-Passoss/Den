@@ -154,6 +154,39 @@ encontrou: procuramos na ajuda, e ela não está lá.
 O `initialize` continua sendo necessário por outras razões (hooks, servidores
 MCP do SDK), mas **não** é o que habilita permissões.
 
+### CONFIRMADO na prática (2026-09-17)
+
+Uma sessão com `--permission-prompt-tool stdio` produziu o pedido, e a resposta
+do cliente foi honrada — `prova.txt` foi criado. Gravado em
+`Packages/HarnessKit/Tests/ClaudeHarnessTests/Fixtures/permission-request.ndjson`.
+
+O que o CLI envia:
+
+```json
+{"type":"control_request",
+ "request_id":"a7c8532d-65be-4a74-8a3f-bd2f485e9a61",
+ "request":{"subtype":"can_use_tool",
+   "tool_name":"Write",
+   "display_name":"Write",
+   "input":{"file_path":"/private/tmp/probe-scratch/prova.txt","content":"ok"},
+   "description":"prova.txt",
+   "permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}],
+   "tool_use_id":"toolu_01MnTatUeYfz3cMti4VXq4z8"}}
+```
+
+O que o cliente responde para permitir:
+
+```json
+{"type":"control_response",
+ "response":{"subtype":"success","request_id":"<mesmo id>",
+   "response":{"behavior":"allow","updatedInput":{...}}}}
+```
+
+Note o `permission_suggestions`: o CLI já sugere a regra que o usuário
+provavelmente quer ("aceitar edições nesta sessão"). Isso é material direto de
+UI — é o botão "permitir sempre nesta sessão" pronto, vindo do próprio harness
+em vez de inventado por nós.
+
 ### Ressalva que ainda vale
 
 O SDK documenta que o callback só é invocado quando as regras de permissão do

@@ -21,6 +21,18 @@ Todos com o mesmo comando, variando só `--prompt` e `--out`, sempre a partir de
 | `hello.ndjson` | 12 | `Diga apenas OK e nada mais.` |
 | `tool-use.ndjson` | 55 | `Liste os arquivos do diretório atual usando o bash.` |
 | `permission-denied.ndjson` | 289 | `Crie um arquivo chamado novo.txt com o conteúdo 'oi' usando o bash.` |
+| `permission-request.ndjson` | 8 | `Use a ferramenta Write para criar prova.txt com o texto ok.` |
+
+`permission-request.ndjson` foi gravado de forma diferente dos outros três e é
+o único que contém o protocolo de controle:
+
+- com `--permission-prompt-tool stdio`, que é o que faz o CLI pedir permissão
+  ao cliente em vez de decidir sozinho;
+- com `--setting-sources ""`, para não carregar hooks nem `defaultMode: auto`
+  da máquina — é por isso que ele é curto e barato (US$ 0,096 contra US$ 0,31
+  de uma sessão equivalente com as configurações do operador);
+- o cliente respondeu `allow`, e o arquivo foi de fato criado — ou seja, a ida
+  e a volta estão ambas provadas, não só o pedido.
 
 `/tmp/probe-scratch` era um diretório descartável com dois `.txt` e uma subpasta
 — nunca este repositório. Ele aparece nos fixtures como `/private/tmp/probe-scratch`,
