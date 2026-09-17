@@ -50,3 +50,38 @@ import Foundation
     let unmappedData = try JSONEncoder().encode(unmapped)
     #expect(try JSONDecoder().decode(ToolCall.self, from: unmappedData) == unmapped)
 }
+
+@Test func anUnknownCanonicalVerbDegradesToNilInsteadOfFailingTheWholeDecode() throws {
+    // Uma versão futura escreve "delete", que este binário ainda não conhece
+    // — rollback, leitor antigo, handoff no meio de um upgrade. A decodificação
+    // do ToolCall inteiro não pode estourar por causa disso: o resto do valor
+    // (id, rawName, input) é bom e precisa sobreviver.
+    let json = #"{"id":"x","rawName":"Delete","canonical":"delete","input":{}}"#
+    let call = try JSONDecoder().decode(ToolCall.self, from: Data(json.utf8))
+    #expect(call.id == "x")
+    #expect(call.rawName == "Delete")
+    #expect(call.canonical == nil)
+}
+
+@Test func aKnownCanonicalVerbStillDecodesToItselfThroughTheCustomDecoder() throws {
+    // O decodificador à mão não pode ter trocado tolerância por regressão no
+    // caminho normal: um verbo que existe hoje precisa continuar decodificando
+    // para o caso certo, não sempre para nil.
+    let json = #"{"id":"t","rawName":"Edit","canonical":"edit","input":{}}"#
+    let call = try JSONDecoder().decode(ToolCall.self, from: Data(json.utf8))
+    #expect(call.canonical == .edit)
+}
+
+@Test func aNilCanonicalRoundTripsCoherentlyThroughJSON() throws {
+    let call = ToolCall(id: "u", rawName: "X", canonical: nil, input: .null)
+    let data = try JSONEncoder().encode(call)
+    // "coerentemente": o encoder escolhe omitir a chave (encodeIfPresent),
+    // não gravar `"canonical":null` — ambos decodificariam de volta para nil,
+    // mas só um está no JSON de fato produzido.
+    let jsonString = String(decoding: data, as: UTF8.self)
+    #expect(!jsonString.contains("canonical"))
+
+    let decoded = try JSONDecoder().decode(ToolCall.self, from: data)
+    #expect(decoded.canonical == nil)
+    #expect(decoded == call)
+}
