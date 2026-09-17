@@ -32,6 +32,17 @@ public struct NDJSONFramer: Sendable {
     /// linhas); em vez disso, o prefixo consumido é descartado uma única
     /// vez, depois do laço — O(n) no total.
     ///
+    /// **Contrato pós-throw: um throw é terminal.** Depois que `push` lança, o
+    /// enquadrador não volta a funcionar — o buffer retém a linha que estourou
+    /// o teto (quando o throw vem de dentro do laço, o `removeSubrange` é
+    /// pulado e nada é consumido), e todo `push` seguinte lança de novo, para
+    /// sempre, com o buffer crescendo sem limite e nenhuma linha válida saindo.
+    /// As linhas que já tinham ficado prontas *neste* chunk também se perdem:
+    /// o array de retorno não chega ao chamador.
+    ///
+    /// O chamador precisa parar de empurrar e descartar o enquadrador. É o que
+    /// `StreamIO` faz, via `hasFramingFailed`; o tipo não tem como impor.
+    ///
     /// Cuidado com índices de `Data`: uma fatia (`buffer[a..<b]`) preserva
     /// o espaço de índices do buffer pai — não começa em 0. `searchStart`
     /// e `index` abaixo são sempre índices do próprio `buffer`, nunca de
