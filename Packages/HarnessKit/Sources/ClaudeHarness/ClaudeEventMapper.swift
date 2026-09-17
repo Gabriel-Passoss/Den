@@ -50,6 +50,10 @@ public struct ClaudeEventMapper: Sendable {
             return user(line)
         case "result":
             return result(line)
+        case "system":
+            return system(line)
+        case "rate_limit_event":
+            return rateLimit(line)
         case "control_request", "control_response":
             // O `ControlChannel` é o dono destes quadros (Etapa 3). Mapeá-los
             // aqui também poria o mesmo pedido de permissão duas vezes no
@@ -259,5 +263,80 @@ private extension ClaudeEventMapper {
             return date
         }
         return now()
+    }
+
+    /// As linhas `system`, separadas por subtipo em efêmeras e duráveis.
+    ///
+    /// Dos 30 `system` do corpus, 21 são `status` (rótulo de spinner) e
+    /// `thinking_tokens` (estimativa corrente de tokens): progresso de
+    /// exibição, não semântica da conversa. Vão para a UI e morrem ali — o
+    /// transcript é registro semântico (spec §4.2), e um replay para outro
+    /// harness não ganha nada com eles.
+    func system(_ line: JSONValue) -> MappedOutput {
+        guard let subtype = line["subtype"]?.stringValue else {
+            return MappedOutput(entries: [unrecognized("system", line)])
+        }
+        switch subtype {
+        case "init":
+            let model = line["model"]?.stringValue ?? ""
+            return MappedOutput(
+                events: [.sessionInitialized(
+                    model: model,
+                    harnessSessionID: line["session_id"]?.stringValue ?? ""
+                )],
+                entries: [TranscriptEntry(
+                    timestamp: now(),
+                    kind: .systemNotice(subtype: "init", text: model),
+                    raw: line
+                )]
+            )
+
+        case "status":
+            return MappedOutput(events: [
+                .notice(subtype: subtype, text: line["status"]?.stringValue ?? "")
+            ])
+
+        case "thinking_tokens":
+            return MappedOutput(events: [
+                .notice(subtype: subtype,
+                        text: line["estimated_tokens"]?.intValue.map { String($0) } ?? "")
+            ])
+
+        case "permission_denied":
+            // As regras do harness negaram sozinhas — o `can_use_tool` só
+            // chega ao cliente quando elas avaliam para "ask". Isso é uma
+            // decisão de permissão de verdade, feita pelo harness. Registrar
+            // como aviso perderia a semântica de que a ferramenta foi barrada.
+            //
+            // `interrupt: false` porque o turno observado segue: nas 6
+            // negações do corpus veio um `tool_result` com `is_error: true`
+            // logo depois e a conversa continuou.
+            guard let toolUseID = line["tool_use_id"]?.stringValue else {
+                return MappedOutput(entries: [unrecognized("system/" + subtype, line)])
+            }
+            return MappedOutput(entries: [TranscriptEntry(
+                timestamp: now(),
+                kind: .permissionDecision(
+                    requestID: toolUseID,
+                    .deny(message: line["message"]?.stringValue ?? "", interrupt: false)
+                ),
+                raw: line
+            )])
+
+        default:
+            return MappedOutput(entries: [unrecognized("system/" + subtype, line)])
+        }
+    }
+
+    /// Durável: é o que explica, meses depois, um turno que parou no meio.
+    func rateLimit(_ line: JSONValue) -> MappedOutput {
+        MappedOutput(entries: [TranscriptEntry(
+            timestamp: now(),
+            kind: .systemNotice(
+                subtype: "rate_limit",
+                text: line["rate_limit_info"]?["status"]?.stringValue ?? ""
+            ),
+            raw: line
+        )])
     }
 }

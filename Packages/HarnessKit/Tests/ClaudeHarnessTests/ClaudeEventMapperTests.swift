@@ -344,3 +344,110 @@ func json(_ text: String) throws -> JSONValue {
     #expect(turn.isError == true)
     #expect(turn.stopReason == nil)
 }
+
+// MARK: - Linhas de sistema
+
+@Test func systemInitAnnouncesTheModelAndAlsoLandsInTheTranscript() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"system","subtype":"init","model":"claude-opus-5",
+     "session_id":"cf77236a-23fd-43ad-95ed-a5ea2792daba","cwd":"/tmp","tools":["Bash"]}
+    """#))
+    #expect(out.events == [.sessionInitialized(model: "claude-opus-5",
+                                               harnessSessionID: "cf77236a-23fd-43ad-95ed-a5ea2792daba")])
+    #expect(out.entries.count == 1)
+    #expect(out.entries[0].kind == .systemNotice(subtype: "init", text: "claude-opus-5"))
+    // D4: entrada derivada da linha carrega a linha inteira.
+    #expect(out.entries[0].raw["cwd"]?.stringValue == "/tmp")
+}
+
+/// D2: 21 das 30 linhas `system` do corpus são progresso de exibição. Elas vão
+/// para a UI e morrem ali — o transcript é registro semântico, não log de
+/// exibição (spec §4.2).
+@Test func statusAndThinkingTokensAreEphemeralOnly() throws {
+    let status = makeMapper().map(try json(#"""
+    {"type":"system","subtype":"status","status":"Analisando","session_id":"s"}
+    """#))
+    #expect(status.events == [.notice(subtype: "status", text: "Analisando")])
+    #expect(status.entries.isEmpty)
+
+    let thinking = makeMapper().map(try json(#"""
+    {"type":"system","subtype":"thinking_tokens","estimated_tokens":1024,
+     "estimated_tokens_delta":32,"session_id":"s"}
+    """#))
+    #expect(thinking.events == [.notice(subtype: "thinking_tokens", text: "1024")])
+    #expect(thinking.entries.isEmpty)
+}
+
+@Test func permissionDeniedIsADecisionNotANotice() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"system","subtype":"permission_denied","tool_name":"Bash",
+     "tool_use_id":"toolu_01MY","message":"Output redirection was blocked.","session_id":"s"}
+    """#))
+    #expect(out.events.isEmpty)
+    #expect(out.entries.count == 1)
+    #expect(out.entries[0].kind == .permissionDecision(
+        requestID: "toolu_01MY",
+        .deny(message: "Output redirection was blocked.", interrupt: false)))
+}
+
+@Test func aPermissionDeniedWithoutAToolUseIDIsPreservedNotGuessed() throws {
+    let line = try json(#"{"type":"system","subtype":"permission_denied","message":"x"}"#)
+    let entry = try #require(makeMapper().map(line).entries.first)
+    #expect(entry.kind == .unrecognized(discriminator: "claude:system/permission_denied", payload: line))
+}
+
+@Test func anUnknownSystemSubtypeIsPreserved() throws {
+    let line = try json(#"{"type":"system","subtype":"algo_novo","campo":1}"#)
+    let entry = try #require(makeMapper().map(line).entries.first)
+    #expect(entry.kind == .unrecognized(discriminator: "claude:system/algo_novo", payload: line))
+}
+
+@Test func aSystemLineWithoutASubtypeIsPreserved() throws {
+    let line = try json(#"{"type":"system","campo":1}"#)
+    let entry = try #require(makeMapper().map(line).entries.first)
+    #expect(entry.kind == .unrecognized(discriminator: "claude:system", payload: line))
+}
+
+/// Durável: é o que explica um turno que parou.
+@Test func aRateLimitEventLandsInTheTranscript() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1789617600,
+     "rateLimitType":"five_hour","isUsingOverage":false},"session_id":"s"}
+    """#))
+    #expect(out.events.isEmpty)
+    #expect(out.entries.count == 1)
+    #expect(out.entries[0].kind == .systemNotice(subtype: "rate_limit", text: "allowed"))
+    #expect(out.entries[0].raw["rate_limit_info"]?["rateLimitType"]?.stringValue == "five_hour")
+}
+
+// MARK: - Entradas de permissão
+
+@Test func aPermissionRequestBecomesAnEntryWithItsSuggestions() throws {
+    let raw = try json(#"""
+    {"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool",
+     "tool_name":"Write","tool_use_id":"toolu_9"}}
+    """#)
+    let request = PermissionRequest(
+        id: "req-1",
+        toolName: "Write",
+        displayName: "Write",
+        input: .object(["file_path": .string("/tmp/a.txt")]),
+        toolUseID: "toolu_9",
+        suggestions: [PermissionSuggestion(type: "addRules", mode: "acceptEdits")]
+    )
+    let entry = makeMapper().entry(for: request, raw: raw)
+    #expect(entry.timestamp == fixedNow)
+    #expect(entry.raw == raw)
+    guard case .permissionRequest(let stored) = entry.kind else {
+        Issue.record("esperava .permissionRequest"); return
+    }
+    #expect(stored == request)
+    #expect(stored.suggestions.count == 1)
+}
+
+@Test func aPermissionDecisionBecomesAnEntryKeyedByTheRequestID() {
+    let entry = makeMapper().entry(
+        for: .allow(updatedInput: nil), requestID: "req-1", raw: .null)
+    #expect(entry.kind == .permissionDecision(requestID: "req-1", .allow(updatedInput: nil)))
+    #expect(entry.timestamp == fixedNow)
+}
