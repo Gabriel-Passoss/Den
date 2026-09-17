@@ -74,3 +74,91 @@ mesma classe acima, documentada no ponto de chamada; a alternativa rejeitada
   as primeiras a falhar numa máquina de CI carregada.
 - O `refusalMessage` é `internal`, então um consumidor fora do módulo não
   consegue comparar contra ele.
+
+# Pendências conhecidas ao fim da Etapa 4a (transcript durável)
+
+Mesmo critério: nenhuma bloqueia o merge, todas foram julgadas no review final
+do transcript durável e deliberadamente adiadas, com o raciocínio.
+
+## O buraco de tolerância que sobrou
+
+**Payloads de discriminadores CONHECIDOS não são tolerantes.** O endurecimento
+da Etapa 4a chegou até a camada do DISCRIMINADOR — `TranscriptEntry.Kind` e
+`Handoff` degradam um nome de caso desconhecido para `.unrecognized` — e parou
+ali. O INTERIOR de um caso conhecido continua sendo `Codable` sintetizado sobre
+tipos fechados.
+
+O contraexemplo não é hipotético: a spec §5.6 já AGENDA um
+`PermissionDecision.expired`. No dia em que ele existir, uma versão futura
+grava `{"permissionDecision":{"_1":{"expired":{...}},"requestID":"r1"}}`, o
+leitor de hoje reconhece `permissionDecision` perfeitamente bem, entra no
+decode sintetizado de `PermissionDecision`, e estoura — descartando a entrada
+INTEIRA, `raw` e tudo. Medido no review: 3 linhas escritas, 2 lidas.
+
+O comentário em `FileTranscriptStore.entries(of:in:)` que descreve o que chega
+ali como "JSON genuinamente quebrado" está um nível raso demais por causa
+disso, e o comentário foi corrigido para dizê-lo. A correção de verdade é dar
+aos enums fechados aninhados (`PermissionDecision` primeiro) o mesmo caso de
+fuga que `Kind` e `Handoff` têm — é mudança de porte e pertence ao plano do
+mapper, junto com o trabalho de `.expired` da §5.6 que já está nesta lista pelo
+lado do protocolo.
+
+## Do modelo
+
+- **Permissão expirada e interrupção não têm representação de primeira classe**
+  (§5.5, §5.6). Pertencem ao plano de orquestração.
+- **`Segment.usage` é estado derivável que o store nunca deriva.** Nada diz qual
+  das duas fontes manda — o campo gravado no `session.json` ou a soma dos
+  `turnResult` do NDJSON. Enquanto ninguém as compara, elas não discordam; o
+  primeiro relatório de custo as compara.
+- **`harnessSessionID: UUID` assume que todo harness aceita identidade gerada
+  pelo chamador.** A spec §4.2 escreve `UUID` literalmente, então o código é
+  fiel — mas é o vazamento de forma a vigiar quando o segundo adaptador chegar.
+
+## Do store
+
+- **`list()` engole a falha de ler a RAIZ.** O `try?` sobre
+  `contentsOfDirectory(at: root,…)` devolve `SessionListing()` — a mesma
+  resposta que uma raiz vazia. Para a raiz AUSENTE isso é deliberado e está
+  pinado por `listOnAnEmptyOrMissingRootIsEmptyNotAnError`: no primeiro uso do
+  app o diretório ainda não existe, e "nenhuma sessão" é a resposta certa. O
+  que não se distingue dela é permissão negada ou disco ilegível — aí "nenhuma
+  sessão" é mentira, e é a mesma forma de perda silenciosa que o
+  `SessionListing.unreadable` acabou de consertar um nível ABAIXO, por sessão.
+  Some-se que `list()` é declarado `throws` e hoje não lança de lugar nenhum.
+  O conserto é distinguir `ENOENT` do resto: ausente devolve vazio, o resto
+  sobe. Achado do re-review da onda de correção, fora do escopo do que ele
+  media; barato de fazer no primeiro plano que tocar o store.
+
+## Menores da Etapa 4a que sobreviveram às correções
+
+Registrados aqui porque o workspace do plano que os guardava é descartável.
+
+- **`Handoff.replay(throughEntry:)` não valida que a entrada existe.** Nada
+  impede um replay apontando para um `UUID` que não está em segmento nenhum da
+  sessão. Vira relevante no plano de handoff — é a feature de trocar de harness
+  mantendo a sessão, e um ponteiro de corte inválido só apareceria na hora de
+  montar o prompt de retomada.
+- **`Session.segments` documenta ordem cronológica sem impor.** O tipo aceita
+  qualquer ordem; `allEntries` concatena na ordem do array. Quem montar a
+  retomada depende disso estar certo.
+- **O formato de data é decidido pelo store, não pelos tipos.** `.iso8601` está
+  fixado pelos testes do `FileTranscriptStore`; nada em `TranscriptEntry` ou
+  `Session` guia outro codificador. Um segundo escritor (export, IPC) escolheria
+  sozinho.
+- **O default de `Segment.seededBy` não é exercitado por teste direto** — os
+  helpers sempre o passam explicitamente. Mutá-lo passa despercebido; mutar a
+  atribuição é pego. Lacuna no código de teste do plano, não no de produção.
+- **A janela de corrida da guarda de newline não tem teste.** Combinar processo
+  morto no meio de uma escrita com um segundo escritor simultâneo é o único
+  cenário vivo; o pior resultado é uma linha em branco que o filtro já descarta.
+  Reconhecida e benigna, não coberta.
+
+## Teste instável observado
+
+- `respondFailsWithChannelClosedWhenTheWriteHitsADeadPipe` falhou **uma vez em
+  ~10 execuções da suíte inteira**, e **zero em 20 execuções isoladas**. Nada da
+  Etapa 4a é alcançável a partir dele (`ControlChannel` não toca nenhum tipo
+  deste plano). É sensível a carga, o que o põe na mesma família da pendência
+  "escrita bloqueante é sistêmica" registrada acima: o erro esperado depende de
+  o `write(2)` no pipe morto de fato retornar `EPIPE` dentro da janela do teste.
