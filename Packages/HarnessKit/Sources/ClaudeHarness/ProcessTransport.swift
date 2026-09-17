@@ -14,7 +14,12 @@ import HarnessCore
 /// pelos callbacks já agendados, então o dreno final e um callback em voo
 /// podem correr juntos. Lendo os dois sob o lock, os bytes chegam ao
 /// enquadrador na mesma ordem em que saíram do pipe.
-private final class StreamIO: @unchecked Sendable {
+///
+/// Interno, e não privado, de propósito: o teto da varredura final só é
+/// mensurável chamando `readPending` direto. Pelo fluxo público ele fica
+/// escondido atrás das centenas de KiB que o `readabilityHandler` drena
+/// enquanto o filho ainda está vivo — ruído maior que o próprio teto.
+final class StreamIO: @unchecked Sendable {
     private let lock = NSLock()
     private let outputHandle: FileHandle
     private let errorHandle: FileHandle
@@ -38,6 +43,14 @@ private final class StreamIO: @unchecked Sendable {
     /// Arma os dois leitores. `onFramingFailure` é chamado no máximo uma vez;
     /// depois dele o stdout para de ser enquadrado, mas o stderr continua sendo
     /// drenado — um pipe de stderr cheio trava o filho (spec §4.4).
+    ///
+    /// Todo caminho que volta *sem* consumir o descritor desarma o handler
+    /// antes: `readabilityHandler` é disparado por nível (é uma dispatch source
+    /// de leitura), então um bloco que devolve deixando bytes ou EOF legíveis é
+    /// reagendado na hora, em laço fechado, queimando uma thread da fila
+    /// compartilhada até alguém desarmar. Desarmar aqui é seguro porque o dreno
+    /// final é o único outro leitor destes descritores, e ele começa
+    /// justamente desarmando os dois.
     func startReading(
         onLines: @escaping @Sendable ([Data]) -> Void,
         onFramingFailure: @escaping @Sendable (any Error) -> Void
@@ -45,9 +58,17 @@ private final class StreamIO: @unchecked Sendable {
         outputHandle.readabilityHandler = { [self] handle in
             lock.lock()
             defer { lock.unlock() }
-            guard !hasFinished, !hasFramingFailed else { return }
+            guard !hasFinished, !hasFramingFailed else {
+                handle.readabilityHandler = nil
+                return
+            }
+            // Chunk vazio num handle legível é EOF, e EOF num pipe é
+            // definitivo: o nível fica alto para sempre.
             let chunk = handle.availableData
-            guard !chunk.isEmpty else { return }
+            guard !chunk.isEmpty else {
+                handle.readabilityHandler = nil
+                return
+            }
             do {
                 onLines(try framer.push(chunk))
             } catch {
@@ -59,8 +80,16 @@ private final class StreamIO: @unchecked Sendable {
         errorHandle.readabilityHandler = { [self] handle in
             lock.lock()
             defer { lock.unlock() }
-            guard !hasFinished else { return }
-            errorBytes.append(handle.availableData)
+            guard !hasFinished else {
+                handle.readabilityHandler = nil
+                return
+            }
+            let chunk = handle.availableData
+            guard !chunk.isEmpty else {
+                handle.readabilityHandler = nil
+                return
+            }
+            errorBytes.append(chunk)
         }
     }
 
@@ -92,25 +121,54 @@ private final class StreamIO: @unchecked Sendable {
         }
     }
 
-    /// Lê o que já está no pipe sem nunca bloquear.
+    /// Tamanho de cada leitura da varredura — uma carga cheia de pipe.
+    static let sweepReadSize = 64 * 1024
+
+    /// Teto de bytes de uma varredura: duas cargas cheias de pipe.
+    ///
+    /// Um pipe no macOS guarda no máximo 65536 bytes (`BIG_PIPE_SIZE`, medido),
+    /// e o filho já saiu quando a varredura começa — então a cauda legítima
+    /// inteira cabe numa única leitura, e 128 KiB dão o dobro disso de folga sem
+    /// nunca truncar saída de verdade. Manter o teto rente ao pipe também
+    /// importa porque o dreno entrega tudo ao enquadrador de uma vez só: um teto
+    /// generoso transformaria um neto tagarela num `framer.push` gigante.
+    static let sweepByteLimit = 2 * sweepReadSize
+
+    /// Prazo de uma varredura. O teto de bytes sozinho não fecha o caso do neto
+    /// que goteja devagar: ele mantém o pipe quase sempre não-vazio sem nunca
+    /// enchê-lo, e aí a varredura demoraria muito para bater no teto. 100 ms é
+    /// ordens de grandeza mais do que uma drenagem honesta de ≤64 KiB precisa
+    /// (microssegundos) e curto o bastante para não travar de forma perceptível
+    /// nem o `terminationHandler` nem o `standardError`, que espera o mesmo lock.
+    static let sweepBudget = Duration.milliseconds(100)
+
+    /// Lê, sem nunca bloquear, o que já está no pipe — e para por aí.
     ///
     /// `readDataToEndOfFile()` só volta quando *todo* escritor fecha o
     /// descritor, e um neto que herdou o pipe sobrevive ao harness — isso
-    /// travaria o `terminationHandler` e o fluxo nunca terminaria. Tudo o que o
-    /// filho escreveu antes de sair já está no pipe neste ponto, então uma
-    /// varredura sem bloqueio pega a cauda inteira.
-    private static func readPending(_ handle: FileHandle) -> Data {
+    /// travaria o `terminationHandler` e o fluxo nunca terminaria.
+    ///
+    /// A varredura é limitada de propósito. Tudo o que o filho escreveu antes de
+    /// sair já está no pipe neste ponto; o que chegar depois veio de um neto que
+    /// continua escrevendo, e persegui-lo é o mesmo travamento por outro
+    /// caminho — ele reenche o pipe tão rápido quanto o dreno esvazia, `poll`
+    /// nunca devolve 0, `continuation.finish()` nunca é alcançado, e isso tudo
+    /// com o lock na mão e o buffer crescendo na velocidade do pipe. Perder o
+    /// retardatário é melhor do que congelar a sessão.
+    static func readPending(_ handle: FileHandle) -> Data {
         let descriptor = handle.fileDescriptor
+        let deadline = ContinuousClock.now + sweepBudget
         var pending = Data()
-        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
-        while true {
+        var buffer = [UInt8](repeating: 0, count: sweepReadSize)
+        while pending.count < sweepByteLimit, ContinuousClock.now < deadline {
             var poller = pollfd(fd: descriptor, events: Int16(POLLIN), revents: 0)
-            guard poll(&poller, 1, 0) > 0 else { return pending }
+            guard poll(&poller, 1, 0) > 0 else { break }
             let count = buffer.withUnsafeMutableBytes { read(descriptor, $0.baseAddress, $0.count) }
             if count < 0 && errno == EINTR { continue }
-            guard count > 0 else { return pending }
+            guard count > 0 else { break }
             pending.append(contentsOf: buffer[0..<count])
         }
+        return pending
     }
 }
 
