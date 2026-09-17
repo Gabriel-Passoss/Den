@@ -198,32 +198,82 @@ public actor ProcessTransport {
         }
     }
 
-    public enum TransportError: Error {
+    public enum TransportError: Error, Equatable {
         /// Não há processo vivo aceitando entrada — ou ele já saiu, ou o stdin
         /// já foi fechado por `endInput()`.
         case notRunning
+        /// `start(_:)` já subiu um processo neste transporte. Ver o contrato de
+        /// uso único em `start(_:)`.
+        case alreadyStarted
     }
 
     private let framingLimit: Int
+    private let terminationGracePeriod: Duration
+    private let killGracePeriod: Duration
     private var process: Process?
     private var standardInput: FileHandle?
     private var io: StreamIO?
 
-    public init(framingLimit: Int = 8 * 1024 * 1024) {
+    /// - Parameters:
+    ///   - terminationGracePeriod: quanto `terminate()` espera pelo SIGTERM
+    ///     antes de escalar para SIGKILL. Default 5 s (spec §5.5).
+    ///   - killGracePeriod: quanto `terminate()` espera depois do SIGKILL.
+    ///     Default 3 s (spec §5.5).
+    ///
+    /// As duas durações são injetáveis pela mesma razão que `framingLimit` é:
+    /// com os defaults da spec, o ramo de escalada só seria observável num
+    /// teste que gastasse 5 segundos de relógio. Com orçamentos curtos ele
+    /// cabe em milissegundos, e o caminho que só roda em emergência deixa de
+    /// ser código sem evidência nenhuma.
+    public init(
+        framingLimit: Int = 8 * 1024 * 1024,
+        terminationGracePeriod: Duration = .seconds(5),
+        killGracePeriod: Duration = .seconds(3)
+    ) {
         self.framingLimit = framingLimit
+        self.terminationGracePeriod = terminationGracePeriod
+        self.killGracePeriod = killGracePeriod
     }
 
     /// Tudo que o harness escreveu em stderr até agora. Quando o fluxo termina,
     /// já inclui o que estava no pipe no instante da saída.
     public var standardError: String { io?.collectedStandardError ?? "" }
 
-    /// Nil enquanto o processo ainda roda.
+    /// O código de saída do processo, ou `nil` em duas situações distintas
+    /// que este tipo não separa: o processo ainda está rodando, ou `start(_:)`
+    /// nunca chegou a subir um (nunca foi chamado, ou falhou no `run()`). Quem
+    /// precisar distinguir as duas tem que guardar por fora o fato de ter
+    /// chamado `start(_:)` com sucesso.
     public var terminationStatus: Int32? {
         guard let process, !process.isRunning else { return nil }
         return process.terminationStatus
     }
 
+    /// Sobe o harness e devolve o fluxo de linhas do stdout dele.
+    ///
+    /// **Um transporte é de uso único.** Um `start(_:)` bem-sucedido casa este
+    /// transporte com um processo para sempre: `terminationStatus` continua
+    /// respondendo pelo processo já colhido, e o fluxo, o stdin e os leitores
+    /// pertencem àquela execução. Uma segunda chamada lança
+    /// `TransportError.alreadyStarted` em vez de sobrescrever `process`,
+    /// `standardInput` e `io` — sobrescrevê-los deixaria o primeiro filho vivo,
+    /// com leitores armados e sem nenhuma referência capaz de alcançá-lo:
+    /// exatamente o órfão que a spec §5.2 existe para impedir, e sem nenhum
+    /// erro visível. Um ciclo `idle → hot` (spec §5.1) cria um transporte novo
+    /// por ciclo; é barato, e é o que torna a reentrância irrepresentável em
+    /// vez de meramente desaconselhada.
+    ///
+    /// A guarda é um `throw`, não uma `precondition`: `start(_:)` já lança, o
+    /// chamador já trata erro, e derrubar o app inteiro por um reuso indevido
+    /// seria pior do que o defeito que estamos prevenindo. Um erro é
+    /// recuperável, testável e nomeia a causa.
+    ///
+    /// Um `start(_:)` que **falha** não queima o transporte: `process` só é
+    /// preenchido depois de `run()` voltar, então uma tentativa de spawn
+    /// malsucedida pode ser repetida.
     public func start(_ launch: Launch) throws -> AsyncThrowingStream<Data, Error> {
+        guard self.process == nil else { throw TransportError.alreadyStarted }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: launch.executable)
         process.arguments = launch.arguments
@@ -308,18 +358,27 @@ public actor ProcessTransport {
     public func terminate() async {
         guard let process, process.isRunning else { return }
         process.terminate()
-        if await waitForExit(within: .seconds(5)) { return }
+        if await waitForExit(process, within: terminationGracePeriod) { return }
 
         kill(process.processIdentifier, SIGKILL)
-        _ = await waitForExit(within: .seconds(3))
+        _ = await waitForExit(process, within: killGracePeriod)
     }
 
-    private func waitForExit(within duration: Duration) async -> Bool {
+    /// Recebe o processo por parâmetro em vez de reler `self.process`.
+    ///
+    /// O laço atravessa pontos de suspensão, e ler o campo do actor depois de
+    /// cada um deles significaria observar um processo possivelmente diferente
+    /// do que `terminate()` acabou de sinalizar — devolvendo `true` para uma
+    /// saída que não é a dele, ou mandando SIGKILL contra um pid já colhido.
+    /// A guarda de uso único em `start(_:)` já impede que o campo mude, mas a
+    /// correção certa é não depender disso: a decisão é sobre *este* processo,
+    /// então é ele que precisa estar na mão.
+    private func waitForExit(_ process: Process, within duration: Duration) async -> Bool {
         let deadline = ContinuousClock.now + duration
         while ContinuousClock.now < deadline {
-            if process?.isRunning != true { return true }
+            if !process.isRunning { return true }
             try? await Task.sleep(for: .milliseconds(50))
         }
-        return process?.isRunning != true
+        return !process.isRunning
     }
 }

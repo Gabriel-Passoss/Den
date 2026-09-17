@@ -82,7 +82,12 @@ private func floodScript(writers: Int) -> String {
     }
 }
 
-@Test func terminateDerrubaUmProcessoQueNaoTermina() async throws {
+/// `sleep 60` **obedece** ao SIGTERM — então este teste mede o caminho feliz de
+/// `terminate()`: o filho sai no primeiro sinal e é colhido pelo polling sem
+/// custar o prazo inteiro até a escalada. O nome antigo
+/// ("derrubaUmProcessoQueNaoTermina") prometia o ramo de SIGKILL, que este
+/// script nunca alcança; quem cobre aquele ramo é o teste logo abaixo.
+@Test func terminateColheNaHoraUmProcessoQueObedeceAoSIGTERM() async throws {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         let stream = try await transport.start(shellLaunch("sleep 60"))
@@ -94,6 +99,97 @@ private func floodScript(writers: Int) -> String {
         // O polling tem que perceber o SIGTERM na hora: um encerramento bem
         // comportado não pode custar os 5 segundos do prazo até o SIGKILL.
         #expect(ContinuousClock.now - started < .seconds(1))
+    }
+}
+
+/// O ramo de escalada (spec §5.5) é a última linha de defesa contra um harness
+/// travado, e é o único caminho que só roda em emergência — ou seja, o que
+/// menos tem chance de ser exercitado por acidente.
+///
+/// `trap "" TERM` põe o SIGTERM em `SIG_IGN`, então `terminate()` é obrigado a
+/// escalar; `read x` bloqueia no stdin do próprio transporte, que segue aberto,
+/// sem criar neto nenhum que sobreviva ao SIGKILL segurando os pipes.
+///
+/// A linha `{"armed":1}` não é decoração: `process.run()` volta assim que o
+/// fork/exec dá certo, antes de o `sh` ter rodado uma linha sequer. Sinalizar
+/// nessa janela mata o filho pela disposição padrão do SIGTERM — medido: sem
+/// esperar por ela, este teste colhe 15 em vez de 9, e o ramo de escalada
+/// continua sem cobertura enquanto parece ter. Esperar a linha prova que o trap
+/// já está instalado.
+///
+/// O que fixa o resultado é o **código de saída**, não o relógio: um processo
+/// colhido por SIGKILL reporta 9. Se a escalada sumir, `terminate()` devolve com
+/// o filho ainda vivo e `terminationStatus` fica `nil`.
+///
+/// Os orçamentos curtos vêm do `init`, não de um limiar de tempo medido — é a
+/// injeção que torna o ramo barato, exatamente como `framingLimit` faz com o
+/// teto de enquadramento.
+@Test func terminateEscalaParaSIGKILLQuandoOSIGTERMEhIgnorado() async throws {
+    try await withTimeout(seconds: 5) {
+        let transport = ProcessTransport(
+            terminationGracePeriod: .milliseconds(50),
+            killGracePeriod: .milliseconds(30)
+        )
+        let stream = try await transport.start(
+            shellLaunch(#"trap "" TERM; printf '{"armed":1}\n'; read x"#)
+        )
+
+        var iterator = stream.makeAsyncIterator()
+        let armed = try await iterator.next()
+        #expect(armed.map { String(decoding: $0, as: UTF8.self) } == #"{"armed":1}"#)
+
+        await transport.terminate()
+        while try await iterator.next() != nil {}
+
+        #expect(await transport.terminationStatus == SIGKILL)
+    }
+}
+
+/// Um transporte é de uso único. Um segundo `start(_:)` sobrescreveria
+/// `process`, `standardInput` e `io`, e o primeiro filho continuaria vivo sem
+/// nenhuma referência capaz de alcançá-lo — nem `terminate()`, nem
+/// `terminationStatus`. Órfão silencioso, que é justamente o que a spec §5.2
+/// existe para impedir; e o gerenciador de sessões do próximo plano vai dirigir
+/// ciclos `idle → hot` (spec §5.1) em cima destes transportes.
+///
+/// Além do erro, o teste fixa a consequência: depois da recusa, o processo que o
+/// transporte ainda governa é o **primeiro**, e `terminate()` o derruba.
+@Test func startRecusaUmSegundoUsoDoMesmoTransporte() async throws {
+    try await withTimeout(seconds: 5) {
+        let transport = ProcessTransport()
+        let stream = try await transport.start(shellLaunch("sleep 60"))
+
+        await #expect(throws: ProcessTransport.TransportError.alreadyStarted) {
+            _ = try await transport.start(shellLaunch("exit 0"))
+        }
+
+        await transport.terminate()
+        for try await _ in stream {}
+        // 15 = SIGTERM: é o primeiro filho que foi colhido, não um segundo
+        // processo que teria saído com 0 por conta própria.
+        #expect(await transport.terminationStatus == SIGTERM)
+    }
+}
+
+/// Um spawn que falha não queima o transporte: `process` só é preenchido depois
+/// de `run()` voltar, então a guarda de uso único não pode transformar uma
+/// tentativa malsucedida numa recusa permanente.
+@Test func umStartQueFalhaNaoQueimaOTransporte() async throws {
+    try await withTimeout(seconds: 5) {
+        let transport = ProcessTransport()
+        var quebrado = shellLaunch("exit 0")
+        quebrado.executable = "/nao/existe/harness"
+
+        await #expect(throws: (any Error).self) {
+            _ = try await transport.start(quebrado)
+        }
+
+        let stream = try await transport.start(shellLaunch(#"printf '{"a":1}\n'"#))
+        var received: [String] = []
+        for try await line in stream {
+            received.append(String(decoding: line, as: UTF8.self))
+        }
+        #expect(received == [#"{"a":1}"#])
     }
 }
 
