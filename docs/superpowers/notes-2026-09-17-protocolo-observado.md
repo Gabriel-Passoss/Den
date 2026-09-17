@@ -127,14 +127,67 @@ da sessão.
 Portanto: **não está demonstrado que o modo `manual` não pergunta.** Está
 demonstrado que `initialize` sozinho não é o interruptor.
 
-### Em aberto, e por onde continuar
+### RESPONDIDO: a chave é uma flag oculta
 
-O que instala o cliente como `canUseTool` no contexto do CLI segue
-desconhecido. O próximo passo é **gratuito e não foi feito**: ler o código do
-SDK oficial em TypeScript e observar exatamente o que ele escreve no stdin
-antes do primeiro turno. Isso responde a pergunta sem gastar nada.
+O SDK oficial resolveu a questão. Quando um callback `can_use_tool` é
+configurado, o SDK **não negocia nada pelo protocolo** — ele acrescenta uma
+flag na linha de comando:
 
-Até lá, não desenhe assumindo que uma sessão trava esperando aprovação.
+```
+--permission-prompt-tool stdio
+```
+
+O valor literal `stdio` faz o CLI rotear os pedidos de permissão pelo protocolo
+de controle em vez de resolvê-los sozinho.
+
+Confirmado em duas fontes independentes:
+
+1. O SDK Python documenta que `_configure_can_use_tool` devolve uma cópia das
+   opções com `permission_prompt_tool_name="stdio"`.
+2. O binário 2.1.236 instalado contém o código correspondente:
+   `if(canUseTool){ if(permissionPromptToolName) throw Error("canUseTool
+   callback cannot be used with permissionPromptToolName..."); push("--permission-prompt-tool","stdio") }`
+
+**A flag não aparece em `claude --help`.** É por isso que a Etapa 2 não a
+encontrou: procuramos na ajuda, e ela não está lá.
+
+O `initialize` continua sendo necessário por outras razões (hooks, servidores
+MCP do SDK), mas **não** é o que habilita permissões.
+
+### Ressalva que ainda vale
+
+O SDK documenta que o callback só é invocado quando as regras de permissão do
+CLI avaliam para **"ask"**. Não é chamado para ferramentas já liberadas por
+`allowed_tools`, por `permission_mode` (`acceptEdits`/`bypassPermissions`), por
+regras em `permissions.allow`, nem depois de um hook `PreToolUse` responder
+allow.
+
+Isso explica o confundidor das rodadas de teste: sob `defaultMode: "auto"` das
+configurações da máquina, muitas chamadas nunca chegam a "ask".
+
+### Contrato do protocolo de controle, agora conhecido
+
+Do SDK oficial, sem custo. Envelope:
+
+```jsonc
+{"type":"control_request","request_id":"<id>","request":{"subtype":"...", ...}}
+{"type":"control_response","response":{"subtype":"success","request_id":"<id>","response":{...}}}
+{"type":"control_response","response":{"subtype":"error","request_id":"<id>","error":"..."}}
+```
+
+Subtipos que o cliente envia: `initialize` (`hooks`, `agents`, `skills`,
+`systemPromptSnapshot`, `excludeDynamicSections`, `forwardSubagentText`),
+`interrupt`, `set_permission_mode` (`mode`), `hook_callback`
+(`callback_id`, `input`, `tool_use_id`), `mcp_message`, `rewind_files`,
+`mcp_reconnect`, `mcp_toggle`, `stop_task`.
+
+Subtipo que o CLI envia ao cliente: **`can_use_tool`**, com `tool_name`,
+`input`, `tool_use_id`, e opcionalmente `permission_suggestions`,
+`blocked_path`, `decision_reason`, `title`, `display_name`, `description`,
+`agent_id`.
+
+Nota: o SDK também injeta `CLAUDE_CODE_ENTRYPOINT` no ambiente do subprocesso
+(`sdk-py` no caso do Python). Vale replicar com um valor próprio do DevSpace.
 
 ### Achado lateral com valor imediato
 
