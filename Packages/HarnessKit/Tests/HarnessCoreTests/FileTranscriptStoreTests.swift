@@ -39,20 +39,22 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
 
     let segment = newSegment()
     let session = newSession(segments: [segment])
+    let first = entry("um")
+    let second = entry("dois")
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
-    try await store.append(entry("dois"), to: segment.id, in: session.id)
+    try await store.append(first, to: segment.id, in: session.id)
+    try await store.append(second, to: segment.id, in: session.id)
+
+    // O round-trip inteiro numa asserção só, e não uma amostra de campos: o
+    // nome do teste promete que a sessão volta do disco como foi, e uma
+    // amostra deixa passar exatamente o que ninguém pensou em amostrar (um
+    // `model` perdido, um `usage` zerado, um `seededBy` que não sobreviveu ao
+    // encoder). `Session` é `Equatable` — a promessa cabe em `==`.
+    var expected = session
+    expected.segments[0].entries = [first, second]
 
     let loaded = try await store.load(session.id)
-    #expect(loaded.id == session.id)
-    #expect(loaded.title == "uma conversa")
-    #expect(loaded.workingDirectory.path == "/tmp/repo")
-    #expect(loaded.segments.count == 1)
-    let texts = loaded.allEntries.compactMap { e -> String? in
-        if case .assistantText(let t) = e.kind { return t }
-        return nil
-    }
-    #expect(texts == ["um", "dois"])
+    #expect(loaded == expected)
 }
 
 @Test func theRawPayloadSurvivesDisk() async throws {
@@ -77,9 +79,9 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
     let second = newSegment(harnessB)
     let session = newSession(segments: [first, second])
     try await store.saveMetadata(session)
-    try await store.append(entry("claude-um"), to: first.id, in: session.id)
-    try await store.append(entry("codex-um"), to: second.id, in: session.id)
-    try await store.append(entry("claude-dois"), to: first.id, in: session.id)
+    try await store.append(entry("a-um"), to: first.id, in: session.id)
+    try await store.append(entry("b-um"), to: second.id, in: session.id)
+    try await store.append(entry("a-dois"), to: first.id, in: session.id)
 
     let loaded = try await store.load(session.id)
     #expect(loaded.segments[0].entries.count == 2)
@@ -118,9 +120,10 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
     try await store.saveMetadata(a)
     try await store.saveMetadata(b)
 
-    let summaries = try await store.list()
-    #expect(summaries.count == 2)
-    #expect(Set(summaries.map(\.id)) == Set([a.id, b.id]))
+    let listing = try await store.list()
+    #expect(listing.sessions.count == 2)
+    #expect(Set(listing.sessions.map(\.id)) == Set([a.id, b.id]))
+    #expect(listing.unreadable.isEmpty)
 }
 
 @Test func savingMetadataAgainDoesNotDisturbTheEntries() async throws {
@@ -147,7 +150,7 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
     let store = FileTranscriptStore(root: root)
     let missingSessionID = UUID()
 
-    await #expect(throws: FileTranscriptStore.StoreError.sessionNotFound(missingSessionID)) {
+    await #expect(throws: TranscriptStoreError.sessionNotFound(missingSessionID)) {
         try await store.append(entry("um"), to: UUID(), in: missingSessionID)
     }
 }
@@ -165,7 +168,7 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
     // metadados. `append` não pode escrever silenciosamente num arquivo que
     // `load()`/`list()` nunca vão enumerar.
     let strangerSegmentID = UUID()
-    await #expect(throws: FileTranscriptStore.StoreError.segmentNotFound(strangerSegmentID)) {
+    await #expect(throws: TranscriptStoreError.segmentNotFound(strangerSegmentID)) {
         try await store.append(entry("um"), to: strangerSegmentID, in: session.id)
     }
 }
