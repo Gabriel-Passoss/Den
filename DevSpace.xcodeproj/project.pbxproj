@@ -6,6 +6,11 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		BE922E2A305C0F5300FFD487 /* ClaudeHarness in Frameworks */ = {isa = PBXBuildFile; productRef = BE922E29305C0F5300FFD487 /* ClaudeHarness */; };
+		BE922E2C305C0F5300FFD487 /* HarnessCore in Frameworks */ = {isa = PBXBuildFile; productRef = BE922E2B305C0F5300FFD487 /* HarnessCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		BE5BD8D5305B606D00035C7F /* DevSpace.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DevSpace.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -22,6 +27,8 @@
 		BE5BD8D2305B606D00035C7F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				BE922E2C305C0F5300FFD487 /* HarnessCore in Frameworks */,
+				BE922E2A305C0F5300FFD487 /* ClaudeHarness in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -60,6 +67,10 @@
 				BE5BD8D7305B606D00035C7F /* DevSpace */,
 			);
 			name = DevSpace;
+			packageProductDependencies = (
+				BE922E29305C0F5300FFD487 /* ClaudeHarness */,
+				BE922E2B305C0F5300FFD487 /* HarnessCore */,
+			);
 			productName = DevSpace;
 			productReference = BE5BD8D5305B606D00035C7F /* DevSpace.app */;
 			productType = "com.apple.product-type.application";
@@ -88,6 +99,9 @@
 			);
 			mainGroup = BE5BD8CC305B606D00035C7F;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				BE922E28305C0F5300FFD487 /* XCLocalSwiftPackageReference "Packages/HarnessKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BE5BD8D6305B606D00035C7F /* Products */;
 			projectDirPath = "";
@@ -319,6 +333,24 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		BE922E28305C0F5300FFD487 /* XCLocalSwiftPackageReference "Packages/HarnessKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/HarnessKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BE922E29305C0F5300FFD487 /* ClaudeHarness */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ClaudeHarness;
+		};
+		BE922E2B305C0F5300FFD487 /* HarnessCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HarnessCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = BE5BD8CD305B606D00035C7F /* Project object */;
 	validationLevel = 1;
