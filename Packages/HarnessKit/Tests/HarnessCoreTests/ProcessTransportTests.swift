@@ -413,3 +413,56 @@ private func floodScript(writers: Int) -> String {
         for try await _ in stream {}
     }
 }
+
+/// `write(_:)` é membro do ator; `writeSync(_:)` é `nonisolated`. Domínios de
+/// isolamento diferentes escrevendo no mesmo pipe: sem um lock em comum, nada
+/// ordena os dois. O kernel só garante atomicidade até `PIPE_BUF` (512 bytes no
+/// Darwin), então uma linha grande é fatiada, e uma escrita pequena vinda do
+/// outro caminho se enfia na fresta — o harness recebe uma linha NDJSON
+/// corrompida, e as duas mensagens se perdem dentro dela.
+@Test func concurrentWritersDoNotInterleaveOnThePipe() async throws {
+    try await withTimeout(seconds: 20) {
+        let transport = ProcessTransport()
+        // `cat` só repassa bytes: o enquadrador deste lado é quem divide as
+        // linhas, então o que chega aqui é exatamente o que saiu do pipe.
+        let stream = try await transport.start(shellLaunch("cat"))
+
+        // Cada linha é maior que a capacidade do pipe (64 KiB no Darwin), então
+        // *toda* escrita é fatiada pelo kernel e os escritores passam o teste
+        // inteiro bloqueados dentro de `write(2)`.
+        //
+        // Oito escritores, e não dois: o que reproduz a corrupção não é o
+        // volume, é a disputa. Medido contra o código sem o lock em comum,
+        // dois escritores de 200 KiB falhavam em 19 de 20 execuções e custavam
+        // 0,22 s; estes oito, com metade do volume, falharam em 20 de 20 e
+        // custam 0,08 s. Continua sendo um teste de corrida — ele amostra o
+        // escalonador, não o prova —, mas amostra o suficiente para valer como
+        // rede.
+        let lineSize = 100_000
+        let rounds = 3
+        let writersPerPath = 4
+        let viaActor = Data(repeating: UInt8(ascii: "x"), count: lineSize)
+        let viaSync = Data(repeating: UInt8(ascii: "y"), count: lineSize)
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<writersPerPath {
+                group.addTask { for _ in 0..<rounds { try await transport.write(viaActor) } }
+                group.addTask { for _ in 0..<rounds { try transport.writeSync(viaSync) } }
+            }
+            try await group.waitForAll()
+        }
+        await transport.endInput()
+
+        var lines: [Data] = []
+        for try await line in stream { lines.append(line) }
+
+        // Uma linha cortada ao meio produz dois pedaços que não têm o tamanho
+        // certo, e pelo menos um deles mistura os dois bytes. As três
+        // expectativas caem juntas.
+        #expect(lines.count == rounds * writersPerPath * 2)
+        #expect(lines.allSatisfy { $0.count == lineSize })
+        #expect(lines.allSatisfy { line in
+            line.allSatisfy { $0 == UInt8(ascii: "x") } || line.allSatisfy { $0 == UInt8(ascii: "y") }
+        })
+    }
+}

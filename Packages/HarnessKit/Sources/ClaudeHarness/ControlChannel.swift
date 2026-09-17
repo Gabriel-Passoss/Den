@@ -16,13 +16,15 @@ public enum ChannelOutput: Sendable {
 /// dos requests que enviamos, e entrega os pedidos de permissão ao consumidor.
 public actor ControlChannel {
     public enum ChannelError: Error, Equatable {
-        /// `start(_:)` ainda não subiu um harness neste canal.
+        /// `start(_:)` ainda não subiu um harness neste canal. Distinto de
+        /// `.channelClosed`: aqui nunca houve harness nenhum.
         case notStarted
         /// O prazo de `requestTimeout` estourou sem resposta correlacionada.
         case timedOut
-        /// O canal fechou (o harness saiu, o fluxo falhou, ou `stop()` foi
-        /// chamado) enquanto este request esperava resposta. Distinto de
-        /// `.notStarted`: aqui o pedido chegou a ser escrito num harness vivo.
+        /// O canal fechou — o harness saiu, o fluxo falhou, ou `stop()` foi
+        /// chamado. Vale tanto para quem esperava resposta quando isso
+        /// aconteceu quanto para quem chega depois. Distinto de `.notStarted`:
+        /// aqui houve um harness, e ele não está mais lá.
         case channelClosed
         /// O harness respondeu com `subtype: "error"`.
         case requestFailed(String)
@@ -32,7 +34,14 @@ public actor ControlChannel {
     private let requestTimeout: Duration
     private var pending: [String: CheckedContinuation<JSONValue, Error>] = [:]
     private var nextRequestNumber = 0
-    private var started = false
+    private var liveness: Liveness = .notStarted
+
+    /// Em que ponto da vida o canal está.
+    ///
+    /// Três estados num campo só, e não dois booleanos: com `started`/`stopped`
+    /// separados, "parado antes de ter começado" seria representável, e o
+    /// chamador receberia o erro errado sobre o estado errado.
+    private enum Liveness { case notStarted, running, closed }
 
     public init(transport: ProcessTransport, requestTimeout: Duration = .seconds(30)) {
         self.transport = transport
@@ -47,7 +56,7 @@ public actor ControlChannel {
         _ launch: ProcessTransport.Launch
     ) async throws -> AsyncThrowingStream<ChannelOutput, Error> {
         let lines = try await transport.start(launch)
-        started = true
+        liveness = .running
 
         return AsyncThrowingStream<ChannelOutput, Error> { continuation in
             let pump = Task { [weak self] in
@@ -123,9 +132,26 @@ public actor ControlChannel {
     ///
     /// Se a task chamadora for cancelada enquanto espera, a continuation não é
     /// retomada na hora — ela sobrevive até o prazo de `requestTimeout` e
-    /// falha com `.timedOut`. A espera é limitada, nunca infinita.
+    /// falha com `.timedOut`.
+    ///
+    /// Esse prazo tem **uma** exceção, e ela é real. `writeSync` faz um
+    /// `write(2)` bloqueante com o job deste ator na mão. Se o harness parar de
+    /// ler o próprio stdin e o pipe de 64 KiB encher, a escrita bloqueia
+    /// segurando o ator, e todo job seguinte fica na fila atrás dela —
+    /// inclusive `timeOut`, que é isolado aqui, e inclusive `stop()`. Nesse
+    /// estado o prazo não chega a disparar e o canal não é alcançável.
+    ///
+    /// Ou seja: a espera é limitada *enquanto o filho continuar drenando o
+    /// stdin*, e não incondicionalmente. A escrita síncrona é o preço de fechar
+    /// a janela de correlação descrita acima; este é o outro lado da moeda, e
+    /// está registrado aqui para que ninguém confie numa garantia que o código
+    /// não dá.
     public func send(_ request: OutboundControlRequest) async throws -> JSONValue {
-        guard started else { throw ChannelError.notStarted }
+        switch liveness {
+        case .notStarted: throw ChannelError.notStarted
+        case .closed: throw ChannelError.channelClosed
+        case .running: break
+        }
         nextRequestNumber += 1
         let id = "devspace-\(nextRequestNumber)"
         let data = try request.requestData(requestID: id)
@@ -169,6 +195,11 @@ public actor ControlChannel {
     /// É o encerramento explícito do canal: abandonar o fluxo sozinho cancela a
     /// bomba interna mas deixa o filho vivo com o stdout sem leitor.
     public func stop() async {
+        // Marcar antes de qualquer `await`: um `send` que chegue ao ator no
+        // meio do encerramento tem que ver o canal fechado, não escrever num
+        // stdin cujo dono está sendo morto — lá o erro seria um EPIPE de
+        // Foundation vazando por uma API que promete `ChannelError`.
+        liveness = .closed
         failAllPending(.channelClosed)
         await transport.terminate()
     }

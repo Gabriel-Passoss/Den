@@ -347,15 +347,29 @@ public actor ProcessTransport {
         return stream
     }
 
+    /// Escreve uma linha no stdin do harness, verificando antes que há um
+    /// processo vivo para recebê-la.
+    ///
+    /// A escrita em si é delegada a `writeSync(_:)` — não porque dê menos
+    /// trabalho, mas porque o pipe precisa de **um** portão só. Os dois métodos
+    /// vivem em domínios de isolamento diferentes (este é membro do ator,
+    /// aquele é `nonisolated`), então nada além de um lock em comum os ordena;
+    /// e o kernel só garante escrita atômica até `PIPE_BUF` (512 bytes no
+    /// Darwin). Uma linha maior que isso — um turno do usuário, por exemplo —
+    /// pode ser fatiada, e um `control_request` vindo do outro caminho se
+    /// enfiaria na fresta: o harness receberia uma única linha NDJSON
+    /// corrompida, perdendo as duas mensagens de uma vez.
     public func write(_ line: Data) throws {
-        guard let standardInput, process?.isRunning == true else { throw TransportError.notRunning }
-        try standardInput.write(contentsOf: line + Data("\n".utf8))
+        guard standardInput != nil, process?.isRunning == true else { throw TransportError.notRunning }
+        try writeSync(line)
     }
 
     public func endInput() {
         // Limpar o espelho antes de fechar, não depois: assim um `writeSync`
         // concorrente ou vê o handle ainda aberto, ou vê `nil` — nunca um
-        // descritor já fechado.
+        // descritor já fechado. E como a escrita acontece *dentro* deste mesmo
+        // lock, esta linha também espera a escrita em voo terminar: o handle
+        // nunca é fechado no meio de uma linha.
         syncStandardInput.withLock { $0 = nil }
         try? standardInput?.close()
         standardInput = nil
@@ -374,11 +388,22 @@ public actor ProcessTransport {
     /// esse campo é isolado no ator. Escrever num filho já morto devolve EPIPE
     /// (o `F_SETNOSIGPIPE` de `start(_:)` garante erro em vez de sinal), então
     /// o caso continua sendo um `throw`, só com outro erro.
+    ///
+    /// A escrita acontece **dentro** do lock, e não depois de soltá-lo: é isso
+    /// que serializa este caminho com o `write(_:)` do ator. Guardar só o
+    /// ponteiro do handle não bastaria — o que precisa ser indivisível é a
+    /// linha inteira chegando ao pipe.
+    ///
+    /// Consequência a encarar de frente: este é um `write(2)` bloqueante feito
+    /// com o job do chamador na mão. Se o harness parar de ler o próprio stdin
+    /// e o pipe (64 KiB) encher, esta chamada bloqueia a thread cooperativa, e
+    /// quem chama de dentro de um ator bloqueia o ator junto. Ver o contrato de
+    /// `ControlChannel.send(_:)`, que é quem paga essa conta.
     nonisolated public func writeSync(_ line: Data) throws {
-        guard let handle = syncStandardInput.withLock({ $0 }) else {
-            throw TransportError.notRunning
+        try syncStandardInput.withLock { handle in
+            guard let handle else { throw TransportError.notRunning }
+            try handle.write(contentsOf: line + Data("\n".utf8))
         }
-        try handle.write(contentsOf: line + Data("\n".utf8))
     }
 
     /// SIGTERM, depois SIGKILL se necessário (spec §5.5).

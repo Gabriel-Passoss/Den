@@ -117,8 +117,12 @@ done
     let drain = Task { for try await _ in stream {} }
     defer { drain.cancel() }
 
+    // O `withTimeout` não é o que está sendo testado — é a rede. Um `send`
+    // pelado aqui significa que uma regressão no prazo trava a suíte inteira em
+    // vez de falhar; e `TimedOut` não é `.timedOut`, então a rede nunca pode
+    // ser confundida com um teste passando.
     await #expect(throws: ControlChannel.ChannelError.timedOut) {
-        _ = try await channel.send(.interrupt)
+        _ = try await withTimeout(seconds: 3) { try await channel.send(.interrupt) }
     }
     await channel.stop()
 }
@@ -154,4 +158,30 @@ done
     #expect(await transport.terminationStatus == nil)
     await channel.stop()
     #expect(await transport.terminationStatus != nil)
+}
+
+/// Depois de `stop()`, o canal tem que dizer que fechou — e dizer isso com o
+/// seu próprio vocabulário. Sem isso, o mirror do stdin continua preenchido, a
+/// escrita bate num filho já morto, e o chamador recebe um `NSError` de EPIPE:
+/// um erro de Foundation vazando por uma API que promete `ChannelError`.
+@Test func sendAfterStopFailsWithChannelClosed() async throws {
+    let channel = ControlChannel(transport: ProcessTransport())
+    let stream = try await channel.start(launch(echoingResponder))
+    let drain = Task { for try await _ in stream {} }
+    defer { drain.cancel() }
+
+    await channel.stop()
+
+    await #expect(throws: ControlChannel.ChannelError.channelClosed) {
+        _ = try await withTimeout(seconds: 3) { try await channel.send(.interrupt) }
+    }
+}
+
+/// E antes de `start(_:)` continua sendo `.notStarted` — os dois estados são
+/// distintos e o chamador merece saber qual deles encontrou.
+@Test func sendBeforeStartFailsWithNotStarted() async throws {
+    let channel = ControlChannel(transport: ProcessTransport())
+    await #expect(throws: ControlChannel.ChannelError.notStarted) {
+        _ = try await channel.send(.interrupt)
+    }
 }
