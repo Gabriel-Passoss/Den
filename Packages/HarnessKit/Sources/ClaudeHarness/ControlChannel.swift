@@ -37,9 +37,13 @@ public struct UnrecognizedControl: Equatable, Sendable {
     /// a sessão contando a mesma história.
     public let automaticReply: String?
 
-    /// `false` quer dizer que o harness **continua esperando** por este quadro
-    /// — uma sessão travada, não uma sessão degradada. São dois estados de UI
-    /// muito diferentes, e esta é a bandeira que os separa.
+    /// `false` quer dizer que **nós não respondemos** — ou porque não havia id,
+    /// ou porque a escrita falhou.
+    ///
+    /// Quando o `raw` é um `control_request`, isso significa um harness que
+    /// continua esperando: sessão travada, e não sessão degradada. São dois
+    /// estados de UI muito diferentes, e é o `raw["type"]` que os separa — esta
+    /// bandeira diz apenas o que nós fizemos, que é o que sabemos com certeza.
     public var wasAnswered: Bool { automaticReply != nil }
 
     public init(requestID: String?, raw: JSONValue, automaticReply: String?) {

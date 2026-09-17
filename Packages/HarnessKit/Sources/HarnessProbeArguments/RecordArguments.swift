@@ -86,12 +86,55 @@ public enum RecordArgumentError: Error, Equatable, Sendable {
 /// próprio tipo, a lidar com os dois casos antes de agir sobre o resultado —
 /// nada aqui deveria propagar como um erro Swift não tratado até o topo.
 public func parseRecordArguments(_ args: [String]) -> Result<RecordArguments, RecordArgumentError> {
-    let known: Set<String> = ["--prompt", "--cwd", "--out"]
+    scanFlags(args, known: ["--prompt", "--cwd", "--out"]).flatMap { values in
+        guard let prompt = values["--prompt"] else {
+            return .failure(.missingRequired(flag: "--prompt"))
+        }
+        guard let cwd = values["--cwd"] else {
+            return .failure(.missingRequired(flag: "--cwd"))
+        }
+        return .success(RecordArguments(prompt: prompt, cwd: cwd, outputPath: values["--out"]))
+    }
+}
 
-    var prompt: String?
-    var cwd: String?
-    var outputPath: String?
+/// Argumentos já validados de `harness-probe permission`.
+///
+/// Não tem `--out` de propósito: este subcomando não grava fixture nenhum, e
+/// aceitar a flag para depois ignorá-la seria mentir no `usage`. Um `--out`
+/// aqui é `.unknownFlag`, como qualquer outro token não reconhecido.
+public struct PermissionArguments: Equatable, Sendable {
+    public var prompt: String
+    public var cwd: String
 
+    public init(prompt: String, cwd: String) {
+        self.prompt = prompt
+        self.cwd = cwd
+    }
+}
+
+/// Mesmo contrato e mesma passada única de `parseRecordArguments` — os dois
+/// compartilham `scanFlags`, para que o invariante que custou dois lançamentos
+/// reais e não intencionais do `claude` valha nos dois subcomandos em vez de
+/// ser reimplementado no segundo.
+public func parsePermissionArguments(_ args: [String]) -> Result<PermissionArguments, RecordArgumentError> {
+    scanFlags(args, known: ["--prompt", "--cwd"]).flatMap { values in
+        guard let prompt = values["--prompt"] else {
+            return .failure(.missingRequired(flag: "--prompt"))
+        }
+        guard let cwd = values["--cwd"] else {
+            return .failure(.missingRequired(flag: "--cwd"))
+        }
+        return .success(PermissionArguments(prompt: prompt, cwd: cwd))
+    }
+}
+
+/// A passada única, sem saber quais flags são obrigatórias — isso é decisão de
+/// cada subcomando. Devolve o valor de cada flag que apareceu.
+private func scanFlags(
+    _ args: [String],
+    known: Set<String>
+) -> Result<[String: String], RecordArgumentError> {
+    var values: [String: String] = [:]
     var index = args.startIndex
     while index < args.endIndex {
         let flag = args[index]
@@ -108,19 +151,37 @@ public func parseRecordArguments(_ args: [String]) -> Result<RecordArguments, Re
             return .failure(.emptyValue(flag: flag))
         }
 
-        switch flag {
-        case "--prompt": prompt = value
-        case "--cwd": cwd = value
-        case "--out": outputPath = value
-        default: break // inatingível: `known` já filtrou os três casos acima
-        }
-
+        values[flag] = value
         index = args.index(after: valueIndex)
     }
+    return .success(values)
+}
 
-    guard let prompt else { return .failure(.missingRequired(flag: "--prompt")) }
-    guard let cwd else { return .failure(.missingRequired(flag: "--cwd")) }
-    return .success(RecordArguments(prompt: prompt, cwd: cwd, outputPath: outputPath))
+/// O que o operador respondeu a um pedido de permissão no terminal.
+public enum PermissionAnswer: Equatable, Sendable {
+    case allow
+    case deny
+}
+
+/// Lê a resposta do operador. `nil` é o EOF do stdin.
+///
+/// **Tudo que não for um "sim" reconhecido é `deny`** — linha vazia, texto
+/// desconhecido, e EOF. Não há default permissivo e não há repergunta: este é
+/// o portão de permissão do produto, e a única resposta segura para uma
+/// entrada ambígua é a que não executa a ferramenta. O EOF importa na prática,
+/// não em teoria: rodar o probe com o stdin redirecionado (de um pipe, de um
+/// arquivo, de um agente) faz `readLine()` devolver `nil` na primeira pergunta,
+/// e um default permissivo ali aprovaria toda chamada de ferramenta de uma
+/// sessão inteira sem ninguém ler nada.
+///
+/// A comparação é sem caixa e sem espaço nas pontas — "  Sim  " é sim —, e
+/// aceita as duas línguas porque o texto da pergunta é em português e os
+/// identificadores do protocolo são em inglês.
+public func parsePermissionAnswer(_ line: String?) -> PermissionAnswer {
+    guard let line else { return .deny }
+    let normalized = line.lowercased().filter { !$0.isWhitespace }
+    let yes: Set<String> = ["s", "sim", "y", "yes", "a", "allow", "p", "permitir"]
+    return yes.contains(normalized) ? .allow : .deny
 }
 
 extension String {

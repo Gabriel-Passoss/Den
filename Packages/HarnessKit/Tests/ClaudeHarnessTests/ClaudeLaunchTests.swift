@@ -129,6 +129,45 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
     #expect(spellings == ["acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan"])
 }
 
+/// Item 10 do review final, do lado do argv.
+///
+/// O `harness-probe permission` é o entregável nomeado da spec §8 ("em modo
+/// `manual` pergunta 'permitir Bash?' e a sessão obedece"), e o defeito que ele
+/// consertou foi o probe montar o próprio argv e ter **divergido**: sem
+/// `--permission-prompt-tool stdio` ele era estruturalmente incapaz de observar
+/// um pedido de permissão, e carregava um `--safe-mode` que `ClaudeLaunch` não
+/// tem. Agora ele chama esta função, então a divergência é irrepresentável.
+///
+/// Este teste fixa a configuração exata que o subcomando pede — sessão nova e
+/// modo `manual` — e as três propriedades de que ele depende para funcionar.
+/// Verificado só por construção e por aqui, nunca contra o CLI real: rodar uma
+/// sessão de verdade gasta dinheiro do operador e é decisão dele.
+@Test func theProbesPermissionSessionAsksInsteadOfDeciding() throws {
+    let args = ClaudeLaunch.make(
+        installation: install,
+        workingDirectory: cwd,
+        session: .fresh(sessionID: session),
+        permissionMode: .manual
+    ).arguments
+
+    // 1. A flag oculta sem a qual nenhum `can_use_tool` chega ao fio.
+    let promptToolIndex = try #require(args.firstIndex(of: "--permission-prompt-tool"))
+    #expect(args[args.index(after: promptToolIndex)] == "stdio")
+
+    // 2. O modo que torna o probe reprodutível em vez de herdar o
+    //    `defaultMode` das configurações do operador.
+    let modeIndex = try #require(args.firstIndex(of: "--permission-mode"))
+    #expect(args[args.index(after: modeIndex)] == "manual")
+
+    // 3. stream-json nas duas direções: sem o `--input-format`, não há por onde
+    //    a resposta do operador voltar.
+    #expect(args.contains("--input-format"))
+    #expect(args.contains("--output-format"))
+
+    // E o que o probe NÃO passa mais: `--safe-mode` era invenção dele.
+    #expect(!args.contains("--safe-mode"))
+}
+
 /// E sem modo nenhum a flag não aparece: herdar a configuração do operador é um
 /// caso legítimo, distinto de passar um modo.
 @Test func noPermissionModeMeansNoFlagAtAll() {
