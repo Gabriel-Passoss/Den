@@ -9,15 +9,29 @@ func usage() -> Never {
     FileHandle.standardError.write(Data("""
     uso:
       harness-probe discover
-      harness-probe record --prompt <texto> [--cwd <dir>] [--out <arquivo.ndjson>]
+      harness-probe record --prompt <texto> --cwd <dir> [--out <arquivo.ndjson>]
 
     """.utf8))
     exit(64)
 }
 
+/// Devolve o valor de `flag` em `args`, ou `nil` se a flag não aparecer.
+///
+/// Uma flag que aparece mas sem valor depois dela (por ser o último
+/// argumento, ou por vir seguida de outra flag reconhecida) é sempre um erro
+/// de uso — nunca um `nil` silencioso indistinguível de "flag omitida". Foi
+/// exatamente essa ambiguidade que, na revisão desta tarefa, fez
+/// `--cwd` (sem valor, no fim da linha) cair no fallback para o diretório de
+/// trabalho real do shell e apontar o `claude` de verdade para dentro do
+/// repositório — sem aviso nenhum.
 func value(_ flag: String, in args: [String]) -> String? {
-    guard let i = args.firstIndex(of: flag), args.index(after: i) < args.endIndex else { return nil }
-    return args[args.index(after: i)]
+    guard let i = args.firstIndex(of: flag) else { return nil }
+    let next = args.index(after: i)
+    guard next < args.endIndex else {
+        errLine("\(flag) foi informado sem um valor.")
+        usage()
+    }
+    return args[next]
 }
 
 func errLine(_ message: String) {
@@ -27,6 +41,14 @@ func errLine(_ message: String) {
 let args = Array(CommandLine.arguments.dropFirst())
 guard let command = args.first else { usage() }
 
+// Carrega um código de saída para depois do `switch`, em vez de chamar
+// `exit(_:)` de dentro de um `case`. `exit(_:)` termina o processo na hora,
+// sem passar pelos `defer`s do Swift — e o `defer` do case "record" é quem
+// chama `transport.terminate()`. Se o filho ainda estiver vivo (por exemplo,
+// abortamos a gravação por uma falha de escrita em disco, não porque o
+// `claude` real já tinha saído), sair direto aqui o deixaria órfão.
+var exitCode: Int32 = 0
+
 switch command {
 case "discover":
     let install = try await ClaudeDiscovery().discover()
@@ -35,9 +57,23 @@ case "discover":
 
 case "record":
     guard let prompt = value("--prompt", in: args) else { usage() }
-    let cwd = URL(fileURLWithPath: value("--cwd", in: args) ?? FileManager.default.currentDirectoryPath)
+    // --cwd é obrigatório, não tem fallback para o diretório de trabalho do
+    // shell. Este comando sobe um `claude` de verdade, com ferramentas de
+    // arquivo e bash reais — deixar "esqueceu a flag" e "typei-a e apaguei o
+    // valor" caírem silenciosamente no cwd do operador é exatamente o
+    // incidente que motivou este fix (ver relatório da Task 4, rodada de
+    // correções). Cada gravação real feita nesta tarefa já passava --cwd
+    // explicitamente; não há caso de uso legítimo para omiti-lo aqui.
+    guard let cwdArgument = value("--cwd", in: args) else { usage() }
+    let cwd = URL(fileURLWithPath: cwdArgument)
     let outputPath = value("--out", in: args)
     let sessionID = UUID()
+
+    // Impresso antes de qualquer coisa que possa falhar — inclusive antes da
+    // descoberta do binário — para que o diretório-alvo seja a primeira coisa
+    // visível, nunca algo que só apareceria depois de o processo já ter sido
+    // lançado contra ele.
+    errLine("diretório de trabalho: \(cwd.path)")
 
     let install = try await ClaudeDiscovery().discover()
     errLine("→ \(install.executable) \(install.version), sessão \(sessionID)")
@@ -132,17 +168,39 @@ case "record":
     await transport.endInput()
 
     var count = 0
+    // `count` só conta linhas que de fato chegaram ao disco. Uma falha de
+    // escrita aborta a gravação em vez de ser engolida: um `try?` aqui faria
+    // o resumo final mentir "N linhas gravadas" sobre um arquivo truncado —
+    // exatamente o fixture corrompido e sem rótulo que esta tarefa existe
+    // para evitar. Aborta no primeiro erro em vez de tentar continuar: uma
+    // vez que o disco não aceita mais bytes, não há razão para acreditar que
+    // a próxima escrita vá funcionar, e um arquivo "quase completo, com um
+    // buraco no meio" não é mais confiável como fixture do que um truncado
+    // no fim — em ambos os casos o único jeito seguro de seguir é regravar.
+    var writeFailure: (line: Int, error: any Error)?
     // Toda linha vai para stdout como veio, sem interpretação: o objetivo
     // desta etapa é justamente descobrir o formato.
     for try await line in stream {
-        count += 1
-        try? outputHandle?.write(contentsOf: line)
-        try? outputHandle?.write(contentsOf: Data("\n".utf8))
         FileHandle.standardOutput.write(line + Data("\n".utf8))
+        guard let outputHandle else { continue }
+        do {
+            try outputHandle.write(contentsOf: line)
+            try outputHandle.write(contentsOf: Data("\n".utf8))
+            count += 1
+        } catch {
+            writeFailure = (count + 1, error)
+            break
+        }
     }
 
     if let outputPath {
-        errLine("← \(count) linhas gravadas em \(outputPath)")
+        if let writeFailure {
+            errLine("✗ escrita falhou na linha \(writeFailure.line) de \(outputPath): \(writeFailure.error)")
+            errLine("✗ \(count) linha(s) confirmadamente gravada(s) antes da falha — arquivo incompleto, não usar como fixture")
+            exitCode = 74 // EX_IOERR — mesmo código usado quando a criação do arquivo falha
+        } else {
+            errLine("← \(count) linhas gravadas em \(outputPath)")
+        }
     }
 
     let stderrText = await transport.standardError
@@ -156,4 +214,12 @@ case "record":
 
 default:
     usage()
+}
+
+// Chega aqui só depois que o `case` correspondente terminou normalmente — e
+// portanto depois que o `defer` dele (se houver) já rodou. É por isso que a
+// falha de escrita não chama `exit(_:)` direto: ela só marca `exitCode` e
+// deixa o bloco terminar, para que `transport.terminate()` aconteça primeiro.
+if exitCode != 0 {
+    exit(exitCode)
 }
