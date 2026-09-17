@@ -12,6 +12,11 @@ public protocol CommandRunner: Sendable {
 public struct CommandFailure: Error, Equatable {
     public let exitCode: Int32
     public let stderr: String
+
+    public init(exitCode: Int32, stderr: String) {
+        self.exitCode = exitCode
+        self.stderr = stderr
+    }
 }
 
 public struct SystemCommandRunner: CommandRunner {

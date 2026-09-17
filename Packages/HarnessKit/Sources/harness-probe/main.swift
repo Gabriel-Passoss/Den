@@ -1,5 +1,6 @@
 import Foundation
 import ClaudeHarness
+import HarnessCore
 import HarnessProbeArguments
 
 /// Ferramenta de diagnóstico: descobre o binário `claude` real e grava uma

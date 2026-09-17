@@ -1,7 +1,7 @@
 import Testing
 import Foundation
-import HarnessCore
-@testable import ClaudeHarness
+@testable import HarnessCore
+import HarnessTestSupport
 
 /// O harness falso é `/bin/sh` rodando um script inline — nenhum arquivo de
 /// recurso necessário.

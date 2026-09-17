@@ -1,6 +1,7 @@
 import Testing
 import Foundation
-@testable import ClaudeHarness
+@testable import HarnessCore
+import HarnessTestSupport
 
 /// Regressão para o Finding 1: `SystemCommandRunner` tem que drenar stdout e
 /// stderr em paralelo. Se voltar a ler só um dos dois, um filho que escreve

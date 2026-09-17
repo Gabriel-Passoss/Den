@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import HarnessCore
 @testable import ClaudeHarness
 
 extension Tag {

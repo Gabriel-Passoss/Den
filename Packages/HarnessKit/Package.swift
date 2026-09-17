@@ -11,11 +11,15 @@ let package = Package(
     ],
     targets: [
         .target(name: "HarnessCore"),
-        .testTarget(name: "HarnessCoreTests", dependencies: ["HarnessCore"]),
+        .target(name: "HarnessTestSupport"),
+        .testTarget(
+            name: "HarnessCoreTests",
+            dependencies: ["HarnessCore", "HarnessTestSupport"]
+        ),
         .target(name: "ClaudeHarness", dependencies: ["HarnessCore"]),
         .testTarget(
             name: "ClaudeHarnessTests",
-            dependencies: ["ClaudeHarness", "HarnessCore"],
+            dependencies: ["ClaudeHarness", "HarnessCore", "HarnessTestSupport"],
             // Fixtures gravados pelo harness-probe (Task 4): transcritos reais
             // de sessões do `claude`, consumidos pelo próximo plano (protocolo
             // de controle e mapper de eventos). SwiftPM não os inclui como

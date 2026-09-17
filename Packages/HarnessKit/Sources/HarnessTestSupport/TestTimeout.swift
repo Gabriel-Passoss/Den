@@ -1,6 +1,8 @@
 import Foundation
 
-private struct TimedOut: Error {}
+public struct TimedOut: Error, Equatable {
+    public init() {}
+}
 
 /// Corre `operation` competindo com um sleep; se o sleep vencer, falha em vez
 /// de travar a suíte inteira. Não usa `TaskGroup` de propósito: sair do escopo
@@ -8,7 +10,7 @@ private struct TimedOut: Error {}
 /// que inclui a travada — anulando o timeout. Uma continuation avulsa,
 /// resolvida uma única vez por quem chegar primeiro, não tem essa espera.
 @discardableResult
-func withTimeout<T: Sendable>(
+public func withTimeout<T: Sendable>(
     seconds: Double,
     operation: @escaping @Sendable () async throws -> T
 ) async throws -> T {

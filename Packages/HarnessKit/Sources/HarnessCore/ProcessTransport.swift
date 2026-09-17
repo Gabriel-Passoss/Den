@@ -1,6 +1,5 @@
 import Darwin
 import Foundation
-import HarnessCore
 
 /// Segura o enquadrador, os handles e o stderr acumulado atrás de um lock.
 ///
