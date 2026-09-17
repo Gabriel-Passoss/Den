@@ -185,3 +185,71 @@ done
         _ = try await channel.send(.interrupt)
     }
 }
+
+/// Sinaliza uma vez só, para quem espera. Existe para este teste: precisamos
+/// saber que o harness falso já leu o request antes de fechar o stdin, sem
+/// depender da ordem de agendamento entre duas tasks — só de uma linha que o
+/// próprio harness escreve depois de ler.
+private actor SingleSignal {
+    private var fired = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func fire() {
+        guard !fired else { return }
+        fired = true
+        for waiter in waiters { waiter.resume() }
+        waiters.removeAll()
+    }
+
+    func wait() async {
+        if fired { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+}
+
+/// Fixa o argumento por trás da correção ao controller ruling: fechar o stdin
+/// não impede o harness de responder pelo stdout — `endInput()` fecha só o
+/// lado da escrita, e a leitura do stdout continua entregando linhas à bomba
+/// normalmente. Por isso `endInput()` marca `liveness = .closed` mas **não**
+/// chama `failAllPending`: um request que já estava pendente pode muito bem
+/// ganhar sua resposta legítima depois do stdin fechar, e falhá-lo ali
+/// quebraria um caminho que funciona para "corrigir" um problema que não
+/// existe. Antes deste teste, essa garantia só existia na cabeça de quem
+/// revisou o código — nada na suíte reclamava se alguém reintroduzisse
+/// `failAllPending` dentro de `endInput()`.
+///
+/// O harness falso: lê o request, ecoa um `ack` de conversa (prova, do lado
+/// de fora, que já leu antes de qualquer stdin fechar), drena o próprio stdin
+/// até o EOF que `endInput()` provoca, e só então escreve o
+/// `control_response` no stdout.
+@Test func aPendingSendStillResolvesAfterEndInputClosesStdin() async throws {
+    let responder = #"""
+    IFS= read -r l
+    id=$(printf '%s' "$l" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+    printf '{"type":"ack"}\n'
+    cat > /dev/null
+    printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"ok":true}}}\n' "$id"
+    """#
+    let channel = ControlChannel(transport: ProcessTransport())
+    let stream = try await channel.start(launch(responder))
+
+    let ackSeen = SingleSignal()
+    let drain = Task {
+        for try await output in stream {
+            if case .conversation = output { await ackSeen.fire() }
+        }
+    }
+    defer { drain.cancel() }
+
+    let sendTask = Task { try await channel.send(.interrupt) }
+
+    // Só fecha o stdin depois de ver a prova de que o harness já leu o
+    // request — sem isso, `endInput()` poderia vencer a corrida contra a
+    // escrita de `send(_:)` e fechar um canal que `liveness` ainda não viu
+    // ninguém usar.
+    try await withTimeout(seconds: 3) { await ackSeen.wait() }
+    await channel.endInput()
+
+    let payload = try await withTimeout(seconds: 3) { try await sendTask.value }
+    #expect(payload["ok"] == .bool(true))
+}
