@@ -90,7 +90,7 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
         workingDirectory: cwd,
         session: .fresh(sessionID: session),
         model: "claude-opus-4-6",
-        permissionMode: "acceptEdits",
+        permissionMode: .acceptEdits,
         additionalDirectories: [
             URL(fileURLWithPath: "/tmp/scratch/a"),
             URL(fileURLWithPath: "/tmp/scratch/b"),
@@ -107,6 +107,37 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
     let addDirIndices = args.indices.filter { args[$0] == "--add-dir" }
     #expect(addDirIndices.count == 2)
     #expect(addDirIndices.map { args[args.index(after: $0)] } == ["/tmp/scratch/a", "/tmp/scratch/b"])
+}
+
+/// Item 6 do review final. Os seis modos da spec §12 são um conjunto fechado, e
+/// cada um tem que chegar ao `--permission-mode` com a grafia exata que o CLI
+/// aceita — um modo com typo era, antes, um erro do CLI em tempo de execução
+/// descoberto só depois de a sessão subir. Este teste fixa as seis grafias de
+/// uma vez: `CaseIterable` garante que um sétimo modo adicionado ao enum sem
+/// grafia correspondente aqui derrube o teste em vez de passar despercebido.
+@Test func everyPermissionModeReachesTheCLIWithItsVerifiedSpelling() throws {
+    let spellings = PermissionMode.allCases.map { mode -> String in
+        let args = ClaudeLaunch.make(
+            installation: install,
+            workingDirectory: cwd,
+            session: .fresh(sessionID: session),
+            permissionMode: mode
+        ).arguments
+        let index = try! #require(args.firstIndex(of: "--permission-mode"))
+        return args[args.index(after: index)]
+    }
+    #expect(spellings == ["acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan"])
+}
+
+/// E sem modo nenhum a flag não aparece: herdar a configuração do operador é um
+/// caso legítimo, distinto de passar um modo.
+@Test func noPermissionModeMeansNoFlagAtAll() {
+    let args = ClaudeLaunch.make(
+        installation: install,
+        workingDirectory: cwd,
+        session: .fresh(sessionID: session)
+    ).arguments
+    #expect(!args.contains("--permission-mode"))
 }
 
 @Test func claudeCodeDeclaresWhatItSupports() {

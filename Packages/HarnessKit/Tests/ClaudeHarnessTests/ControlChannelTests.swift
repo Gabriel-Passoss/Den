@@ -35,8 +35,7 @@ done
 /// fica vivo o bastante para o teste responder duas vezes sem que o canal
 /// feche no meio.
 private let askingHarnessForWrite = #"""
-printf '{"type":"control_request","request_id":"ask-dup","request":{"subtype":"can_use_tool","tool_name":"Write","input":{}}}
-'
+printf '{"type":"control_request","request_id":"ask-dup","request":{"subtype":"can_use_tool","tool_name":"Write","input":{}}}\n'
 cat > /dev/null
 """#
 
@@ -86,7 +85,7 @@ cat > /dev/null
 
     let results = try await withTimeout(seconds: 3) {
         async let first = channel.send(.interrupt)
-        async let second = channel.send(.setPermissionMode("acceptEdits"))
+        async let second = channel.send(.setPermissionMode(.acceptEdits))
         return try await [first, second]
     }
     #expect(results.count == 2)

@@ -92,10 +92,24 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
     #expect(decided == "deny")
 }
 
+/// Um inteiro no input não pode perder precisão na volta.
+///
+/// O literal é `9007199254740993` — o **menor** inteiro que `Double` não
+/// representa (2^53 + 1; ele arredonda para 9007199254740992). Item 7 do
+/// review final: antes o literal era `1`, e com ele este teste não conseguia
+/// falhar. O `JSONEncoder` imprime `Double(1.0)` como `1`, e o `JSONValue`
+/// decodifica o token `1.0` de volta para `.int(1)` — então um modelo com um
+/// único caso `.number(Double)`, exatamente o que este teste existe para
+/// proibir, produziria forma de fio idêntica e resultado de asserção
+/// idêntico. Ele passava sob a modelagem que deveria reprovar.
+///
+/// Com 2^53 + 1 a diferença vira observável no fio: qualquer caminho que passe
+/// por `Double` devolve 9007199254740992, e a asserção quebra. Ver a ordem
+/// `Int` antes de `Double` no decodificador de `JSONValue` — é ela que mantém
+/// isto verdadeiro.
 @Test func theUpdatedInputSurvivesTheRoundTrip() async throws {
-    // Um inteiro no input não pode virar ponto flutuante na volta.
     let harness = #"""
-    printf '{"type":"control_request","request_id":"ask-2","request":{"subtype":"can_use_tool","tool_name":"T","input":{"count":1}}}\n'
+    printf '{"type":"control_request","request_id":"ask-2","request":{"subtype":"can_use_tool","tool_name":"T","input":{"count":9007199254740993}}}\n'
     IFS= read -r resposta
     printf '{"type":"result","eco":%s}\n' "$(printf '%s' "$resposta" | sed -n 's/.*"updatedInput":\({[^}]*}\).*/\1/p')"
     """#
@@ -118,7 +132,7 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
         }
         return echoed
     }
-    #expect(echoed?["count"] == .int(1))
+    #expect(echoed?["count"] == .int(9007199254740993))
 }
 
 /// Controller ruling: uma resposta de permissão que chega depois que o harness

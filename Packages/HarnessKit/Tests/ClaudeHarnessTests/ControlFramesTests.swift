@@ -197,7 +197,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
 }
 
 @Test func encodesSetPermissionModeWithItsMode() throws {
-    let data = try OutboundControlRequest.setPermissionMode("acceptEdits")
+    let data = try OutboundControlRequest.setPermissionMode(.acceptEdits)
         .requestData(requestID: "out-2")
     let decoded = try JSONDecoder().decode(JSONValue.self, from: data)
     #expect(decoded["request"]?["subtype"] == .string("set_permission_mode"))

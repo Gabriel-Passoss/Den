@@ -32,7 +32,7 @@ public enum ClaudeLaunch {
         workingDirectory: URL,
         session: SessionStart,
         model: String? = nil,
-        permissionMode: String? = nil,
+        permissionMode: PermissionMode? = nil,
         additionalDirectories: [URL] = []
     ) -> ProcessTransport.Launch {
         var arguments = [
@@ -65,7 +65,12 @@ public enum ClaudeLaunch {
         }
 
         if let model { arguments += ["--model", model] }
-        if let permissionMode { arguments += ["--permission-mode", permissionMode] }
+        // `PermissionMode`, e não `String`: o conjunto de seis valores da spec
+        // §12 é fechado, e um modo com typo é um erro do CLI em tempo de
+        // execução — a sessão sobe e falha lá adiante, com a mensagem vindo do
+        // processo filho. É o mesmo argumento que tornou o par resume/fork
+        // irrepresentável, aplicado ao vizinho de linha.
+        if let permissionMode { arguments += ["--permission-mode", permissionMode.rawValue] }
         for directory in additionalDirectories {
             arguments += ["--add-dir", directory.path]
         }

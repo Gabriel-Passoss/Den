@@ -14,12 +14,13 @@ import Foundation
 /// decodifica sempre como `.int`, não importa como foi escrito no fixture
 /// original — `decode(Int.self)` aceita o token `1.0` porque ele não tem
 /// parte fracionária. `{"opacity":1.0}` vira `.int(1)` e reencoda como
-/// `{"opacity":1}`: o ponto decimal se perde. Isso é aceitável porque o
-/// consumidor real (Claude Code, um processo Node) trata `1` e `1.0` como o
-/// mesmo `Number` em JavaScript — a diferença é inobservável do outro lado
-/// do pipe. Seria inaceitável para um harness cuja linguagem distingue os
-/// dois; nesse caso este tipo precisaria de um parser JSON próprio que
-/// preserva a forma do token, não apenas o `Codable` de container único.
+/// `{"opacity":1}`: o ponto decimal se perde. Isso é aceitável para um
+/// consumidor JSON cuja representação numérica não distingue inteiro de ponto
+/// flutuante — uma CLI escrita em JavaScript, por exemplo, onde `1` e `1.0`
+/// são o mesmo `Number` e a diferença é inobservável do outro lado do pipe.
+/// Seria inaceitável para um harness cuja linguagem distingue os dois; nesse
+/// caso este tipo precisaria de um parser JSON próprio que preserva a forma
+/// do token, não apenas o `Codable` de container único.
 public enum JSONValue: Sendable, Equatable {
     case null
     case bool(Bool)

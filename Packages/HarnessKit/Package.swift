@@ -33,6 +33,14 @@ let package = Package(
         // vivia exatamente nessa lógica — precisa ser testável.
         .target(name: "HarnessProbeArguments"),
         .testTarget(name: "HarnessProbeArgumentsTests", dependencies: ["HarnessProbeArguments"]),
-        .executableTarget(name: "harness-probe", dependencies: ["ClaudeHarness", "HarnessProbeArguments"]),
+        // `HarnessCore` é explícito, e não herdado pelo fechamento transitivo
+        // do SwiftPM: o alvo faz `import HarnessCore` direto, e um manifesto
+        // que não diz isso mente sobre o que o alvo usa — no dia em que
+        // `ClaudeHarness` deixar de arrastá-lo junto, o probe quebra por uma
+        // razão que não está escrita em lugar nenhum.
+        .executableTarget(
+            name: "harness-probe",
+            dependencies: ["ClaudeHarness", "HarnessCore", "HarnessProbeArguments"]
+        ),
     ]
 )

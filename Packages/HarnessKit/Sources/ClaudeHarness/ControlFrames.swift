@@ -121,58 +121,62 @@ public enum ControlResponseResult: Equatable, Sendable {
     public var payload: JSONValue? { if case .success(let p) = self { return p }; return nil }
 }
 
-/// Um pedido de permissão vindo do harness.
-public struct PermissionRequest: Equatable, Sendable {
-    public let id: String
-    public let toolName: String
-    public let displayName: String?
-    public let description: String?
-    public let input: JSONValue
-    public let toolUseID: String?
-    /// Regras que o próprio harness sugere — material direto para os botões do
-    /// diálogo ("permitir sempre nesta sessão") em vez de inventarmos os nossos.
-    public let suggestions: [PermissionSuggestion]
+// MARK: - Formato de fio dos tipos neutros de permissão
+//
+// `PermissionRequest`, `PermissionSuggestion` e `PermissionDecision` são de
+// `HarnessCore` (spec §7.1). O que mora aqui é a leitura e a escrita **deste**
+// CLI, e mora neste arquivo de propósito: o decodificador fica ao lado do
+// `switch` de `ControlFrame.classify`, que é o seu único chamador, e o
+// codificador ao lado do envelope que ele preenche. Separá-los num arquivo
+// próprio poria uma função a um arquivo de distância da única linha que a usa.
 
+extension PermissionRequest {
+    /// Lê um `can_use_tool` do Claude Code. Falha quando o quadro não traz
+    /// `tool_name`.
+    ///
+    /// **Continua falível, e isso é a metade do item 1 que faz o resto
+    /// funcionar.** O `nil` daqui é o que roteia o quadro para
+    /// `.unansweredControlRequest`, que responde erro e destrava o harness. Se
+    /// este inicializador virasse infalível — com um `toolName` default, por
+    /// exemplo —, a UI abriria um diálogo pedindo aprovação para uma ferramenta
+    /// que não sabemos nomear: a §5.4 do avesso, degradando para uma mentira em
+    /// vez de para uma recusa. A falha aqui não é um caso de erro; é a
+    /// fronteira entre "entendemos o pedido" e "temos que recusá-lo".
+    ///
+    /// O `id` chega por parâmetro, já validado como não-vazio por `classify` —
+    /// é lá que a pergunta "isto é respondível?" pertence, porque é lá que a
+    /// resposta escolhe o caso do `ControlFrame`.
     init?(id: String, request: JSONValue) {
         guard let toolName = request["tool_name"]?.stringValue else { return nil }
-        self.id = id
-        self.toolName = toolName
-        self.displayName = request["display_name"]?.stringValue
-        self.description = request["description"]?.stringValue
-        self.input = request["input"] ?? .null
-        self.toolUseID = request["tool_use_id"]?.stringValue
-        self.suggestions = (request["permission_suggestions"]?.arrayValue ?? [])
-            .map(PermissionSuggestion.init(raw:))
+        self.init(
+            id: id,
+            toolName: toolName,
+            displayName: request["display_name"]?.stringValue,
+            description: request["description"]?.stringValue,
+            input: request["input"] ?? .null,
+            toolUseID: request["tool_use_id"]?.stringValue,
+            suggestions: (request["permission_suggestions"]?.arrayValue ?? [])
+                .map(PermissionSuggestion.init(raw:))
+        )
     }
 }
 
-public struct PermissionSuggestion: Equatable, Sendable {
-    public let type: String?
-    public let mode: String?
-    public let destination: String?
-    public let behavior: String?
-    /// Payload original preservado — nem todo campo de sugestão é conhecido.
-    /// Controller ruling (Finding 3): uma sugestão sem "type" ainda é
-    /// preservada aqui, não descartada — um diálogo que ignora o que não
-    /// entende é melhor que um `suggestions.count` que mente sobre o que o
-    /// harness realmente ofereceu.
-    public let raw: JSONValue
-
+extension PermissionSuggestion {
+    /// Lê uma entrada de `permission_suggestions` do Claude Code.
     init(raw: JSONValue) {
-        self.type = raw["type"]?.stringValue
-        self.mode = raw["mode"]?.stringValue
-        self.destination = raw["destination"]?.stringValue
-        self.behavior = raw["behavior"]?.stringValue
-        self.raw = raw
+        self.init(
+            type: raw["type"]?.stringValue,
+            mode: raw["mode"]?.stringValue,
+            destination: raw["destination"]?.stringValue,
+            behavior: raw["behavior"]?.stringValue,
+            raw: raw
+        )
     }
 }
 
-public enum PermissionDecision: Equatable, Sendable {
-    case allow(updatedInput: JSONValue?)
-    case deny(message: String, interrupt: Bool)
-
+public extension PermissionDecision {
     /// A linha NDJSON a escrever no stdin do harness.
-    public func responseData(requestID: String) throws -> Data {
+    func responseData(requestID: String) throws -> Data {
         let body: JSONValue
         switch self {
         case .allow(let updatedInput):
@@ -202,7 +206,7 @@ public enum PermissionDecision: Equatable, Sendable {
 public enum OutboundControlRequest: Equatable, Sendable {
     case initialize
     case interrupt
-    case setPermissionMode(String)
+    case setPermissionMode(PermissionMode)
     case setModel(String?)
 
     var subtype: String {
@@ -220,7 +224,9 @@ public enum OutboundControlRequest: Equatable, Sendable {
         case .initialize, .interrupt:
             break
         case .setPermissionMode(let mode):
-            request["mode"] = .string(mode)
+            // A grafia que o CLI espera no fio é a mesma do `rawValue`; a
+            // tradução acontece aqui, no adaptador, e não em `HarnessCore`.
+            request["mode"] = .string(mode.rawValue)
         case .setModel(let model):
             request["model"] = model.map(JSONValue.string) ?? .null
         }
