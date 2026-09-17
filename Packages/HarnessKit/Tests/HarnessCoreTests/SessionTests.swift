@@ -89,7 +89,13 @@ private func segment(
     #expect(back.workingDirectory.path == "/tmp/a b")
 }
 
-@Test func aSummaryDescribesASessionWithoutItsEntries() {
+/// - Note: o nome antigo desta função era
+///   "aSummaryDescribesASessionWithoutItsEntries", e ela passa
+///   `session.allEntries.count` — descreve uma sessão COM as entradas
+///   carregadas, que é o caso fácil. Quem cobre "sem as entradas" é
+///   `aSummaryOfAPartiallyLoadedSessionTrustsTheCallersEntryCountNotTheEmptyArrays`
+///   logo abaixo.
+@Test func aSummaryDerivesTheMetadataFromTheSessionAndTakesTheCountFromTheCaller() {
     let session = Session(
         id: UUID(), title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
         segments: [

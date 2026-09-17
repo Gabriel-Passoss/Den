@@ -143,16 +143,35 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
             case permissionDecision(requestID: String, PermissionDecision)
             case systemNotice(subtype: String, text: String)
             case turnResult(TurnResult)
+
+            /// Escrita à mão, byte por byte igual à que o compilador
+            /// sintetizaria — verificado: o formato de fio não muda por
+            /// declará-la. Existe para que `knownDiscriminators` abaixo possa
+            /// ser DERIVADO dela em vez de ser uma segunda lista de strings
+            /// mantida à mão ao lado dos casos.
+            enum CodingKeys: String, CodingKey, CaseIterable {
+                case userMessage, assistantText, assistantThinking, toolCall
+                case toolResult, permissionRequest, permissionDecision
+                case systemNotice, turnResult
+            }
         }
 
-        /// Chave dinâmica: aceita qualquer string, porque o discriminador de
-        /// um caso desconhecido não tem uma chave nomeada de antemão.
-        private struct DiscriminatorKey: CodingKey {
-            let stringValue: String
-            init?(stringValue: String) { self.stringValue = stringValue }
-            var intValue: Int? { nil }
-            init?(intValue: Int) { nil }
-        }
+        /// Os discriminadores que esta versão conhece, derivados das MESMAS
+        /// chaves que a `Codable` sintetizada de `Known` usa para ler e
+        /// escrever — não uma lista paralela.
+        ///
+        /// A cadeia `Kind` → `Known` → `Known.CodingKeys` tem os dois
+        /// primeiros elos impostos pelo compilador: um décimo caso em `Kind`
+        /// quebra o `switch` de `encode(to:)` (exaustivo), a correção dele
+        /// exige o caso em `Known`, e isso por sua vez quebra o `switch` de
+        /// `init(from:)` (exaustivo sobre `Known`). O terceiro elo —
+        /// `Known` → `CodingKeys` — NÃO é imposto pelo compilador (medido:
+        /// compila, e `encode` estoura em tempo de execução com "Case 'x'
+        /// cannot be encoded because it is not defined in CodingKeys"). Quem
+        /// fecha esse elo é `theKindCasesAndTheKnownDiscriminatorsDoNotDiverge`
+        /// em `TranscriptEntryTests.swift`.
+        static let knownDiscriminators: Set<String> =
+            Set(Known.CodingKeys.allCases.map(\.stringValue))
 
         public init(from decoder: Decoder) throws {
             let peek = try decoder.container(keyedBy: DiscriminatorKey.self)
@@ -163,12 +182,7 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
                     debugDescription: "TranscriptEntry.Kind espera exatamente uma chave discriminadora, achou \(peek.allKeys.count)"
                 )
             }
-            let knownNames: Set<String> = [
-                "userMessage", "assistantText", "assistantThinking", "toolCall",
-                "toolResult", "permissionRequest", "permissionDecision",
-                "systemNotice", "turnResult",
-            ]
-            guard knownNames.contains(key.stringValue) else {
+            guard Kind.knownDiscriminators.contains(key.stringValue) else {
                 let payload = try peek.decode(JSONValue.self, forKey: key)
                 self = .unrecognized(discriminator: key.stringValue, payload: payload)
                 return

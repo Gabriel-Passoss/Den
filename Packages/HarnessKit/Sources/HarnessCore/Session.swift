@@ -4,6 +4,22 @@ import Foundation
 ///
 /// As duas estratégias da spec §3: o usuário escolhe entre um briefing gerado
 /// e o replay do transcript.
+/// Um terceiro caso — de uma versão futura, ou de um harness que ainda não
+/// existe aqui — degrada para `.unrecognized` em vez de estourar, pelo mesmo
+/// motivo e com a mesma mecânica de `TranscriptEntry.Kind`, e com um raio de
+/// dano ainda maior: `Handoff` mora dentro do `session.json`, que é o ÚNICO
+/// arquivo por onde `load()`, `list()` e `append()` entram numa sessão. Um
+/// `DecodingError` aqui não custa uma entrada — custa a conversa inteira, nas
+/// três operações de uma vez: a sessão não abre, some da lista sem aviso, e
+/// nem dá para continuar escrevendo nela. Medido contra o store real antes
+/// desta correção: `load()` → `DecodingError`, `list()` → 0 sessões,
+/// `append()` → `DecodingError`.
+///
+/// Vale aqui a mesma exigência de idempotência do `Kind`: reencode de um
+/// `.unrecognized` reemite o discriminador e o payload ORIGINAIS, nunca a
+/// palavra "unrecognized" — senão um binário velho que só abriu e regravou os
+/// metadados degradaria a proveniência permanentemente, inclusive para a
+/// versão nova que a escreveu e a entende.
 public enum Handoff: Sendable, Equatable, Codable {
     /// Um resumo estruturado, gerado a partir do transcript anterior.
     case briefing(String)
@@ -12,6 +28,58 @@ public enum Handoff: Sendable, Equatable, Codable {
     /// Referencia a entrada por id e não por índice: índices se deslocam,
     /// ids não.
     case replay(throughEntry: UUID)
+    /// Uma estratégia de handoff que esta versão não conhece, preservada em
+    /// vez de perdida.
+    case unrecognized(discriminator: String, payload: JSONValue)
+
+    /// Espelho dos casos conhecidos, com o mesmo formato de fio que `Handoff`
+    /// teria se sua `Codable` fosse inteiramente sintetizada. Ver a nota
+    /// equivalente em `TranscriptEntry.Kind.Known`.
+    private enum Known: Sendable, Equatable, Codable {
+        case briefing(String)
+        case replay(throughEntry: UUID)
+
+        /// Escrita à mão, idêntica à sintetizada, só para que
+        /// `knownDiscriminators` seja derivado dela. Ver a nota em
+        /// `TranscriptEntry.Kind.knownDiscriminators`.
+        enum CodingKeys: String, CodingKey, CaseIterable {
+            case briefing, replay
+        }
+    }
+
+    /// Derivado das chaves que a `Codable` sintetizada de `Known` usa.
+    static let knownDiscriminators: Set<String> =
+        Set(Known.CodingKeys.allCases.map(\.stringValue))
+
+    public init(from decoder: Decoder) throws {
+        let peek = try decoder.container(keyedBy: DiscriminatorKey.self)
+        guard peek.allKeys.count == 1, let key = peek.allKeys.first else {
+            throw DecodingError.dataCorruptedError(
+                forKey: DiscriminatorKey(stringValue: "seededBy")!,
+                in: peek,
+                debugDescription: "Handoff espera exatamente uma chave discriminadora, achou \(peek.allKeys.count)"
+            )
+        }
+        guard Handoff.knownDiscriminators.contains(key.stringValue) else {
+            let payload = try peek.decode(JSONValue.self, forKey: key)
+            self = .unrecognized(discriminator: key.stringValue, payload: payload)
+            return
+        }
+        switch try Known(from: decoder) {
+        case .briefing(let text): self = .briefing(text)
+        case .replay(let entry): self = .replay(throughEntry: entry)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .briefing(let text): try Known.briefing(text).encode(to: encoder)
+        case .replay(let entry): try Known.replay(throughEntry: entry).encode(to: encoder)
+        case .unrecognized(let discriminator, let payload):
+            var container = encoder.container(keyedBy: DiscriminatorKey.self)
+            try container.encode(payload, forKey: DiscriminatorKey(stringValue: discriminator)!)
+        }
+    }
 }
 
 /// Um trecho contínuo de conversa dentro de um harness.
