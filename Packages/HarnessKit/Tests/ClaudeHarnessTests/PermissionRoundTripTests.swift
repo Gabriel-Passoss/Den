@@ -24,12 +24,21 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
     let channel = ControlChannel(transport: ProcessTransport())
     let stream = try await channel.start(launch(askingHarness))
 
-    var request: PermissionRequest?
-    for try await output in stream {
-        if case .permissionRequest(let r) = output {
-            request = r
-            try await channel.respond(to: r.id, with: .allow(updatedInput: nil))
+    // `withTimeout` aqui não testa prazo nenhum — testa a rede. Uma regressão
+    // em `respond` que nunca escreva (ou escreva errado) deixa o `read` do
+    // harness falso bloqueado para sempre, e o `for try await` esperaria por
+    // um fluxo que jamais termina. Sem a rede, isso trava a suíte inteira sem
+    // nome de teste, sem asserção, sem saída nenhuma. Com ela, a regressão
+    // vira `TimedOut` num teste nomeado, em segundos.
+    let request = try await withTimeout(seconds: 3) { () async throws -> PermissionRequest? in
+        var request: PermissionRequest?
+        for try await output in stream {
+            if case .permissionRequest(let r) = output {
+                request = r
+                try await channel.respond(to: r.id, with: .allow(updatedInput: nil))
+            }
         }
+        return request
     }
     let r = try #require(request)
     #expect(r.toolName == "Write")
@@ -41,15 +50,19 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
     let channel = ControlChannel(transport: ProcessTransport())
     let stream = try await channel.start(launch(askingHarness))
 
-    var decided: String?
-    for try await output in stream {
-        switch output {
-        case .permissionRequest(let r):
-            try await channel.respond(to: r.id, with: .allow(updatedInput: nil))
-        case .conversation(let data):
-            let v = try JSONDecoder().decode(JSONValue.self, from: data)
-            if let d = v["decidiu"]?.stringValue { decided = d }
+    // Mesma rede que em `thePermissionRequestReachesTheConsumer`.
+    let decided = try await withTimeout(seconds: 3) { () async throws -> String? in
+        var decided: String?
+        for try await output in stream {
+            switch output {
+            case .permissionRequest(let r):
+                try await channel.respond(to: r.id, with: .allow(updatedInput: nil))
+            case .conversation(let data):
+                let v = try JSONDecoder().decode(JSONValue.self, from: data)
+                if let d = v["decidiu"]?.stringValue { decided = d }
+            }
         }
+        return decided
     }
     #expect(decided == "allow")
 }
@@ -58,15 +71,19 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
     let channel = ControlChannel(transport: ProcessTransport())
     let stream = try await channel.start(launch(askingHarness))
 
-    var decided: String?
-    for try await output in stream {
-        switch output {
-        case .permissionRequest(let r):
-            try await channel.respond(to: r.id, with: .deny(message: "não", interrupt: false))
-        case .conversation(let data):
-            let v = try JSONDecoder().decode(JSONValue.self, from: data)
-            if let d = v["decidiu"]?.stringValue { decided = d }
+    // Mesma rede que em `thePermissionRequestReachesTheConsumer`.
+    let decided = try await withTimeout(seconds: 3) { () async throws -> String? in
+        var decided: String?
+        for try await output in stream {
+            switch output {
+            case .permissionRequest(let r):
+                try await channel.respond(to: r.id, with: .deny(message: "não", interrupt: false))
+            case .conversation(let data):
+                let v = try JSONDecoder().decode(JSONValue.self, from: data)
+                if let d = v["decidiu"]?.stringValue { decided = d }
+            }
         }
+        return decided
     }
     #expect(decided == "deny")
 }
@@ -81,15 +98,19 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
     let channel = ControlChannel(transport: ProcessTransport())
     let stream = try await channel.start(launch(harness))
 
-    var echoed: JSONValue?
-    for try await output in stream {
-        switch output {
-        case .permissionRequest(let r):
-            try await channel.respond(to: r.id, with: .allow(updatedInput: r.input))
-        case .conversation(let data):
-            let v = try JSONDecoder().decode(JSONValue.self, from: data)
-            if let e = v["eco"] { echoed = e }
+    // Mesma rede que em `thePermissionRequestReachesTheConsumer`.
+    let echoed = try await withTimeout(seconds: 3) { () async throws -> JSONValue? in
+        var echoed: JSONValue?
+        for try await output in stream {
+            switch output {
+            case .permissionRequest(let r):
+                try await channel.respond(to: r.id, with: .allow(updatedInput: r.input))
+            case .conversation(let data):
+                let v = try JSONDecoder().decode(JSONValue.self, from: data)
+                if let e = v["eco"] { echoed = e }
+            }
         }
+        return echoed
     }
     #expect(echoed?["count"] == .int(1))
 }
