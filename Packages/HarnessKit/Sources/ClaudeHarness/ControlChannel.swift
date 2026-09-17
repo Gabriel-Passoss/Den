@@ -67,10 +67,10 @@ public actor ControlChannel {
                             continuation.yield(output)
                         }
                     }
-                    await self?.failAllPending(.channelClosed)
+                    await self?.markClosed()
                     continuation.finish()
                 } catch {
-                    await self?.failAllPending(.channelClosed)
+                    await self?.markClosed()
                     continuation.finish(throwing: error)
                 }
             }
@@ -113,6 +113,21 @@ public actor ControlChannel {
         let waiting = pending
         pending.removeAll()
         for (_, continuation) in waiting { continuation.resume(throwing: error) }
+    }
+
+    /// Controller ruling: os dois ramos terminais da bomba chamavam
+    /// `failAllPending(.channelClosed)` sem nunca marcar `liveness = .closed`.
+    /// Quem esperava resposta via o erro certo, mas um `send`/`respond` que
+    /// chegasse *depois* — o harness saiu sozinho, sem `stop()` — via a
+    /// guarda de `liveness` ainda em `.running`, a escrita batia num pipe sem
+    /// leitor do outro lado, e o erro que vazava era do Foundation (EPIPE),
+    /// não `ChannelError`. Isso é exatamente o defeito que `Liveness` foi
+    /// criado para eliminar, entrando pela outra porta: uma sessão que
+    /// termina sozinha — uma queda, ou um fim de sessão normal — é tão comum
+    /// quanto um `stop()` explícito, e merece o mesmo vocabulário de erro.
+    private func markClosed() {
+        liveness = .closed
+        failAllPending(.channelClosed)
     }
 
     /// Envia um request de controle e espera a resposta correlacionada.
@@ -181,12 +196,42 @@ public actor ControlChannel {
         continuation.resume(throwing: ChannelError.timedOut)
     }
 
+    /// Responde a um pedido de permissão.
+    ///
+    /// Não há resposta a esperar: a decisão é o fim da troca. Se o consumidor
+    /// nunca responder, o harness fica bloqueado — é por isso que o pedido
+    /// carrega o `id` e não um callback.
+    ///
+    /// Mesma guarda de três estados que `send(_:)`, e pela mesma razão: uma
+    /// decisão do usuário chega em segundos, não instantaneamente, e a sessão
+    /// pode muito bem ter terminado nesse meio-tempo — de propósito
+    /// (`stop()`), ou sozinha (o harness saiu, `markClosed()` correu). Sem
+    /// esta guarda, `respond` cairia direto em `transport.writeSync`, que
+    /// bateria num pipe sem leitor do outro lado e devolveria um erro do
+    /// Foundation em vez de `ChannelError.channelClosed`.
+    public func respond(to requestID: String, with decision: PermissionDecision) throws {
+        switch liveness {
+        case .notStarted: throw ChannelError.notStarted
+        case .closed: throw ChannelError.channelClosed
+        case .running: break
+        }
+        try transport.writeSync(try decision.responseData(requestID: requestID))
+    }
+
     /// Escreve um turno do usuário no stdin do harness.
     public func writeTurn(_ line: Data) async throws {
         try await transport.write(line)
     }
 
+    /// Fecha o stdin do harness. Não há mais como escrever para ele depois
+    /// disso — nem um turno, nem um request de controle, nem uma resposta de
+    /// permissão — então o canal se considera fechado a partir daqui. Só
+    /// `liveness`, e não `failAllPending`: um request ainda pendente pode
+    /// muito bem receber sua resposta legítima depois disso — encerrar a
+    /// nossa escrita não encerra a leitura do stdout dele, e é a bomba, não
+    /// este método, quem sabe quando essa leitura de fato acaba.
     public func endInput() async {
+        liveness = .closed
         await transport.endInput()
     }
 
