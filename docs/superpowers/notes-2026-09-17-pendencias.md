@@ -74,3 +74,52 @@ mesma classe acima, documentada no ponto de chamada; a alternativa rejeitada
   as primeiras a falhar numa máquina de CI carregada.
 - O `refusalMessage` é `internal`, então um consumidor fora do módulo não
   consegue comparar contra ele.
+
+# Pendências conhecidas ao fim da Etapa 4a (transcript durável)
+
+Mesmo critério: nenhuma bloqueia o merge, todas foram julgadas no review final
+do transcript durável e deliberadamente adiadas, com o raciocínio.
+
+## O buraco de tolerância que sobrou
+
+**Payloads de discriminadores CONHECIDOS não são tolerantes.** O endurecimento
+da Etapa 4a chegou até a camada do DISCRIMINADOR — `TranscriptEntry.Kind` e
+`Handoff` degradam um nome de caso desconhecido para `.unrecognized` — e parou
+ali. O INTERIOR de um caso conhecido continua sendo `Codable` sintetizado sobre
+tipos fechados.
+
+O contraexemplo não é hipotético: a spec §5.6 já AGENDA um
+`PermissionDecision.expired`. No dia em que ele existir, uma versão futura
+grava `{"permissionDecision":{"_1":{"expired":{...}},"requestID":"r1"}}`, o
+leitor de hoje reconhece `permissionDecision` perfeitamente bem, entra no
+decode sintetizado de `PermissionDecision`, e estoura — descartando a entrada
+INTEIRA, `raw` e tudo. Medido no review: 3 linhas escritas, 2 lidas.
+
+O comentário em `FileTranscriptStore.entries(of:in:)` que descreve o que chega
+ali como "JSON genuinamente quebrado" está um nível raso demais por causa
+disso, e o comentário foi corrigido para dizê-lo. A correção de verdade é dar
+aos enums fechados aninhados (`PermissionDecision` primeiro) o mesmo caso de
+fuga que `Kind` e `Handoff` têm — é mudança de porte e pertence ao plano do
+mapper, junto com o trabalho de `.expired` da §5.6 que já está nesta lista pelo
+lado do protocolo.
+
+## Do modelo
+
+- **Permissão expirada e interrupção não têm representação de primeira classe**
+  (§5.5, §5.6). Pertencem ao plano de orquestração.
+- **`Segment.usage` é estado derivável que o store nunca deriva.** Nada diz qual
+  das duas fontes manda — o campo gravado no `session.json` ou a soma dos
+  `turnResult` do NDJSON. Enquanto ninguém as compara, elas não discordam; o
+  primeiro relatório de custo as compara.
+- **`harnessSessionID: UUID` assume que todo harness aceita identidade gerada
+  pelo chamador.** A spec §4.2 escreve `UUID` literalmente, então o código é
+  fiel — mas é o vazamento de forma a vigiar quando o segundo adaptador chegar.
+
+## Teste instável observado
+
+- `respondFailsWithChannelClosedWhenTheWriteHitsADeadPipe` falhou **uma vez em
+  ~10 execuções da suíte inteira**, e **zero em 20 execuções isoladas**. Nada da
+  Etapa 4a é alcançável a partir dele (`ControlChannel` não toca nenhum tipo
+  deste plano). É sensível a carga, o que o põe na mesma família da pendência
+  "escrita bloqueante é sistêmica" registrada acima: o erro esperado depende de
+  o `write(2)` no pipe morto de fato retornar `EPIPE` dentro da janela do teste.
