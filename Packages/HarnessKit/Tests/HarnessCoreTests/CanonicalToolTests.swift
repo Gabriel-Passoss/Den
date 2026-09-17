@@ -9,10 +9,13 @@ import Foundation
 
 @Test func aHarnessIDIsAnOpenSetSoANewAdapterNeedsNoChangeHere() {
     // Um enum fechado obrigaria a editar HarnessCore para cada harness novo.
-    let codex = HarnessID(rawValue: "codex")
-    #expect(codex.rawValue == "codex")
-    #expect(codex != HarnessID.claudeCode)
-    #expect(HarnessID.claudeCode.rawValue == "claude-code")
+    // Estes dois ids são declarados AQUI, no teste, sem que HarnessCore
+    // conheça nenhum deles — que é precisamente a propriedade sob teste.
+    let a = HarnessID(rawValue: "harness-a")
+    let b = HarnessID(rawValue: "harness-b")
+    #expect(a.rawValue == "harness-a")
+    #expect(a != b)
+    #expect(a == HarnessID(rawValue: "harness-a"))
 }
 
 @Test func aToolCallCarriesTheHarnessOwnNameEvenWhenItMapsCleanly() throws {

@@ -9,6 +9,4 @@ public struct HarnessID: RawRepresentable, Sendable, Hashable, Codable {
     public init(rawValue: String) {
         self.rawValue = rawValue
     }
-
-    public static let claudeCode = HarnessID(rawValue: "claude-code")
 }
