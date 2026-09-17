@@ -25,8 +25,11 @@ private func roundTrip(_ json: String) throws -> String {
 }
 
 @Test func preservesIntegersAcrossARoundTrip() throws {
-    // O caso que motiva o tipo: um inteiro não pode virar ponto flutuante,
-    // porque o input da ferramenta é devolvido ao CLI ao permitir a chamada.
+    // Round-trip de inteiros pequenos. ISTO PASSA COM QUALQUER ORDEM entre
+    // Int e Double no decoder — este JSONEncoder imprime Double(1.0) como
+    // "1", igual a Int(1), então este teste não prova a distinção dos casos.
+    // Quem prova é preservesIntegersBeyondDoublePrecision, com um valor que
+    // só Int representa exatamente.
     #expect(try roundTrip(#"{"count":1}"#) == #"{"count":1}"#)
     #expect(try roundTrip(#"{"count":0}"#) == #"{"count":0}"#)
     #expect(try roundTrip(#"{"count":-7}"#) == #"{"count":-7}"#)
@@ -42,6 +45,20 @@ private func roundTrip(_ json: String) throws -> String {
 
 @Test func preservesFractionalNumbers() throws {
     #expect(try roundTrip(#"{"ratio":1.5}"#) == #"{"ratio":1.5}"#)
+}
+
+@Test func wholeNumberDoublesDecodeAsInt() throws {
+    // Comportamento real do tipo, documentado em vez de escondido: um número
+    // JSON sem resto fracionário sempre decodifica como .int, não importa
+    // como foi escrito no fixture — decode(Int.self) aceita o token "1.0"
+    // porque ele não tem parte fracionária. {"opacity":1.0} vira .int(1) e
+    // reencoda como {"opacity":1}: o ponto decimal se perde. O mesmo vale
+    // para -2.0 e 0.0. Isso é aceitável porque o consumidor real (Claude
+    // Code, um processo Node) trata 1 e 1.0 como o mesmo Number em
+    // JavaScript — a diferença é inobservável do outro lado do pipe.
+    let v = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"opacity":1.0}"#.utf8))
+    #expect(v == .object(["opacity": .int(1)]))
+    #expect(try roundTrip(#"{"opacity":1.0}"#) == #"{"opacity":1}"#)
 }
 
 @Test func handlesNestingAndArrays() throws {
