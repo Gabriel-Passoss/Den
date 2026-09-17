@@ -61,6 +61,44 @@ struct RecordArgumentsTests {
         #expect(result == .failure(.missingValue(flag: "--cwd")))
     }
 
+    @Test("--cwd vazio não vira \"aqui\" silenciosamente")
+    func cwdVazioNaoViraAquiSilenciosamente() {
+        // "".hasPrefix("--") é false, então sem esta guarda um --cwd vazio
+        // passava a checagem de token como valor "válido", e
+        // URL(fileURLWithPath: "") resolve para o cwd real do processo — o
+        // mesmo resultado que --cwd obrigatório existe para impedir,
+        // alcançado por uma variável de shell vazia em vez de um token
+        // malposicionado. Vetor realista:
+        // `harness-probe record --prompt "..." --cwd "$SCRATCH_DIR"` com
+        // SCRATCH_DIR vazia ou não setada.
+        let result = parseRecordArguments(["--prompt", "oi", "--cwd", ""])
+        #expect(result == .failure(.emptyValue(flag: "--cwd")))
+    }
+
+    @Test("--prompt vazio é rejeitado")
+    func promptVazioERejeitado() {
+        let result = parseRecordArguments(["--prompt", "", "--cwd", "/tmp/probe-scratch"])
+        #expect(result == .failure(.emptyValue(flag: "--prompt")))
+    }
+
+    @Test("--out vazio também é rejeitado")
+    func outVazioTambemERejeitado() {
+        let result = parseRecordArguments(["--prompt", "oi", "--cwd", "/tmp/probe-scratch", "--out", ""])
+        #expect(result == .failure(.emptyValue(flag: "--out")))
+    }
+
+    @Test("valor só com espaços é rejeitado, não só string vazia")
+    func valorSoComEspacosERejeitado() {
+        let result = parseRecordArguments(["--prompt", "oi", "--cwd", "   "])
+        #expect(result == .failure(.emptyValue(flag: "--cwd")))
+    }
+
+    @Test("valor com tabs e quebra de linha também conta como vazio")
+    func valorComTabsEQuebraDeLinhaTambemContaComoVazio() {
+        let result = parseRecordArguments(["--prompt", "oi", "--cwd", "\t\n  "])
+        #expect(result == .failure(.emptyValue(flag: "--cwd")))
+    }
+
     @Test("--out seguido de outra flag também não vira valor")
     func outSeguidoDeFlagNaoViraValor() {
         let result = parseRecordArguments(["--prompt", "oi", "--cwd", "/tmp/probe-scratch", "--out", "--prompt"])

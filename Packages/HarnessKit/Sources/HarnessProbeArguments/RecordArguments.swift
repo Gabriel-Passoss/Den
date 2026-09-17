@@ -23,6 +23,12 @@ public enum RecordArgumentError: Error, Equatable, Sendable {
     /// por ser o último token da lista, seja porque o próximo token começa
     /// com "--" (e portanto é outra flag, não um valor).
     case missingValue(flag: String)
+    /// Uma flag reconhecida apareceu com um valor presente, mas vazio ou só
+    /// espaço em branco. Caso distinto de `.missingValue` de propósito: o
+    /// vetor real é uma variável de shell vazia (`--cwd "$VAR"` com `VAR`
+    /// não setada), não um token esquecido — e a mensagem certa para cada
+    /// um é diferente o suficiente para valer a separação.
+    case emptyValue(flag: String)
     /// Um token não é nenhuma das flags reconhecidas — nunca ignorado.
     case unknownFlag(String)
     /// Uma flag obrigatória (`--prompt` ou `--cwd`) nunca apareceu.
@@ -32,6 +38,8 @@ public enum RecordArgumentError: Error, Equatable, Sendable {
         switch self {
         case .missingValue(let flag):
             return "\(flag) foi informado sem um valor válido."
+        case .emptyValue(let flag):
+            return "\(flag) foi informado com um valor vazio (ou só espaços) — confira se a variável de shell usada não está vazia."
         case .unknownFlag(let flag):
             return "flag desconhecida: \(flag)"
         case .missingRequired(let flag):
@@ -64,6 +72,15 @@ public enum RecordArgumentError: Error, Equatable, Sendable {
 /// - Qualquer token que não seja uma das três flags reconhecidas é um erro
 ///   (`.unknownFlag`) — nunca ignorado silenciosamente. Um typo na flag falha
 ///   alto, em vez de cair num default.
+/// - **Um valor vazio ou só com espaço em branco é sempre erro**
+///   (`.emptyValue`), mesmo quando o token está presente. `"".hasPrefix("--")`
+///   é `false`, então sem esta regra `--cwd ""` passava a guarda acima como
+///   valor "válido" — e `URL(fileURLWithPath: "")`, do lado de quem consome
+///   `RecordArguments`, resolve para o diretório de trabalho real do
+///   processo. O vetor realista é um idiom de shell comum,
+///   `--cwd "$SCRATCH_DIR"` com a variável vazia ou não setada — o mesmo
+///   resultado que `--cwd` obrigatório existia para impedir, alcançado por
+///   ausência de validação em vez de ambiguidade de token.
 ///
 /// Devolve `Result` em vez de `throws` para que o chamador seja obrigado, no
 /// próprio tipo, a lidar com os dois casos antes de agir sobre o resultado —
@@ -87,6 +104,9 @@ public func parseRecordArguments(_ args: [String]) -> Result<RecordArguments, Re
             return .failure(.missingValue(flag: flag))
         }
         let value = args[valueIndex]
+        guard !value.isBlankValue else {
+            return .failure(.emptyValue(flag: flag))
+        }
 
         switch flag {
         case "--prompt": prompt = value
@@ -101,4 +121,14 @@ public func parseRecordArguments(_ args: [String]) -> Result<RecordArguments, Re
     guard let prompt else { return .failure(.missingRequired(flag: "--prompt")) }
     guard let cwd else { return .failure(.missingRequired(flag: "--cwd")) }
     return .success(RecordArguments(prompt: prompt, cwd: cwd, outputPath: outputPath))
+}
+
+extension String {
+    /// Vazia, ou só espaço em branco (inclui tabs e quebras de linha). Sem
+    /// depender de Foundation — `Character.isWhitespace` já é da biblioteca
+    /// padrão — para este alvo continuar livre de I/O e de dependências
+    /// pesadas, coerente com o resto do parser sendo uma função pura.
+    fileprivate var isBlankValue: Bool {
+        allSatisfy(\.isWhitespace)
+    }
 }
