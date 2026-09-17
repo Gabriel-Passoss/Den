@@ -80,7 +80,39 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
         self.raw = raw
     }
 
-    /// Os nove casos da spec §4.2.
+    /// Os nove casos da spec §4.2, mais um décimo de fuga.
+    ///
+    /// Decodificador escrito à mão pelo mesmo motivo do `ToolCall.init(from:)`
+    /// da Task 1, uma camada acima e com um raio de dano maior: a sintetização
+    /// chavearia o container externo pelo nome do caso, e um discriminador que
+    /// este binário não conhece — `{"kind": {"subagentSpawn": {...}}}`, gravado
+    /// por uma versão futura — estouraria `DecodingError` para a
+    /// `TranscriptEntry` INTEIRA. Isso derruba `id`, `timestamp` e `raw`
+    /// junto, quando `raw` está bem ali no mesmo objeto JSON, guardando os
+    /// bytes exatos que preservariam o registro. Contradiria a garantia da
+    /// própria doc acima: "raw garante que nada é perdido" — exceto quando
+    /// perde tudo.
+    ///
+    /// Por isso um discriminador desconhecido degrada para `.unrecognized`
+    /// (discriminador + payload como `JSONValue`) em vez de propagar o erro —
+    /// mesma disciplina de escopo do `ToolCall`: só esse caso específico
+    /// degrada; um JSON genuinamente corrompido (chave `kind` ausente, ou não
+    /// sendo um objeto de uma chave só) continua estourando `DecodingError`
+    /// de verdade.
+    ///
+    /// Requisito de idempotência: reencode de um `.unrecognized` PRECISA
+    /// reemitir o discriminador e o payload originais, nunca a palavra
+    /// "unrecognized". Cenário: uma versão nova grava um décimo caso; um
+    /// binário mais velho abre, degrada para `.unrecognized("subagentSpawn",
+    /// ...)`, e depois regrava a sessão por qualquer motivo (compactação,
+    /// migração). Se o encoder escrevesse `{"unrecognized": {...}}`, o
+    /// registro ficaria degradado PERMANENTEMENTE — inclusive para a versão
+    /// nova, que entende "subagentSpawn" perfeitamente bem e deixaria de
+    /// reconhecer o próprio caso que ela escreveu. Não "simplifique" o
+    /// encoder de volta para escrever o nome do caso — é exatamente essa
+    /// simplificação que quebra a idempotência.
+    /// `decodingAnUnknownCaseAndReencodingItIsIdempotent` é o teste que pega
+    /// essa regressão.
     public enum Kind: Sendable, Equatable, Codable {
         case userMessage(text: String, attachments: [Attachment])
         case assistantText(String)
@@ -91,5 +123,92 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
         case permissionDecision(requestID: String, PermissionDecision)
         case systemNotice(subtype: String, text: String)
         case turnResult(TurnResult)
+        /// Um caso que esta versão não conhece, preservado em vez de perdido.
+        case unrecognized(discriminator: String, payload: JSONValue)
+
+        /// Espelho dos nove casos conhecidos, com o mesmo formato de fio que
+        /// `Kind` teria se sua `Codable` fosse inteiramente sintetizada
+        /// (mesmos nomes de caso, mesmos rótulos de valor associado, mesma
+        /// ordem). Existe só para emprestar essa sintetização: decodificar
+        /// aqui é decodificar exatamente como o compilador decodificaria os
+        /// nove casos de `Kind`, sem reescrever à mão o container aninhado de
+        /// cada um.
+        private enum Known: Sendable, Equatable, Codable {
+            case userMessage(text: String, attachments: [Attachment])
+            case assistantText(String)
+            case assistantThinking(String)
+            case toolCall(ToolCall)
+            case toolResult(ToolResult)
+            case permissionRequest(PermissionRequest)
+            case permissionDecision(requestID: String, PermissionDecision)
+            case systemNotice(subtype: String, text: String)
+            case turnResult(TurnResult)
+        }
+
+        /// Chave dinâmica: aceita qualquer string, porque o discriminador de
+        /// um caso desconhecido não tem uma chave nomeada de antemão.
+        private struct DiscriminatorKey: CodingKey {
+            let stringValue: String
+            init?(stringValue: String) { self.stringValue = stringValue }
+            var intValue: Int? { nil }
+            init?(intValue: Int) { nil }
+        }
+
+        public init(from decoder: Decoder) throws {
+            let peek = try decoder.container(keyedBy: DiscriminatorKey.self)
+            guard peek.allKeys.count == 1, let key = peek.allKeys.first else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: DiscriminatorKey(stringValue: "kind")!,
+                    in: peek,
+                    debugDescription: "TranscriptEntry.Kind espera exatamente uma chave discriminadora, achou \(peek.allKeys.count)"
+                )
+            }
+            let knownNames: Set<String> = [
+                "userMessage", "assistantText", "assistantThinking", "toolCall",
+                "toolResult", "permissionRequest", "permissionDecision",
+                "systemNotice", "turnResult",
+            ]
+            guard knownNames.contains(key.stringValue) else {
+                let payload = try peek.decode(JSONValue.self, forKey: key)
+                self = .unrecognized(discriminator: key.stringValue, payload: payload)
+                return
+            }
+            switch try Known(from: decoder) {
+            case .userMessage(let text, let attachments):
+                self = .userMessage(text: text, attachments: attachments)
+            case .assistantText(let text): self = .assistantText(text)
+            case .assistantThinking(let text): self = .assistantThinking(text)
+            case .toolCall(let call): self = .toolCall(call)
+            case .toolResult(let result): self = .toolResult(result)
+            case .permissionRequest(let request): self = .permissionRequest(request)
+            case .permissionDecision(let requestID, let decision):
+                self = .permissionDecision(requestID: requestID, decision)
+            case .systemNotice(let subtype, let text):
+                self = .systemNotice(subtype: subtype, text: text)
+            case .turnResult(let result): self = .turnResult(result)
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            switch self {
+            case .userMessage(let text, let attachments):
+                try Known.userMessage(text: text, attachments: attachments).encode(to: encoder)
+            case .assistantText(let text): try Known.assistantText(text).encode(to: encoder)
+            case .assistantThinking(let text): try Known.assistantThinking(text).encode(to: encoder)
+            case .toolCall(let call): try Known.toolCall(call).encode(to: encoder)
+            case .toolResult(let result): try Known.toolResult(result).encode(to: encoder)
+            case .permissionRequest(let request): try Known.permissionRequest(request).encode(to: encoder)
+            case .permissionDecision(let requestID, let decision):
+                try Known.permissionDecision(requestID: requestID, decision).encode(to: encoder)
+            case .systemNotice(let subtype, let text):
+                try Known.systemNotice(subtype: subtype, text: text).encode(to: encoder)
+            case .turnResult(let result): try Known.turnResult(result).encode(to: encoder)
+            case .unrecognized(let discriminator, let payload):
+                // Reemite o discriminador e o payload originais — ver o
+                // requisito de idempotência na doc do tipo acima.
+                var container = encoder.container(keyedBy: DiscriminatorKey.self)
+                try container.encode(payload, forKey: DiscriminatorKey(stringValue: discriminator)!)
+            }
+        }
     }
 }
