@@ -62,4 +62,11 @@ private let session = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
     #expect(c.canSetPermissionMode)
     #expect(c.canResumeSession)
     #expect(c.canForkSession)
+    // `set_model` exists in the control protocol (OutboundControlRequest),
+    // so flipping this to `true` looks like fixing an oversight. It isn't:
+    // it was never verified against the real CLI, and spec §4.1 wants the
+    // conservative answer until someone confirms it. Only change this to
+    // `true` once a real session has shown the CLI accepting a `set_model`
+    // control request and actually acting on it — not before.
+    #expect(!c.canSetModelInSession)
 }
