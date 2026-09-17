@@ -129,9 +129,9 @@ public actor FileTranscriptStore: TranscriptStore {
             throw StoreError.sessionNotFound(sessionID)
         }
         var session = try decoder.decode(Session.self, from: Data(contentsOf: metadata))
-        session.segments = try session.segments.map { segment in
+        session.segments = session.segments.map { segment in
             var filled = segment
-            filled.entries = try entries(of: segment.id, in: sessionID)
+            filled.entries = entries(of: segment.id, in: sessionID)
             return filled
         }
         return session
@@ -164,12 +164,36 @@ public actor FileTranscriptStore: TranscriptStore {
         }
     }
 
-    private func entries(of segmentID: UUID, in sessionID: UUID) throws -> [TranscriptEntry] {
+    /// Lê as entradas de um segmento, pulando linhas ilegíveis.
+    ///
+    /// Um NDJSON append-only é escrito com o app rodando: se o processo morrer
+    /// no meio de uma escrita, a última linha fica pela metade. Falhar a
+    /// leitura inteira perderia a conversa por causa de meia linha — e é
+    /// justamente quando o usuário mais quer o histórico de volta. Mesma regra
+    /// da spec §5.4: degradar, não falhar.
+    ///
+    /// A tolerância não é só para a última linha. Uma linha corrompida no
+    /// MEIO do arquivo (disco, edição manual, um segundo processo pisando no
+    /// arquivo) é o mesmo problema visto de outro ângulo: uma entrada
+    /// ilegível não pode esconder as entradas depois dela.
+    ///
+    /// Isso não é o mesmo buraco que `TranscriptEntry.Kind.unrecognized`
+    /// fecha. Um discriminador que esta versão não conhece, mas escrito por
+    /// uma versão futura, decodifica normalmente — vira `.unrecognized`, não
+    /// um erro. Uma linha que chega até aqui e AINDA falha ao decodificar não
+    /// é um caso futuro chegando cedo demais: é JSON de verdade quebrado
+    /// (truncado, sobrescrito, editado à mão). Perder essa entrada é o preço
+    /// de não perder as outras.
+    ///
+    /// - Note: a entrada ilegível é perdida, não recuperada. Se o transcript
+    ///   precisar um dia ser à prova de perda, o caminho é escrever tamanho +
+    ///   linha, não tentar reparar JSON.
+    private func entries(of segmentID: UUID, in sessionID: UUID) -> [TranscriptEntry] {
         let file = segmentFile(segmentID, in: sessionID)
         guard let text = try? String(contentsOf: file, encoding: .utf8) else { return [] }
-        return try text.split(separator: "\n")
+        return text.split(separator: "\n")
             .filter { !$0.isEmpty }
-            .map { try decoder.decode(TranscriptEntry.self, from: Data($0.utf8)) }
+            .compactMap { try? decoder.decode(TranscriptEntry.self, from: Data($0.utf8)) }
     }
 
     private func lineCount(of segmentID: UUID, in sessionID: UUID) -> Int {
