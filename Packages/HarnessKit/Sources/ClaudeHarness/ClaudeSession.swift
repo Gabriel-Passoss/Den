@@ -1,6 +1,16 @@
 import Foundation
 import HarnessCore
 
+public struct ImageAttachment: Sendable, Equatable {
+    public let mediaType: String
+    public let data: Data
+
+    public init(mediaType: String, data: Data) {
+        self.mediaType = mediaType
+        self.data = data
+    }
+}
+
 public actor ClaudeSession {
 
     public enum Update: Sendable {
@@ -57,17 +67,39 @@ public actor ClaudeSession {
         }
     }
 
-    public func send(_ text: String) async throws {
-        let turn = JSONValue.object([
+    public func send(_ text: String, images: [ImageAttachment] = []) async throws {
+        var line = try JSONEncoder().encode(Self.userTurn(text: text, images: images))
+        line.append(0x0A)
+        try await channel.writeTurn(line)
+    }
+
+    static func userTurn(text: String, images: [ImageAttachment]) -> JSONValue {
+        let content: JSONValue
+        if images.isEmpty {
+            content = .string(text)
+        } else {
+            var blocks: [JSONValue] = images.map { image in
+                .object([
+                    "type": .string("image"),
+                    "source": .object([
+                        "type": .string("base64"),
+                        "media_type": .string(image.mediaType),
+                        "data": .string(image.data.base64EncodedString()),
+                    ]),
+                ])
+            }
+            if !text.isEmpty {
+                blocks.append(.object(["type": .string("text"), "text": .string(text)]))
+            }
+            content = .array(blocks)
+        }
+        return .object([
             "type": .string("user"),
             "message": .object([
                 "role": .string("user"),
-                "content": .string(text),
+                "content": content,
             ]),
         ])
-        var line = try JSONEncoder().encode(turn)
-        line.append(0x0A)
-        try await channel.writeTurn(line)
     }
 
     public func resolve(_ requestID: String, _ decision: PermissionDecision) async throws {

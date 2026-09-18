@@ -7,6 +7,13 @@ struct ChatView: View {
     @State private var expanded: Set<UUID> = []
     @State private var keyMonitor: Any?
 
+    struct ZoomedImage: Identifiable, Equatable {
+        let id = UUID()
+        let data: Data
+    }
+
+    @State private var zoomed: ZoomedImage?
+
     var body: some View {
         VStack(spacing: 0) {
             transcript
@@ -24,19 +31,76 @@ struct ChatView: View {
         .task(id: cockpit.sessionID) { await cockpit.loadBranch() }
         .onChange(of: cockpit.sessionID, initial: true) { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
+        .overlay { lightbox }
+    }
+
+    @ViewBuilder
+    private var lightbox: some View {
+        if let zoomed, let image = NSImage(data: zoomed.data) {
+            ZStack {
+                Color.black.opacity(0.65)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .shadow(radius: 24)
+                    .padding(36)
+                    .transition(.scale(scale: 0.55).combined(with: .opacity))
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { closeLightbox() }
+            .help("Clique ou Esc para fechar")
+        }
+    }
+
+    private func closeLightbox() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { zoomed = nil }
     }
 
     private func installKeyMonitor() {
         removeKeyMonitor()
         let cockpit = self.cockpit
+        let zoomed = $zoomed
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.keyCode == 48, event.modifierFlags.contains(.shift) else { return event }
-            let modes = Self.modeChoices.map(\.mode)
-            let current = cockpit.preferredMode ?? cockpit.detectedMode ?? .manual
-            let next = modes[((modes.firstIndex(of: current) ?? 0) + 1) % modes.count]
-            Task { await cockpit.choose(mode: next) }
-            return nil
+            if event.keyCode == 53, zoomed.wrappedValue != nil {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    zoomed.wrappedValue = nil
+                }
+                return nil
+            }
+            if event.keyCode == 48, event.modifierFlags.contains(.shift) {
+                let modes = Self.modeChoices.map(\.mode)
+                let current = cockpit.preferredMode ?? cockpit.detectedMode ?? .manual
+                let next = modes[((modes.firstIndex(of: current) ?? 0) + 1) % modes.count]
+                Task { await cockpit.choose(mode: next) }
+                return nil
+            }
+            if event.modifierFlags.contains(.command),
+               event.charactersIgnoringModifiers?.lowercased() == "v" {
+                let images = Self.pasteboardImages()
+                if !images.isEmpty {
+                    for data in images { cockpit.attach(imageData: data) }
+                    return nil
+                }
+            }
+            return event
         }
+    }
+
+    static func pasteboardImages() -> [Data] {
+        let board = NSPasteboard.general
+        let types = board.types ?? []
+        guard types.contains(.png) || types.contains(.tiff) else { return [] }
+        return (board.readObjects(forClasses: [NSImage.self]) ?? [])
+            .compactMap { object in
+                guard let image = object as? NSImage,
+                      let tiff = image.tiffRepresentation,
+                      let bitmap = NSBitmapImageRep(data: tiff)
+                else { return nil }
+                return bitmap.representation(using: .png, properties: [:])
+            }
     }
 
     private func removeKeyMonitor() {
@@ -132,7 +196,8 @@ struct ChatView: View {
         HStack(spacing: 0) {
             Spacer(minLength: 64)
             bubble(text: line.text, moment: line.timestamp,
-                   tint: AnyShapeStyle(Color.accentColor.opacity(0.22)))
+                   tint: AnyShapeStyle(Color.accentColor.opacity(0.22)),
+                   images: line.images)
         }
     }
 
@@ -145,25 +210,52 @@ struct ChatView: View {
     }
 
     private func bubble(text: String, moment: Date?, tint: AnyShapeStyle,
-                        markdown: Bool = false) -> some View {
-        HStack(alignment: .lastTextBaseline, spacing: 8) {
-            if markdown {
-                MarkdownText(text: text)
-            } else {
-                Text(text)
-                    .font(.system(size: 13))
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                        markdown: Bool = false, images: [Data] = []) -> some View {
+        let sizes = images.map(Self.displaySize(for:))
+        let contentWidth = sizes.map(\.width).max()
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(images.enumerated()), id: \.offset) { index, data in
+                if let image = NSImage(data: data) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .frame(width: sizes[index].width, height: sizes[index].height)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                zoomed = ZoomedImage(data: data)
+                            }
+                        }
+                        .help("Clique para ampliar")
+                }
             }
-            if let moment {
-                Text(moment, format: .dateTime.hour().minute())
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                if markdown {
+                    MarkdownText(text: text)
+                } else if !text.isEmpty {
+                    Text(text)
+                        .font(.system(size: 13))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !images.isEmpty { Spacer(minLength: 12) }
+                if let moment {
+                    Text(moment, format: .dateTime.hour().minute())
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                }
             }
+            .frame(width: contentWidth)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(tint, in: RoundedRectangle(cornerRadius: 13))
+    }
+
+    private static func displaySize(for data: Data) -> CGSize {
+        guard let image = NSImage(data: data),
+              image.size.width > 0, image.size.height > 0 else { return .zero }
+        let scale = min(1, min(280 / image.size.width, 220 / image.size.height))
+        return CGSize(width: image.size.width * scale, height: image.size.height * scale)
     }
 
     private func chip(icon: String, text: String, mono: Bool, dim: Bool = false) -> some View {
@@ -278,6 +370,10 @@ struct ChatView: View {
 
     private var composer: some View {
         VStack(spacing: 7) {
+            if !cockpit.pendingImages.isEmpty {
+                pendingImageRow
+            }
+
             TextField("Peça uma alteração…", text: $cockpit.prompt, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...6)
@@ -322,7 +418,8 @@ struct ChatView: View {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 19))
                 }
                 .buttonStyle(.plain)
-                .disabled(cockpit.prompt.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(cockpit.prompt.trimmingCharacters(in: .whitespaces).isEmpty
+                          && cockpit.pendingImages.isEmpty)
             }
         }
         .padding(12)
@@ -332,6 +429,36 @@ struct ChatView: View {
         .padding(.bottom, 16)
         .frame(maxWidth: 800)
         .frame(maxWidth: .infinity)
+    }
+
+    private var pendingImageRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(cockpit.pendingImages) { pasted in
+                    if let image = NSImage(data: pasted.data) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(alignment: .topTrailing) {
+                                Button {
+                                    cockpit.removeImage(pasted.id)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.white, .black.opacity(0.6))
+                                }
+                                .buttonStyle(.plain)
+                                .padding(2)
+                                .help("Remover imagem")
+                            }
+                    }
+                }
+            }
+            .padding(.top, 2)
+        }
+        .frame(height: 62)
     }
 
     private var modelBadge: some View {
