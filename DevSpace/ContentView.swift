@@ -17,16 +17,9 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 860, minHeight: 560)
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    Task { await workspace.newSession() }
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                }
-                .help("Nova conversa")
-            }
-        }
+        // Sem botão de nova conversa aqui: o "+" da sidebar já é esse gesto, e
+        // duas portas para a mesma ação só fazem o usuário perguntar qual é a
+        // certa.
         .task { await workspace.refresh() }
     }
 
@@ -41,8 +34,10 @@ struct ContentView: View {
             Button("Nova conversa") { Task { await workspace.newSession() } }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("DevSpace")
-        .navigationSubtitle("")
+        // Título vazio de propósito: sem conversa aberta não há o que a barra
+        // de título possa dizer, e repetir o nome do app numa janela que já é
+        // o app não informa nada.
+        .navigationTitle("")
     }
 }
 

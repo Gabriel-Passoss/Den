@@ -195,6 +195,13 @@ final class CockpitModel {
         status = "fria"
     }
 
+    /// Aceita um título vindo de fora (o usuário renomeou na sidebar) e para
+    /// de tentar batizar a conversa pelo primeiro turno.
+    func adoptTitle(_ newTitle: String) {
+        title = newTitle
+        hasTitle = true
+    }
+
     /// O título sai do primeiro turno, que é o que o usuário reconhece na lista.
     private func nameFromFirstTurn(_ text: String) async {
         guard !hasTitle else { return }
