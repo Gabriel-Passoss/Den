@@ -147,6 +147,17 @@ private extension ClaudeEventMapper {
     /// `stream_event` entregaram delta a delta. É ela que vai para o
     /// transcript, e são eles que vão para a UI — as duas fontes carregam o
     /// mesmo texto (D1).
+    ///
+    /// O `raw` de cada entrada fica no BLOCO, não na linha inteira, e é por
+    /// isso: este CLI emite uma linha `assistant` por bloco de conteúdo, e
+    /// linhas que compartilham `message.id` repetem `message.usage` ao pé da
+    /// letra. Medido em `permission-denied.ndjson`: 12 linhas `assistant`, 7
+    /// `message.id` distintos. Somar o usage por LINHA dá 24 tokens de entrada
+    /// e 162.264 de leitura de cache; somar por `message.id` ÚNICO dá 14 e
+    /// 93.511 — exatamente o que a linha `result` relata para o turno inteiro.
+    /// Guardar o `raw` da LINHA em vez do bloco entregaria à camada de sessão
+    /// uma armadilha de contagem dobrada de graça; a contabilidade oficial vai
+    /// só na entrada `.turnResult`, que lê a linha `result`, não estas.
     func assistant(_ line: JSONValue) -> MappedOutput {
         let moment = timestamp(of: line)
         guard let blocks = line["message"]?["content"]?.arrayValue else {
@@ -225,6 +236,13 @@ private extension ClaudeEventMapper {
     /// do último bloco `text` da linha `assistant` anterior, e mapeá-lo
     /// duplicaria o último parágrafo de todo turno (D3). A linha inteira fica
     /// no `raw`, então nada se perde.
+    ///
+    /// Essa duplicação foi MEDIDA, não suposta — mas só nas quatro fixtures, e
+    /// as quatro têm `subtype: "success"`. Para um resultado de erro
+    /// (`error_max_turns`, `error_during_execution`) o campo carrega uma
+    /// explicação do CLI que não duplica nada — e `TurnResult` não tem campo
+    /// de mensagem, então nesse caminho o texto só sobrevive no `raw`. D3 vale
+    /// para o caminho de sucesso; o de erro não foi medido.
     func result(_ line: JSONValue) -> MappedOutput {
         let usage = line["usage"]
         let totals = UsageTotals(
@@ -272,10 +290,18 @@ private extension ClaudeEventMapper {
     /// exibição, não semântica da conversa. Vão para a UI e morrem ali — o
     /// transcript é registro semântico (spec §4.2), e um replay para outro
     /// harness não ganha nada com eles.
+    ///
+    /// Isto é uma LISTA DE PERMISSÃO de dois itens, não uma categoria — é o
+    /// único lugar do mapeador que abre mão de propósito do "nada se perde" da
+    /// spec §5.4. O que torna isso seguro é o `default` logo abaixo: um
+    /// subtipo `system` futuro com semântica de verdade cai nele e sobrevive
+    /// como `.unrecognized`, em vez de ser descartado como se fosse mais um
+    /// rótulo de progresso.
     func system(_ line: JSONValue) -> MappedOutput {
         guard let subtype = line["subtype"]?.stringValue else {
             return MappedOutput(entries: [unrecognized("system", line)])
         }
+        let moment = timestamp(of: line)
         switch subtype {
         case "init":
             let model = line["model"]?.stringValue ?? ""
@@ -285,7 +311,7 @@ private extension ClaudeEventMapper {
                     harnessSessionID: line["session_id"]?.stringValue ?? ""
                 )],
                 entries: [TranscriptEntry(
-                    timestamp: now(),
+                    timestamp: moment,
                     kind: .systemNotice(subtype: "init", text: model),
                     raw: line
                 )]
@@ -311,11 +337,24 @@ private extension ClaudeEventMapper {
             // `interrupt: false` porque o turno observado segue: nas 6
             // negações do corpus veio um `tool_result` com `is_error: true`
             // logo depois e a conversa continuou.
+            //
+            // A chave aqui é `tool_use_id` (um `toolu_…`), não o
+            // `PermissionRequest.id` (um UUID do canal de controle) que
+            // `ClaudeEventMapper+Permission.swift` usa para a mesma posição —
+            // as duas convergem em `.permissionDecision(requestID:)` porque a
+            // spec só reserva um campo para isso, mas são dois espaços de
+            // nome. Uma negação decidida aqui, pelo harness sozinho, NÃO tem
+            // `.permissionRequest` correspondente no transcript: nenhum
+            // pedido chegou a ser roteado ao cliente para começo de conversa.
+            // Um replay que tente reconstruir "o que foi pedido, o que foi
+            // decidido" vai ver uma decisão órfã — e isso é fiel, não um bug:
+            // o harness decidiu sozinho. Colisão de identidade entre os dois
+            // espaços é impraticável (prefixo `toolu_` contra UUID).
             guard let toolUseID = line["tool_use_id"]?.stringValue else {
                 return MappedOutput(entries: [unrecognized("system/" + subtype, line)])
             }
             return MappedOutput(entries: [TranscriptEntry(
-                timestamp: now(),
+                timestamp: moment,
                 kind: .permissionDecision(
                     requestID: toolUseID,
                     .deny(message: line["message"]?.stringValue ?? "", interrupt: false)
@@ -331,7 +370,7 @@ private extension ClaudeEventMapper {
     /// Durável: é o que explica, meses depois, um turno que parou no meio.
     func rateLimit(_ line: JSONValue) -> MappedOutput {
         MappedOutput(entries: [TranscriptEntry(
-            timestamp: now(),
+            timestamp: timestamp(of: line),
             kind: .systemNotice(
                 subtype: "rate_limit",
                 text: line["rate_limit_info"]?["status"]?.stringValue ?? ""

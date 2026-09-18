@@ -9,9 +9,22 @@ import HarnessCore
 // do mapeador, e é aqui que mora o relógio injetado — por isso são métodos de
 // instância.
 //
-// O `raw` chega por parâmetro em vez de ser reconstruído: só o chamador tem a
-// linha original do fio, e a §4.2 exige um registro fiel, não uma
-// reconstrução aproximada.
+// O `raw` chega por parâmetro, e não reconstruído — mas hoje NENHUM chamador
+// pode entregar um `raw` fiel para `entry(for:raw:)` (pedido). O
+// `ControlChannel.consume` classifica o quadro, tem o `Data` cru na mão, e o
+// descarta: devolve `.permissionRequest(request)` sem ele, e `PermissionRequest`
+// (`HarnessCore/Permission.swift`) não tem campo `raw` para carregá-lo até
+// aqui. O parâmetro existe para que esta função POSSA ser fiel assim que
+// existir um chamador que a alimente — não porque um já exista. Ligar isso de
+// verdade exige carregar o quadro cru através do canal de controle, e está
+// registrado como pendência para a próxima etapa (ver
+// `docs/superpowers/notes-2026-09-17-pendencias.md`).
+//
+// Para a DECISÃO o quadro de entrada nem existe: uma decisão nasce na UI do
+// DevSpace, não numa linha do fio. O `raw` honesto para
+// `entry(for:requestID:raw:)` é o `control_response` que NÓS escrevemos —
+// `PermissionDecision.responseData(requestID:)` — ou `.null` quando esse
+// payload não está à mão no ponto de chamada.
 public extension ClaudeEventMapper {
     /// A entrada que registra que o harness pediu permissão.
     func entry(for request: PermissionRequest, raw: JSONValue) -> TranscriptEntry {

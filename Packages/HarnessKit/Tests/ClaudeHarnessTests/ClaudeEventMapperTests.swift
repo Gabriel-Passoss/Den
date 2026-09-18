@@ -8,13 +8,13 @@ import Foundation
 
 /// Um instante fixo: nenhuma asserção deste arquivo depende do relógio de
 /// parede.
-let fixedNow = Date(timeIntervalSince1970: 1_000_000)
+private let fixedNow = Date(timeIntervalSince1970: 1_000_000)
 
-func makeMapper() -> ClaudeEventMapper {
+private func makeMapper() -> ClaudeEventMapper {
     ClaudeEventMapper(now: { fixedNow })
 }
 
-func json(_ text: String) throws -> JSONValue {
+private func json(_ text: String) throws -> JSONValue {
     try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
 }
 
@@ -296,6 +296,37 @@ func json(_ text: String) throws -> JSONValue {
     """#))
     #expect(out.entries.count == 1)
     #expect(out.entries[0].kind == .userMessage(text: "liste a pasta", attachments: []))
+}
+
+/// Espelha `anAssistantLineWithoutContentIsPreservedWhole`: o caminho
+/// `assistant` já tinha este teste, o `user` não.
+@Test func aUserLineWithoutContentIsPreservedWhole() throws {
+    let line = try json(#"{"type":"user","message":{"role":"user"}}"#)
+    let entry = try #require(makeMapper().map(line).entries.first)
+    #expect(entry.kind == .unrecognized(discriminator: "claude:user", payload: line))
+}
+
+/// `content` presente mas nem string nem array — um número, por exemplo.
+/// Mesmo discriminador do caso sem `content`: os dois caem na mesma guarda.
+@Test func aUserLineWithNeitherStringNorArrayContentIsPreservedWhole() throws {
+    let line = try json(#"{"type":"user","message":{"content":42}}"#)
+    let entry = try #require(makeMapper().map(line).entries.first)
+    #expect(entry.kind == .unrecognized(discriminator: "claude:user", payload: line))
+}
+
+/// Espelha `anUnknownOrMalformedBlockIsPreservedNotDropped` do lado
+/// `assistant`: um bloco `tool_result` sem `tool_use_id` não pode virar
+/// `ToolResult` — não há a que chamada apontar — e degrada em vez de adivinhar.
+@Test func aToolResultBlockWithoutAToolUseIDIsPreservedNotGuessed() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"user","message":{"content":[
+      {"type":"tool_result","content":"oi"}]}}
+    """#))
+    guard case .unrecognized(let discriminator, _) =
+            try #require(out.entries.first).kind else {
+        Issue.record("esperava .unrecognized"); return
+    }
+    #expect(discriminator == "claude:content/tool_result")
 }
 
 // MARK: - Durável: result
