@@ -198,14 +198,14 @@ final class CockpitModel {
                           raw: .object(["media_type": .string("image/png")]))
     }
 
-    func send() async {
-        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    func send(text explicit: String? = nil) async {
+        let text = (explicit ?? prompt).trimmingCharacters(in: .whitespacesAndNewlines)
         let images = pendingImages
         guard !text.isEmpty || !images.isEmpty else { return }
-        if session == nil { await start() }
-        guard let session else { return }
         prompt = ""
         pendingImages = []
+        if session == nil { await start() }
+        guard let session else { return }
 
         let attachments = images.compactMap { persistAttachment($0.data) }
         let entry = TranscriptEntry(

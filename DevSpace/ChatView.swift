@@ -378,7 +378,7 @@ struct ChatView: View {
                 .textFieldStyle(.plain)
                 .lineLimit(1...6)
                 .font(.system(size: 13))
-                .onSubmit { Task { await cockpit.send() } }
+                .onSubmit { submit() }
 
             HStack(spacing: 8) {
                 modeBadge
@@ -412,9 +412,7 @@ struct ChatView: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Button {
-                    Task { await cockpit.send() }
-                } label: {
+                Button(action: submit) {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 19))
                 }
                 .buttonStyle(.plain)
@@ -429,6 +427,12 @@ struct ChatView: View {
         .padding(.bottom, 16)
         .frame(maxWidth: 800)
         .frame(maxWidth: .infinity)
+    }
+
+    private func submit() {
+        let text = cockpit.prompt
+        cockpit.prompt = ""
+        Task { await cockpit.send(text: text) }
     }
 
     private var pendingImageRow: some View {
