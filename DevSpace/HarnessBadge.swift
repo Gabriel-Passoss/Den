@@ -26,14 +26,14 @@ struct HarnessBadge: View {
         .clipShape(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
     }
 
-    static func asset(for harness: HarnessID) -> String? {
+    nonisolated static func asset(for harness: HarnessID) -> String? {
         switch harness {
         case .claudeCode: "HarnessClaudeCode"
         default: nil
         }
     }
 
-    static func name(for harness: HarnessID) -> String {
+    nonisolated static func name(for harness: HarnessID) -> String {
         switch harness {
         case .claudeCode: "Claude Code"
         default: harness.rawValue
