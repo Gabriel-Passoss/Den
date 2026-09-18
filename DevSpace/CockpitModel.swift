@@ -35,11 +35,23 @@ final class CockpitModel {
 
     var preferredModel: String?
 
+    var preferredEffort: EffortLevel?
+
+    var detectedEffort: EffortLevel?
+
     static let modelChoices: [(name: String, id: String?)] = [
         ("Fable", "fable"),
         ("Opus", "opus"),
         ("Sonnet", "sonnet"),
         ("Haiku", "haiku"),
+    ]
+
+    static let effortChoices: [(name: String, id: EffortLevel?)] = [
+        ("Baixo", .low),
+        ("Médio", .medium),
+        ("Alto", .high),
+        ("Muito alto", .xhigh),
+        ("Máximo", .max),
     ]
 
     private let store: FileTranscriptStore
@@ -65,6 +77,7 @@ final class CockpitModel {
         self.workingDirectory = workingDirectory
         self.harnessSessionID = self.sessionID
         self.isRestored = false
+        self.detectedEffort = ClaudeSettings.effortLevel(forWorkingDirectory: workingDirectory)
     }
 
     init(store: FileTranscriptStore, restoring session: Session) {
@@ -78,6 +91,7 @@ final class CockpitModel {
         self.harnessSessionID = session.segments.last?.harnessSessionID ?? session.id
         self.isRestored = true
         self.status = "fria"
+        self.detectedEffort = ClaudeSettings.effortLevel(forWorkingDirectory: session.workingDirectory)
         for entry in session.allEntries { render(entry, persist: false) }
     }
 
@@ -127,7 +141,8 @@ final class CockpitModel {
                 installation: installation,
                 workingDirectory: workingDirectory,
                 session: start,
-                model: preferredModel
+                model: preferredModel,
+                effort: preferredEffort
             )
             let live = ClaudeSession(channel: ControlChannel(transport: ProcessTransport()))
             let updates = try await live.start(launch)
@@ -202,6 +217,16 @@ final class CockpitModel {
     func choose(model id: String?) async {
         guard preferredModel != id else { return }
         preferredModel = id
+        await relaunchIfIdle()
+    }
+
+    func choose(effort level: EffortLevel?) async {
+        guard preferredEffort != level else { return }
+        preferredEffort = level
+        await relaunchIfIdle()
+    }
+
+    private func relaunchIfIdle() async {
         guard !isBusy else { return }
         if session != nil { await stop() }
         await start()

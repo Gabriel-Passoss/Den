@@ -10,12 +10,17 @@ public enum SessionStart: Sendable, Equatable {
     case fork(from: UUID, newSessionID: UUID)
 }
 
+public enum EffortLevel: String, Sendable, Equatable, CaseIterable {
+    case low, medium, high, xhigh, max
+}
+
 public enum ClaudeLaunch {
     public static func make(
         installation: HarnessInstallation,
         workingDirectory: URL,
         session: SessionStart,
         model: String? = nil,
+        effort: EffortLevel? = nil,
         permissionMode: PermissionMode? = nil,
         additionalDirectories: [URL] = []
     ) -> ProcessTransport.Launch {
@@ -44,6 +49,7 @@ public enum ClaudeLaunch {
         }
 
         if let model { arguments += ["--model", model] }
+        if let effort { arguments += ["--effort", effort.rawValue] }
 
         if let permissionMode { arguments += ["--permission-mode", permissionMode.rawValue] }
         for directory in additionalDirectories {

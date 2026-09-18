@@ -93,6 +93,24 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
     #expect(addDirIndices.map { args[args.index(after: $0)] } == ["/tmp/scratch/a", "/tmp/scratch/b"])
 }
 
+@Test func theLaunchPassesTheEffortLevel() {
+    let args = ClaudeLaunch.make(
+        installation: install,
+        workingDirectory: cwd,
+        session: .fresh(sessionID: session),
+        effort: .xhigh
+    ).arguments
+    let i = try! #require(args.firstIndex(of: "--effort"))
+    #expect(args[args.index(after: i)] == "xhigh")
+}
+
+@Test func withoutAnEffortTheFlagIsAbsent() {
+    let args = ClaudeLaunch.make(
+        installation: install, workingDirectory: cwd, session: .fresh(sessionID: session)
+    ).arguments
+    #expect(!args.contains("--effort"))
+}
+
 @Test func everyPermissionModeReachesTheCLIWithItsVerifiedSpelling() throws {
     let spellings = PermissionMode.allCases.map { mode -> String in
         let args = ClaudeLaunch.make(

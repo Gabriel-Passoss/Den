@@ -1,5 +1,6 @@
 import SwiftUI
 import HarnessCore
+import ClaudeHarness
 
 struct ChatView: View {
     @Bindable var cockpit: CockpitModel
@@ -244,6 +245,7 @@ struct ChatView: View {
 
             HStack(spacing: 8) {
                 modelBadge
+                effortBadge
                 if cockpit.isBusy {
                     ProgressView().controlSize(.small).scaleEffect(0.7)
                     Text("trabalhando").font(.system(size: 10)).foregroundStyle(.secondary)
@@ -309,6 +311,44 @@ struct ChatView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Escolher o modelo das próximas mensagens")
+    }
+
+    private var effortBadge: some View {
+        Menu {
+            Picker("Esforço", selection: effortSelection) {
+                ForEach(CockpitModel.effortChoices, id: \.id) { choice in
+                    Text(choice.name).tag(choice.id)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 3) {
+                Text(effortLabel)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 7))
+            }
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(.quaternary.opacity(0.4), in: Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Escolher o esforço das próximas mensagens")
+    }
+
+    private var effortSelection: Binding<EffortLevel?> {
+        Binding(
+            get: { cockpit.preferredEffort ?? cockpit.detectedEffort },
+            set: { level in Task { await cockpit.choose(effort: level) } }
+        )
+    }
+
+    private var effortLabel: String {
+        guard let level = cockpit.preferredEffort ?? cockpit.detectedEffort else { return "Esforço" }
+        return CockpitModel.effortChoices.first { $0.id == level }?.name ?? level.rawValue
     }
 
     private var modelSelection: Binding<String?> {
