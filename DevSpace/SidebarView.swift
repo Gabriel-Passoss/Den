@@ -23,8 +23,6 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             topBar
             list
-            Divider()
-            footer
         }
         .frame(minWidth: 250)
     }
@@ -46,7 +44,19 @@ struct SidebarView: View {
             .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 7))
 
             Menu {
-                Button("Nova sessão") { Task { await workspace.newSession() } }
+                // Onde a conversa nasce é escolhido AQUI, no gesto que a cria,
+                // e não num seletor de "pasta atual" escondido no rodapé: um
+                // estado global que decide onde a próxima coisa acontece é o
+                // tipo de coisa que o usuário esquece de conferir.
+                if workspace.folders.isEmpty {
+                    Button("Nova sessão…") { addFolderThenCreate() }
+                } else {
+                    ForEach(workspace.folders, id: \.path) { folder in
+                        Button("Nova sessão em \(workspace.displayName(for: folder))") {
+                            Task { await workspace.newSession(in: folder) }
+                        }
+                    }
+                }
                 Divider()
                 Button("Adicionar pasta…") { addFolder() }
             } label: {
@@ -201,48 +211,6 @@ struct SidebarView: View {
         DispatchQueue.main.async { editorFocused = true }
     }
 
-    // MARK: - Rodapé
-
-    private var footer: some View {
-        VStack(spacing: 6) {
-            Menu {
-                ForEach(workspace.folders, id: \.path) { folder in
-                    Button(folder.lastPathComponent) { workspace.workingDirectory = folder }
-                }
-                if !workspace.folders.isEmpty { Divider() }
-                Button("Escolher outra…") { addFolder() }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "folder.badge.gearshape").font(.system(size: 10))
-                    Text(abbreviated(workspace.workingDirectory))
-                        .font(.system(size: 11))
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 7))
-                .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .help("A pasta que uma conversa nova vai usar")
-
-            HStack(spacing: 5) {
-                HarnessBadge(harness: workspace.defaultHarness, size: 12)
-                Text("\(HarnessBadge.name(for: workspace.defaultHarness)) · login da assinatura")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                Spacer(minLength: 0)
-            }
-        }
-        .padding(10)
-    }
-
     // MARK: - Apoio
 
     /// Os harnesses que hospedaram a conversa, mais quando ela mudou.
@@ -261,14 +229,22 @@ struct SidebarView: View {
         url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }
 
-    private func addFolder() {
+    @discardableResult
+    private func addFolder() -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.prompt = "Adicionar"
         panel.directoryURL = workspace.workingDirectory
-        if panel.runModal() == .OK, let url = panel.url {
-            workspace.addFolder(url)
-        }
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        workspace.addFolder(url)
+        return url
+    }
+
+    /// Primeira conversa do app: não há pasta nenhuma ainda, então escolher uma
+    /// e criar a sessão é um gesto só.
+    private func addFolderThenCreate() {
+        guard let url = addFolder() else { return }
+        Task { await workspace.newSession(in: url) }
     }
 }

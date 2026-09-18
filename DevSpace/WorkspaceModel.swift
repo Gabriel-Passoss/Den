@@ -144,6 +144,16 @@ final class WorkspaceModel {
         }
     }
 
+    /// Como a pasta se chama para quem lê: o apelido, quando há.
+    func displayName(for url: URL) -> String {
+        folderNames[url.path] ?? url.lastPathComponent
+    }
+
+    func newSession(in folder: URL) async {
+        workingDirectory = folder
+        await newSession()
+    }
+
     func newSession() async {
         let cockpit = CockpitModel(store: store, workingDirectory: workingDirectory)
         await cockpit.persistMetadata()
