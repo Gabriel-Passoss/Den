@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import HarnessCore
@@ -73,6 +74,26 @@ final class WorkspaceModel {
         cockpits[id]?.isLive ?? false
     }
 
+    enum SessionIndicator {
+        case unread, working, waiting, rateLimited
+    }
+
+    func indicator(for id: UUID) -> SessionIndicator? {
+        guard let cockpit = cockpits[id] else { return nil }
+        if cockpit.isRateLimited { return .rateLimited }
+        if cockpit.pending != nil || cockpit.pendingQuestion != nil { return .waiting }
+        if cockpit.isBusy { return .working }
+        if cockpit.hasUnread { return .unread }
+        return nil
+    }
+
+    private func adopt(_ cockpit: CockpitModel) {
+        let id = cockpit.sessionID
+        cockpit.isViewed = { [weak self] in
+            self?.selectedID == id && NSApplication.shared.isActive
+        }
+    }
+
     var groups: [Group] {
         let matching = search.isEmpty ? summaries : summaries.filter {
             $0.title.localizedCaseInsensitiveContains(search)
@@ -134,6 +155,7 @@ final class WorkspaceModel {
 
     func newSession() async {
         let cockpit = CockpitModel(store: store, workingDirectory: workingDirectory)
+        adopt(cockpit)
         await cockpit.persistMetadata()
         cockpits[cockpit.sessionID] = cockpit
         selectedID = cockpit.sessionID
@@ -143,9 +165,14 @@ final class WorkspaceModel {
 
     func select(_ id: UUID) async {
         selectedID = id
-        guard cockpits[id] == nil else { return }
+        if let cockpit = cockpits[id] {
+            if cockpit.hasUnread { cockpit.hasUnread = false }
+            return
+        }
         guard let session = try? await store.load(id) else { return }
-        cockpits[id] = CockpitModel(store: store, restoring: session)
+        let cockpit = CockpitModel(store: store, restoring: session)
+        adopt(cockpit)
+        cockpits[id] = cockpit
     }
 
     func stopAll() async {

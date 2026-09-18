@@ -3,7 +3,7 @@ import HarnessCore
 
 struct SessionRow: View {
     let summary: SessionSummary
-    let isLive: Bool
+    let indicator: WorkspaceModel.SessionIndicator?
     var select: () -> Void
     var rename: (String) -> Void
 
@@ -31,12 +31,12 @@ struct SessionRow: View {
 
             Spacer(minLength: 4)
 
-            if isLive {
+            if let indicator {
                 Circle()
-                    .fill(.orange)
+                    .fill(Self.color(for: indicator))
                     .frame(width: 6, height: 6)
-                    .help("Em execução")
-                    .accessibilityLabel("Em execução")
+                    .help(Self.label(for: indicator))
+                    .accessibilityLabel(Self.label(for: indicator))
             }
         }
         .padding(.trailing, Self.trailingInset)
@@ -46,9 +46,29 @@ struct SessionRow: View {
             guard !isEditing else { return }
             select()
         })
-        .simultaneousGesture(TapGesture(count: 2).onEnded { isEditing = true })
+        .simultaneousGesture(TapGesture(count: 2).onEnded {
+            Task { @MainActor in isEditing = true }
+        })
         .contextMenu {
             Button("Renomear") { isEditing = true }
+        }
+    }
+
+    private static func color(for indicator: WorkspaceModel.SessionIndicator) -> Color {
+        switch indicator {
+        case .unread: .green
+        case .working: .yellow
+        case .waiting: .purple
+        case .rateLimited: .red
+        }
+    }
+
+    private static func label(for indicator: WorkspaceModel.SessionIndicator) -> String {
+        switch indicator {
+        case .unread: "Resposta nova"
+        case .working: "Trabalhando"
+        case .waiting: "Aguardando sua decisão"
+        case .rateLimited: "Tokens esgotados"
         }
     }
 

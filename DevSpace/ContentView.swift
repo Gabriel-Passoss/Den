@@ -1,4 +1,5 @@
 import SwiftUI
+import HarnessCore
 
 struct ContentView: View {
     @State private var workspace = WorkspaceModel()
@@ -21,6 +22,37 @@ struct ContentView: View {
         .task {
             await workspace.refresh()
             #if DEBUG
+            if ProcessInfo.processInfo.environment["DEVSPACE_FAKE"] != nil,
+               let first = workspace.summaries.first {
+                await workspace.select(first.id)
+                let delayed = ProcessInfo.processInfo
+                    .environment["DEVSPACE_FAKE_DELAY"].flatMap(Double.init)
+                if let delayed {
+                    try? await Task.sleep(for: .seconds(delayed))
+                }
+                let env = ProcessInfo.processInfo.environment
+                if env["DEVSPACE_FAKE_UNREAD"] != nil {
+                    workspace.active?.hasUnread = true
+                }
+                if env["DEVSPACE_FAKE_QUESTION"] != nil {
+                workspace.active?.pendingQuestion = CockpitModel.QuestionPrompt(
+                    id: "fake",
+                    questions: [.init(
+                        text: "Qual você prefere?",
+                        header: "Escolha",
+                        multiSelect: false,
+                        options: [
+                            .init(label: "Gato", detail: "Independente, dorme bastante"),
+                            .init(label: "Cachorro", detail: "Leal, gosta de passear"),
+                        ])],
+                    request: PermissionRequest(id: "fake", toolName: "AskUserQuestion")
+                )
+                }
+                if ProcessInfo.processInfo.environment["DEVSPACE_FAKE_BUSY"] != nil {
+                    workspace.active?.isBusy = true
+                    workspace.active?.turnStartedAt = Date()
+                }
+            }
             DebugSnapshot.arm()
             #endif
         }

@@ -35,7 +35,7 @@ struct SidebarView: View {
                     ForEach(group.sessions) { summary in
                         SessionRow(
                             summary: summary,
-                            isLive: workspace.isLive(summary.id),
+                            indicator: workspace.indicator(for: summary.id),
                             select: { Task { await workspace.select(summary.id) } },
                             rename: { name in
                                 Task { await workspace.renameSession(summary.id, to: name) }
@@ -106,7 +106,9 @@ struct SidebarView: View {
     }
 
     private func toggleCollapse(_ id: String) {
-        if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
+        Task { @MainActor in
+            if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
+        }
     }
 
     // MARK: - Ações

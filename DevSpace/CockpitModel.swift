@@ -32,6 +32,9 @@ final class CockpitModel {
     var model: String = ""
     var isBusy = false
     var turnStartedAt: Date?
+    var hasUnread = false
+    var isRateLimited = false
+    var isViewed: (() -> Bool)?
 
     struct PastedImage: Identifiable, Equatable {
         let id = UUID()
@@ -39,6 +42,21 @@ final class CockpitModel {
     }
 
     var pendingImages: [PastedImage] = []
+
+    struct QuestionPrompt: Identifiable {
+        struct Option { let label: String; let detail: String }
+        struct Question {
+            let text: String
+            let header: String
+            let multiSelect: Bool
+            let options: [Option]
+        }
+        let id: String
+        let questions: [Question]
+        let request: PermissionRequest
+    }
+
+    var pendingQuestion: QuestionPrompt?
 
     var branch: String?
 
@@ -229,6 +247,70 @@ final class CockpitModel {
         }
     }
 
+    static func questionPrompt(from request: PermissionRequest) -> QuestionPrompt? {
+        guard let items = request.input["questions"]?.arrayValue else { return nil }
+        let questions = items.compactMap { item -> QuestionPrompt.Question? in
+            guard let text = item["question"]?.stringValue,
+                  let options = item["options"]?.arrayValue else { return nil }
+            let parsed = options.compactMap { option -> QuestionPrompt.Option? in
+                guard let label = option["label"]?.stringValue else { return nil }
+                return QuestionPrompt.Option(
+                    label: label, detail: option["description"]?.stringValue ?? "")
+            }
+            guard !parsed.isEmpty else { return nil }
+            return QuestionPrompt.Question(
+                text: text,
+                header: item["header"]?.stringValue ?? "",
+                multiSelect: item["multiSelect"]?.boolValue ?? false,
+                options: parsed)
+        }
+        guard !questions.isEmpty else { return nil }
+        return QuestionPrompt(id: request.id, questions: questions, request: request)
+    }
+
+    func answerQuestion(_ selections: [String: [String]]) async {
+        guard let prompt = pendingQuestion, let session else { return }
+        pendingQuestion = nil
+        var input = prompt.request.input
+        if case .object(var members) = input {
+            members["answers"] = .object(selections.mapValues {
+                .string($0.joined(separator: ", "))
+            })
+            input = .object(members)
+        }
+        do {
+            try await session.resolve(prompt.id, .allow(updatedInput: input))
+            let chosen = prompt.questions.compactMap { question -> String? in
+                guard let labels = selections[question.text], !labels.isEmpty else { return nil }
+                let joined = labels.joined(separator: ", ")
+                guard prompt.questions.count > 1 else { return joined }
+                let name = question.header.isEmpty ? question.text : question.header
+                return "\(name): \(joined)"
+            }.joined(separator: "\n")
+            if !chosen.isEmpty {
+                let entry = TranscriptEntry(
+                    timestamp: Date(),
+                    kind: .userMessage(text: chosen, attachments: []),
+                    raw: .object(["type": .string("user"), "text": .string(chosen)])
+                )
+                render(entry, persist: true)
+            }
+        } catch {
+            append(.notice, "não consegui responder a pergunta: \(error)")
+        }
+    }
+
+    func dismissQuestion() async {
+        guard let prompt = pendingQuestion, let session else { return }
+        pendingQuestion = nil
+        do {
+            try await session.resolve(prompt.id, .deny(
+                message: "o usuário dispensou a pergunta", interrupt: false))
+        } catch {
+            append(.notice, "não consegui dispensar a pergunta: \(error)")
+        }
+    }
+
     func resolve(allow: Bool) async {
         guard let request = pending, let session else { return }
         pending = nil
@@ -354,7 +436,12 @@ final class CockpitModel {
             render(entry, persist: true)
 
         case .permission(let request):
-            pending = request
+            if request.toolName == "AskUserQuestion",
+               let prompt = Self.questionPrompt(from: request) {
+                pendingQuestion = prompt
+            } else {
+                pending = request
+            }
 
         case .unrecognizedControl(let unrecognized):
             append(.unknown, "quadro de controle não reconhecido"
@@ -377,6 +464,8 @@ final class CockpitModel {
         }
     }
 
+    private var questionCallIDs: Set<String> = []
+
     private func render(_ entry: TranscriptEntry, persist: Bool) {
         if persist {
             Task { [store, sessionID, segmentID] in
@@ -398,18 +487,30 @@ final class CockpitModel {
         case .assistantText(let text):
             streaming = ""
             append(.assistant, text, at: moment)
+            if persist, !(isViewed?() ?? false) { hasUnread = true }
         case .assistantThinking(let text):
             append(.thinking, text, at: moment)
         case .toolCall(let call):
-            append(.tool, summary(of: call), at: moment, verb: call.canonical)
+            if call.rawName == "AskUserQuestion" {
+                questionCallIDs.insert(call.id)
+            } else {
+                append(.tool, summary(of: call), at: moment, verb: call.canonical)
+            }
         case .toolResult(let result):
-            append(.toolResult, (result.isError ? "falhou: " : "") + oneLine(result.content),
-                   at: moment)
+            if !questionCallIDs.contains(result.callID) {
+                append(.toolResult,
+                       (result.isError ? "falhou: " : "") + oneLine(result.content),
+                       at: moment)
+            }
         case .permissionDecision(_, let decision):
             if case .deny(let message, _) = decision { append(.notice, message, at: moment) }
         case .systemNotice(let subtype, let text):
             if subtype == "init", let raw = entry.raw["permissionMode"]?.stringValue {
                 detectedMode = raw == "default" ? .manual : PermissionMode(rawValue: raw)
+            }
+            if subtype == "rate_limit",
+               let state = entry.raw["rate_limit_info"]?["status"]?.stringValue {
+                isRateLimited = state != "allowed"
             }
             if subtype != "init" && subtype != "rate_limit" { append(.notice, text, at: moment) }
         case .turnResult(let result):
@@ -417,6 +518,7 @@ final class CockpitModel {
             isBusy = false
             turnStartedAt = nil
             streaming = ""
+            if !result.isError { isRateLimited = false }
             if result.isError {
                 append(.notice, "o turno falhou no harness"
                        + (result.stopReason.map { " (\($0))" } ?? ""), at: moment)

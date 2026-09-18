@@ -4,7 +4,9 @@ import AppKit
 enum DebugSnapshot {
     static func arm() {
         guard let path = ProcessInfo.processInfo.environment["DEVSPACE_SNAPSHOT"] else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        let delay = ProcessInfo.processInfo.environment["DEVSPACE_SNAPSHOT_DELAY"]
+            .flatMap(Double.init) ?? 2.5
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             capture(to: path)
 
             if ProcessInfo.processInfo.environment["DEVSPACE_SNAPSHOT_STAY"] == nil {

@@ -15,14 +15,12 @@ struct ChatView: View {
     @State private var zoomed: ZoomedImage?
 
     var body: some View {
-        VStack(spacing: 0) {
-            transcript
-            if let pending = cockpit.pending {
-                permissionCard(pending)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 6)
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                transcript
+                composer
             }
-            composer
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
 
         .navigationTitle(cockpit.title)
@@ -31,6 +29,13 @@ struct ChatView: View {
         .task(id: cockpit.sessionID) { await cockpit.loadBranch() }
         .onChange(of: cockpit.sessionID, initial: true) { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification)) { _ in
+            let cockpit = self.cockpit
+            Task { @MainActor in
+                if cockpit.hasUnread { cockpit.hasUnread = false }
+            }
+        }
         .overlay { lightbox }
     }
 
@@ -111,10 +116,9 @@ struct ChatView: View {
     // MARK: - Transcript
 
     private var transcript: some View {
-        GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 14) {
                     ForEach(cockpit.blocks) { block in
                         switch block {
                         case .line(let line):
@@ -125,7 +129,8 @@ struct ChatView: View {
                     }
                     if !cockpit.streaming.isEmpty {
                         assistantBubble(cockpit.streaming, at: nil).id("streaming")
-                    } else if cockpit.isBusy, cockpit.pending == nil {
+                    } else if cockpit.isBusy, cockpit.pending == nil,
+                              cockpit.pendingQuestion == nil {
                         HStack(spacing: 0) {
                             TypingIndicator()
                                 .padding(.horizontal, 12)
@@ -141,14 +146,44 @@ struct ChatView: View {
                 .padding(.vertical, 16)
                 .frame(maxWidth: 760, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .frame(minHeight: geometry.size.height, alignment: .top)
             }
-            .defaultScrollAnchor(.bottom)
+            .safeAreaInset(edge: .bottom, spacing: 0) { transientCards }
+            .onAppear { jumpToEnd(proxy) }
             .onChange(of: cockpit.lines.count) { scrollToEnd(proxy) }
             .onChange(of: cockpit.streaming) { scrollToEnd(proxy) }
+            .onChange(of: cockpit.pendingQuestion?.id) { scrollToEnd(proxy) }
         }
         .id(cockpit.sessionID)
+    }
+
+    @ViewBuilder
+    private var transientCards: some View {
+        if cockpit.pending != nil || cockpit.pendingQuestion != nil {
+            VStack(spacing: 6) {
+                if let pending = cockpit.pending {
+                    permissionCard(pending)
+                }
+                if let question = cockpit.pendingQuestion {
+                    QuestionCard(
+                        prompt: question,
+                        answer: { selections in Task { await cockpit.answerQuestion(selections) } },
+                        dismiss: { Task { await cockpit.dismissQuestion() } }
+                    )
+                    .id(question.id)
+                }
+            }
+            .padding(.horizontal, 20)
+            .frame(maxWidth: 800)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+            .background(.bar)
         }
+    }
+
+    private func jumpToEnd(_ proxy: ScrollViewProxy) {
+        if !cockpit.streaming.isEmpty { proxy.scrollTo("streaming", anchor: .bottom) }
+        else if let last = cockpit.lines.last { proxy.scrollTo(last.id, anchor: .bottom) }
     }
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
@@ -385,7 +420,7 @@ struct ChatView: View {
                 modelBadge
                 effortBadge
                 if cockpit.isBusy {
-                    ProgressView().controlSize(.small).scaleEffect(0.7)
+                    ProgressView().controlSize(.mini)
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         Text(busyLabel(at: context.date))
                             .font(.system(size: 10))
@@ -401,8 +436,8 @@ struct ChatView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Parar o que está rodando")
-                } else if cockpit.pending != nil {
-                    Text("aguardando você").font(.system(size: 10)).foregroundStyle(.orange)
+                } else if cockpit.pending != nil || cockpit.pendingQuestion != nil {
+                    Text("Aguardando você").font(.system(size: 10)).foregroundStyle(.orange)
                 } else if let status = visibleStatus {
                     Text(status)
                         .font(.system(size: 10))
@@ -606,7 +641,7 @@ struct ChatView: View {
     private var visibleStatus: String? {
         let status = cockpit.status
         guard status.hasPrefix("falhou") || status.hasPrefix("encerrada") else { return nil }
-        return status
+        return status.prefix(1).uppercased() + status.dropFirst()
     }
 
     private func busyLabel(at now: Date) -> String {

@@ -34,7 +34,9 @@ struct FolderHeader: View {
             guard !isEditing else { return }
             toggle()
         })
-        .simultaneousGesture(TapGesture(count: 2).onEnded { isEditing = true })
+        .simultaneousGesture(TapGesture(count: 2).onEnded {
+            Task { @MainActor in isEditing = true }
+        })
         .contextMenu {
             Button("Renomear") { isEditing = true }
             Button("Nova sessão aqui", action: newSession)
