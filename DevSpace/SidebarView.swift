@@ -4,6 +4,9 @@ import HarnessCore
 /// A lista de conversas, agrupada por pasta.
 struct SidebarView: View {
     @Bindable var workspace: WorkspaceModel
+    /// Pastas recolhidas, por nome. Em memória de propósito: é estado de
+    /// arrumação da janela, não da conversa — nada aqui merece ir para o disco.
+    @State private var collapsed: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,32 +44,48 @@ struct SidebarView: View {
 
                 ForEach(workspace.groups) { group in
                     folderHeader(group)
-                    ForEach(group.sessions) { summary in
-                        sessionRow(summary)
+                    if !collapsed.contains(group.id) {
+                        ForEach(group.sessions) { summary in
+                            sessionRow(summary)
+                        }
                     }
                 }
             }
             .padding(.bottom, 10)
+            .animation(.easeInOut(duration: 0.18), value: collapsed)
         }
     }
 
     private func folderHeader(_ group: WorkspaceModel.Group) -> some View {
-        HStack(spacing: 7) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-            Text(group.name)
-                .font(.system(size: 14, weight: .semibold))
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 6)
-            Text("\(group.sessions.count)")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+        let isCollapsed = collapsed.contains(group.id)
+        return Button {
+            if isCollapsed { collapsed.remove(group.id) } else { collapsed.insert(group.id) }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                Text(group.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 6)
+                Text("\(group.sessions.count)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 14)
+            .padding(.bottom, 5)
+            // A linha inteira é o alvo do clique, e não só o texto: um alvo do
+            // tamanho da palavra obriga a mirar.
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 14)
-        .padding(.bottom, 5)
+        .buttonStyle(.plain)
     }
 
     private func sessionRow(_ summary: SessionSummary) -> some View {
