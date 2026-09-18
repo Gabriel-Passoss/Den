@@ -82,14 +82,7 @@ struct ChatView: View {
     private func row(_ line: CockpitModel.Line) -> some View {
         switch line.role {
         case .user:
-            Text(line.text)
-                .font(.system(size: 13))
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
+            userBubble(line)
 
         case .assistant:
             assistantText(line.text)
@@ -116,6 +109,33 @@ struct ChatView: View {
 
         case .unknown:
             EmptyView()
+        }
+    }
+
+    /// A mensagem do usuário: encostada à direita, contida, com a hora dentro
+    /// do balão.
+    ///
+    /// O `Spacer` com folga mínima é o que impede o balão de esticar até a
+    /// borda: ele encolhe até o conteúdo e para. E a hora fica alinhada pela
+    /// ÚLTIMA linha de base do texto, não pelo centro — é isso que a põe ao pé
+    /// do balão quando a mensagem tem várias linhas, em vez de flutuando no
+    /// meio da altura.
+    private func userBubble(_ line: CockpitModel.Line) -> some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 64)
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Text(line.text)
+                    .font(.system(size: 13))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(line.timestamp, format: .dateTime.hour().minute())
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.accentColor.opacity(0.22),
+                        in: RoundedRectangle(cornerRadius: 13))
         }
     }
 

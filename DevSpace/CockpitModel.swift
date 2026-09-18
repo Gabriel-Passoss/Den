@@ -16,6 +16,10 @@ final class CockpitModel {
         let id: UUID
         let role: Role
         let text: String
+        /// Quando aconteceu. Vem do `TranscriptEntry`, não do relógio de quem
+        /// desenha — uma conversa reaberta do disco mostra a hora em que foi
+        /// dita, não a hora em que foi lida.
+        let timestamp: Date
         /// Só para `.tool`: o verbo canônico, quando existe.
         var verb: CanonicalTool?
     }
@@ -217,36 +221,40 @@ final class CockpitModel {
             }
         }
 
+        let moment = entry.timestamp
         switch entry.kind {
         case .userMessage(let text, _):
-            append(.user, text)
+            append(.user, text, at: moment)
         case .assistantText(let text):
             streaming = ""
-            append(.assistant, text)
+            append(.assistant, text, at: moment)
         case .assistantThinking(let text):
-            append(.thinking, text)
+            append(.thinking, text, at: moment)
         case .toolCall(let call):
-            append(.tool, summary(of: call), verb: call.canonical)
+            append(.tool, summary(of: call), at: moment, verb: call.canonical)
         case .toolResult(let result):
-            append(.toolResult, (result.isError ? "falhou: " : "") + oneLine(result.content))
+            append(.toolResult, (result.isError ? "falhou: " : "") + oneLine(result.content),
+                   at: moment)
         case .permissionDecision(_, let decision):
-            if case .deny(let message, _) = decision { append(.notice, message) }
+            if case .deny(let message, _) = decision { append(.notice, message, at: moment) }
         case .systemNotice(let subtype, let text):
-            if subtype != "init" && subtype != "rate_limit" { append(.notice, text) }
+            if subtype != "init" && subtype != "rate_limit" { append(.notice, text, at: moment) }
         case .turnResult:
             // Nada na tela: tokens e custo não são a conversa, e o custo de uma
             // conta de assinatura não é dinheiro que o usuário paga por turno.
             isBusy = false
             streaming = ""
         case .permissionRequest, .unrecognized:
-            append(.unknown, oneLine(entry.raw))
+            append(.unknown, oneLine(entry.raw), at: moment)
         }
     }
 
-    private func append(_ role: Line.Role, _ text: String, verb: CanonicalTool? = nil) {
+    private func append(_ role: Line.Role, _ text: String,
+                        at moment: Date = Date(), verb: CanonicalTool? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        lines.append(Line(id: UUID(), role: role, text: trimmed, verb: verb))
+        lines.append(Line(id: UUID(), role: role, text: trimmed,
+                          timestamp: moment, verb: verb))
     }
 
     /// Uma chamada de ferramenta, resumida do jeito que se lê.
