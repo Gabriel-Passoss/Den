@@ -60,8 +60,17 @@ struct ChatView: View {
                         }
                     }
                     if !cockpit.streaming.isEmpty {
-
                         assistantBubble(cockpit.streaming, at: nil).id("streaming")
+                    } else if cockpit.isBusy, cockpit.pending == nil {
+                        HStack(spacing: 0) {
+                            TypingIndicator()
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(.quaternary.opacity(0.4),
+                                            in: RoundedRectangle(cornerRadius: 13))
+                            Spacer(minLength: 64)
+                        }
+                        .id("typing")
                     }
                 }
                 .padding(.horizontal, 20)
@@ -275,7 +284,12 @@ struct ChatView: View {
                 effortBadge
                 if cockpit.isBusy {
                     ProgressView().controlSize(.small).scaleEffect(0.7)
-                    Text("trabalhando").font(.system(size: 10)).foregroundStyle(.secondary)
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text(busyLabel(at: context.date))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
                     Button {
                         Task { await cockpit.stop() }
                     } label: {
@@ -454,8 +468,15 @@ struct ChatView: View {
 
     private var visibleStatus: String? {
         let status = cockpit.status
-        guard status.hasPrefix("falhou") || status.hasPrefix("encerrada")
-                || status.hasPrefix("procurando") else { return nil }
+        guard status.hasPrefix("falhou") || status.hasPrefix("encerrada") else { return nil }
         return status
+    }
+
+    private func busyLabel(at now: Date) -> String {
+        guard let start = cockpit.turnStartedAt else { return "Pensando" }
+        let seconds = max(0, Int(now.timeIntervalSince(start)))
+        return seconds < 60
+            ? "Pensando · \(seconds)s"
+            : "Pensando · \(seconds / 60)m \(seconds % 60)s"
     }
 }

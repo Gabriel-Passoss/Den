@@ -30,6 +30,7 @@ final class CockpitModel {
     var status: String = ""
     var model: String = ""
     var isBusy = false
+    var turnStartedAt: Date?
 
     var branch: String?
 
@@ -184,11 +185,13 @@ final class CockpitModel {
         await nameFromFirstTurn(text)
 
         isBusy = true
+        turnStartedAt = Date()
         do {
             try await session.send(text)
         } catch {
             append(.notice, "não consegui mandar o turno: \(error)")
             isBusy = false
+            turnStartedAt = nil
         }
     }
 
@@ -278,6 +281,7 @@ final class CockpitModel {
         await session?.stop()
         session = nil
         isBusy = false
+        turnStartedAt = nil
         status = "fria"
     }
 
@@ -326,6 +330,7 @@ final class CockpitModel {
 
             let midTurn = isBusy
             isBusy = false
+            turnStartedAt = nil
             status = error.map { "encerrada: \($0)" } ?? "fria"
             session = nil
             if let error {
@@ -369,6 +374,7 @@ final class CockpitModel {
         case .turnResult(let result):
 
             isBusy = false
+            turnStartedAt = nil
             streaming = ""
             if result.isError {
                 append(.notice, "o turno falhou no harness"
