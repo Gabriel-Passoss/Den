@@ -42,6 +42,10 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        // A largura da coluna se declara na RAIZ da coluna. Posta no wrapper
+        // lá fora ela é ignorada, e a barra encolhe até o mínimo que o sistema
+        // aceita — que é estreito demais para caber título e subtítulo.
+        .navigationSplitViewColumnWidth(min: 248, ideal: 282, max: 420)
         .searchable(text: $workspace.search, placement: .sidebar, prompt: "Buscar sessões")
         .toolbar {
             ToolbarItem {
