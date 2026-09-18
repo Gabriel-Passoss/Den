@@ -13,6 +13,12 @@ struct ChatView: View {
     }
 
     @State private var zoomed: ZoomedImage?
+    @State private var nearBottom = true
+
+    private struct ScrollEdgeState: Equatable {
+        var distance: CGFloat
+        var contentHeight: CGFloat
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -148,7 +154,43 @@ struct ChatView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { transientCards }
-            .onAppear { jumpToEnd(proxy) }
+            .onScrollGeometryChange(for: ScrollEdgeState.self) { geometry in
+                ScrollEdgeState(
+                    distance: geometry.contentSize.height
+                        - (geometry.contentOffset.y + geometry.containerSize.height
+                           - geometry.contentInsets.bottom),
+                    contentHeight: geometry.contentSize.height)
+            } action: { old, new in
+                if new.distance <= 100 {
+                    nearBottom = true
+                } else if old.contentHeight == new.contentHeight,
+                          new.distance > old.distance {
+                    nearBottom = false
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if !nearBottom {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { jumpToEnd(proxy) }
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 13, weight: .semibold))
+                            .padding(9)
+                            .background(.regularMaterial, in: Circle())
+                            .overlay(Circle().stroke(.quaternary, lineWidth: 1))
+                            .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 12)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .help("Ir para o final")
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: nearBottom)
+            .onAppear {
+                nearBottom = true
+                jumpToEnd(proxy)
+            }
             .onChange(of: cockpit.lines.count) { scrollToEnd(proxy) }
             .onChange(of: cockpit.streaming) { scrollToEnd(proxy) }
             .onChange(of: cockpit.pendingQuestion?.id) { scrollToEnd(proxy) }
@@ -166,7 +208,10 @@ struct ChatView: View {
                 if let question = cockpit.pendingQuestion {
                     QuestionCard(
                         prompt: question,
-                        answer: { selections in Task { await cockpit.answerQuestion(selections) } },
+                        answer: { selections in
+                            nearBottom = true
+                            Task { await cockpit.answerQuestion(selections) }
+                        },
                         dismiss: { Task { await cockpit.dismissQuestion() } }
                     )
                     .id(question.id)
@@ -187,6 +232,7 @@ struct ChatView: View {
     }
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        guard nearBottom else { return }
         withAnimation(.easeOut(duration: 0.15)) {
             if !cockpit.streaming.isEmpty { proxy.scrollTo("streaming", anchor: .bottom) }
             else if let last = cockpit.lines.last { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -459,6 +505,7 @@ struct ChatView: View {
         .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 11))
         .overlay(RoundedRectangle(cornerRadius: 11).stroke(.quaternary, lineWidth: 1))
         .padding(.horizontal, 20)
+        .padding(.top, 10)
         .padding(.bottom, 16)
         .frame(maxWidth: 800)
         .frame(maxWidth: .infinity)
@@ -467,6 +514,7 @@ struct ChatView: View {
     private func submit() {
         let text = cockpit.prompt
         cockpit.prompt = ""
+        nearBottom = true
         Task { await cockpit.send(text: text) }
     }
 
