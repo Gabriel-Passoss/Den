@@ -47,6 +47,7 @@ struct ChatView: View {
     // MARK: - Transcript
 
     private var transcript: some View {
+        GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
@@ -67,9 +68,13 @@ struct ChatView: View {
                 .padding(.vertical, 16)
                 .frame(maxWidth: 760, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .center)
+                .frame(minHeight: geometry.size.height, alignment: .top)
             }
+            .defaultScrollAnchor(.bottom)
             .onChange(of: cockpit.lines.count) { scrollToEnd(proxy) }
             .onChange(of: cockpit.streaming) { scrollToEnd(proxy) }
+        }
+        .id(cockpit.sessionID)
         }
     }
 
