@@ -51,20 +51,22 @@ struct SidebarView: View {
     }
 
     private func folderHeader(_ group: WorkspaceModel.Group) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: "folder")
-                .font(.system(size: 9))
+        HStack(spacing: 7) {
+            Image(systemName: "folder.fill")
+                .font(.system(size: 13))
                 .foregroundStyle(.secondary)
             Text(group.name)
-                .font(.system(size: 11, weight: .medium))
-            Spacer()
+                .font(.system(size: 14, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 6)
             Text("\(group.sessions.count)")
-                .font(.system(size: 10))
+                .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 3)
+        .padding(.top, 14)
+        .padding(.bottom, 5)
     }
 
     private func sessionRow(_ summary: SessionSummary) -> some View {
