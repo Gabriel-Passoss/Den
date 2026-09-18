@@ -162,3 +162,105 @@ Registrados aqui porque o workspace do plano que os guardava é descartável.
   deste plano). É sensível a carga, o que o põe na mesma família da pendência
   "escrita bloqueante é sistêmica" registrada acima: o erro esperado depende de
   o `write(2)` no pipe morto de fato retornar `EPIPE` dentro da janela do teste.
+
+# Pendências conhecidas ao fim da Etapa 4b (mapeador de eventos)
+
+Mesmo critério: nenhuma bloqueia o merge, julgada na Task 6 e deliberadamente
+adiada, com o raciocínio.
+
+## Do store
+
+**`FileTranscriptStore` trunca a fração de segundo do carimbo.** Descoberto ao
+escrever a Task 6, no teste que leva o corpus de `permission-denied.ndjson`
+inteiro até o disco e de volta: o encoder usa `.iso8601`, que não escreve
+milissegundos, enquanto as linhas `assistant` e `user` do protocolo trazem
+carimbos com fração de segundo ("…:59.447Z"). Um carimbo que vai ao disco
+volta truncado no segundo. Não afeta a ordem do transcript — que é a ordem de
+append no NDJSON, não a do carimbo — nem nenhum teste existente (o teste da
+Task 6, `theMappedTranscriptSurvivesTheStore`, compara carimbos com tolerância
+de 1s em vez de igualdade, exatamente por essa razão), mas é perda de
+fidelidade contra a §4.2. Mudar a estratégia de codificação de data é mudança
+de formato de arquivo e pertence a um plano próprio que toque o store.
+
+# Pendências conhecidas ao fim da Etapa 4b — revisão final de branch
+
+Mesmo critério: nenhuma bloqueia o merge. Estas cinco vieram da revisão final
+de todo o branch `feat/claude-event-mapper` (253 testes verdes, build limpo),
+julgadas junto com a onda de correção que endereçou o bug real da revisão (a
+tabela de verbos faltando `Glob`/`Grep`) e deliberadamente adiadas com o
+raciocínio abaixo.
+
+## A costura de permissão
+
+**A costura entre `ControlChannel` e `ClaudeEventMapper.entry(for:raw:)` não
+tem chamador que consiga ser fiel.** `ControlChannel.consume` (em
+`ControlChannel.swift`) classifica o quadro, tem o `Data` cru na mão, e o
+descarta ao devolver `.permissionRequest(request)`; `PermissionRequest`
+(`HarnessCore/Permission.swift`) não tem campo `raw` para carregá-lo adiante.
+Consequência medida hoje: um pedido de permissão não é registrado em
+DOBRO — o mapeador devolve `.empty` para quadros de controle, então há
+exatamente um dono — mas é DESCARTADO por inteiro. Rodar `permission-request.ndjson`
+pela linha através de `ClaudeEventMapper.map(line:)` dá 6 entradas, e nenhuma
+delas é `.permissionRequest` ou `.permissionDecision` — as duas linhas de
+controle (`control_response` do `init` e o `control_request` do `can_use_tool`)
+caem no `case "control_request", "control_response": return .empty`. E
+`noFixtureLineDegrades` passa mesmo assim, porque descartar não é degradar —
+o teste só vigia `.unrecognized`, não ausência. Direção do conserto: carregar
+`raw: JSONValue` em `ChannelOutput.permissionRequest` ou no próprio
+`PermissionRequest`, para que um chamador real (que ainda não existe — é o
+mesmo buraco que o comentário de `ClaudeEventMapper+Permission.swift` agora
+documenta explicitamente) tenha o que passar.
+
+## O fluxo efêmero não sabe nomear uma chamada de ferramenta em streaming
+
+`content_block_start` é descartado em `ephemeral(_:)` (cai no `default` que
+comenta "moldura do stream"), e é o ÚNICO quadro que carrega o nome da
+ferramenta durante o streaming — o nome só chega quando a linha `assistant`
+pousa como `.toolCall`, já consolidada. Medido em `permission-denied.ndjson`:
+63 quadros `input_json_delta` sem nome de ferramenta para mostrar enquanto o
+JSON do input é montado pedaço a pedaço. Junto disso, uma assimetria: existe
+`SessionEvent.turnStarted` (de `message_start`) mas não existe contraparte de
+fim de turno — quem consome só `events` sabe que um turno começou e nunca que
+ele terminou (isso só aparece em `entries`, na linha `assistant` consolidada
+ou no `.turnResult`). Direção do conserto: um caso novo de `SessionEvent` que
+carregue o índice do bloco, o tipo do bloco e o nome da ferramenta — sem
+quebrar o "sem estado" do mapeador, porque tudo isso é derivável da própria
+linha `content_block_start` em mãos. Deliberadamente diferido: a forma certa
+desse caso deveria ser puxada pelo cockpit que vai consumi-lo, que ainda não
+existe; inventá-la agora arrisca errar o formato e reescrever goldens medidos
+para um comportamento que ninguém lê ainda.
+
+## `system/init` inventa string vazia onde deveria admitir que não sabe
+
+Em `system(_:)`, `case "init"`: `line["model"]?.stringValue ?? ""` e
+`line["session_id"]?.stringValue ?? ""` — um `system/init` sem `model` (ou sem
+`session_id`) emite `.sessionInitialized(model: "", harnessSessionID: "")` em
+vez de degradar. O modelo é a proveniência do segmento inteiro da sessão; um
+modelo vazio é uma mentira silenciosa onde `.unrecognized` seria honesto e
+visível. Diferido porque o que a camada de sessão DEVE fazer diante de um
+`init` sem modelo — recusar o segmento? aceitar com um rótulo "desconhecido"? —
+é decisão dela, não do mapeador.
+
+## Uma forma plausível de `user` que o corpus não exercita
+
+Uma linha `user` cujo `content` é um array de blocos `text` (em vez do array
+de `tool_result` que o corpus sempre traz, ou da string que só nós escrevemos)
+cai em `userBlock(_:at:)`, falha a guarda de `tool_result` e degrada para
+`claude:content/text` em vez de virar `.userMessage`. Nenhuma das quatro
+fixtures grava essa forma — o CLI observado nunca ecoou um turno de usuário em
+blocos —, mas é uma forma plausível para o turno inicial ecoado de uma sessão
+retomada (`--resume`), que este corpus não cobre. Registrado como nota, não
+como defeito: não há fixture para confirmar a forma real do campo nesse caso.
+
+## `timestamp(of:)` pode estar cego a um formato de carimbo que o corpus não usa
+
+`timestamp(of:)` (`ClaudeEventMapper.swift`) tenta
+`Date.ISO8601FormatStyle(includingFractionalSeconds: true)` e depois
+`Date.ISO8601FormatStyle()` — ambos exigem o sufixo `Z`. As linhas do corpus
+sempre usam `Z` ("…:59.447Z"), nunca um offset explícito tipo `+00:00`. Se o
+CLI algum dia emitir um carimbo em forma de offset, ele cairia
+silenciosamente no relógio injetado em vez de falhar de forma visível —
+exatamente o comportamento que a spec §5.4 pede para JSON malformado, mas
+aplicado aqui a um formato de data que pode ser perfeitamente válido e só não
+reconhecido. Não verificado contra o protocolo real: registrado como pergunta
+em aberto, não como defeito confirmado.
