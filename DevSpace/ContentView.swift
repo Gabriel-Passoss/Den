@@ -3,6 +3,8 @@ import HarnessCore
 
 struct ContentView: View {
     @State private var model = CockpitModel()
+    /// Quais blocos recolhidos o usuário abriu.
+    @State private var expanded: Set<UUID> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,8 +61,13 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    ForEach(model.lines) { line in
-                        row(line).id(line.id)
+                    ForEach(model.blocks) { block in
+                        switch block {
+                        case .line(let line):
+                            row(line).id(line.id)
+                        case .collapsed(let id, let lines):
+                            unrecognizedBlock(id: id, lines: lines).id(id)
+                        }
                     }
                     if !model.streaming.isEmpty {
                         // O efêmero, pintado enquanto chega. Some quando o
@@ -73,6 +80,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onChange(of: model.lines.count) { scrollToEnd(proxy) }
+            .animation(.easeInOut(duration: 0.15), value: expanded)
             .onChange(of: model.streaming) { scrollToEnd(proxy) }
         }
     }
@@ -106,6 +114,44 @@ struct ContentView: View {
             monoline(symbol: "checkmark.circle", color: .green, text: line.text)
         case .unknown:
             monoline(symbol: "questionmark.diamond", color: .pink, text: line.text)
+        }
+    }
+
+    /// Eventos que este binário não sabe ler, preservados e quietos.
+    ///
+    /// Spec §5.4: nada é perdido e nada vira erro — o conteúdo está aqui,
+    /// a um clique. O que ele não faz é competir com a conversa.
+    @ViewBuilder
+    private func unrecognizedBlock(id: UUID, lines: [CockpitModel.Line]) -> some View {
+        let isOpen = expanded.contains(id)
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                if isOpen { expanded.remove(id) } else { expanded.insert(id) }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: isOpen ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                    Text(lines.count == 1
+                         ? "1 evento não reconhecido"
+                         : "\(lines.count) eventos não reconhecidos")
+                        .font(.system(size: 10))
+                }
+                .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+
+            if isOpen {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(lines) { line in
+                        Text(line.text)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.leading, 13)
+            }
         }
     }
 

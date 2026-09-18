@@ -163,7 +163,54 @@ final class CockpitModel {
     }
 
     private func append(_ role: Line.Role, _ text: String) {
-        lines.append(Line(id: UUID(), role: role, text: text))
+        // Um bloco de raciocínio pode chegar só com a assinatura criptográfica
+        // e nenhum texto — desenhar o rótulo sozinho põe na tela um "RACIOCÍNIO"
+        // sem raciocínio nenhum.
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        lines.append(Line(id: UUID(), role: role, text: trimmed))
+    }
+
+    /// As linhas agrupadas para desenhar: corridas consecutivas de eventos não
+    /// reconhecidos viram UM bloco recolhido.
+    ///
+    /// A spec §5.4 manda preservar e exibir o que não conhecemos — e é isso
+    /// que acontece, o conteúdo continua ali. O que muda é o peso na tela:
+    /// numa máquina com hooks configurados, o início de toda sessão traz uma
+    /// dezena desses, e uma linha berrante por evento afoga a conversa antes
+    /// dela começar.
+    var blocks: [Block] {
+        var result: [Block] = []
+        var run: [Line] = []
+
+        func flush() {
+            guard !run.isEmpty else { return }
+            result.append(.collapsed(id: run[0].id, lines: run))
+            run = []
+        }
+
+        for line in lines {
+            if line.role == .unknown {
+                run.append(line)
+            } else {
+                flush()
+                result.append(.line(line))
+            }
+        }
+        flush()
+        return result
+    }
+
+    enum Block: Identifiable {
+        case line(Line)
+        case collapsed(id: UUID, lines: [Line])
+
+        var id: UUID {
+            switch self {
+            case .line(let line): return line.id
+            case .collapsed(let id, _): return id
+            }
+        }
     }
 
     /// Um resumo de uma linha só para um payload arbitrário.

@@ -264,3 +264,39 @@ exatamente o comportamento que a spec §5.4 pede para JSON malformado, mas
 aplicado aqui a um formato de data que pode ser perfeitamente válido e só não
 reconhecido. Não verificado contra o protocolo real: registrado como pergunta
 em aberto, não como defeito confirmado.
+
+## Observado ao rodar o cockpit numa máquina real (2026-09-17)
+
+### Os `system` de hook não estão no corpus, e são a maioria na vida real
+
+Primeira execução do cockpit contra o `claude` do usuário: o transcript abriu
+com **nove** entradas `.unrecognized` antes da conversa começar — eventos de
+hook (`subtype=hook_started`, `subtype=hook_response`, com `hook_event`,
+`hook_id`, `hook_name` e a saída do hook).
+
+Nenhuma fixture tem um único hook, porque `harness-probe record` grava com
+`--setting-sources ""`. É a MESMA classe de erro que a revisão final pegou na
+tabela de verbos canônicos: o corpus não é o protocolo, é uma configuração —
+e uma configuração deliberadamente mais pobre que a de qualquer máquina de
+trabalho.
+
+O que NÃO foi feito, de propósito: acrescentar `hook_started`/`hook_response`
+à lista de subtipos efêmeros do mapeador. Seria adivinhar forma de fio não
+medida, exatamente o defeito que a revisão apontou em D5. O que foi feito: a
+UI recolhe corridas consecutivas de `.unrecognized` num bloco fechado — o
+conteúdo continua lá (spec §5.4) e para de afogar a conversa.
+
+Para decidir de verdade é preciso medir. E há uma distinção provável dentro do
+par: `hook_started` não carrega semântica nenhuma (é "começou"), mas
+`hook_response` carrega o `additionalContext` que o hook INJETA na conversa —
+isto é, texto que o modelo de fato viu. Descartá-lo tornaria o transcript
+infiel à §4.2, e é o tipo de coisa que só se descobre lendo a linha. Uma
+regravação de fixture com hooks ligados resolveria os dois de uma vez.
+
+### Bloco de raciocínio sem texto
+
+Um `assistantThinking` chegou com corpo vazio (só a assinatura criptográfica),
+e a UI desenhava o rótulo "RACIOCÍNIO" com nada embaixo. Corrigido na
+apresentação — `append` descarta texto vazio. Não foi mexido no mapeador: uma
+entrada de raciocínio vazia é fiel ao que veio no fio, e o `raw` guarda a
+assinatura.
