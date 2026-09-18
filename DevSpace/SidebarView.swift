@@ -2,14 +2,19 @@ import SwiftUI
 import HarnessCore
 
 /// A lista de conversas, agrupada por pasta.
+///
+/// `List` com `.listStyle(.sidebar)` e não uma pilha desenhada à mão: a barra
+/// lateral nativa traz a vibrância, o realce de seleção, o hover, a navegação
+/// por teclado e os recuos corretos sem que nada disso precise ser imitado — e
+/// imitação de controle nativo envelhece mal, porque o sistema muda e a
+/// imitação não.
 struct SidebarView: View {
     @Bindable var workspace: WorkspaceModel
 
     /// Pastas recolhidas, por caminho. Em memória de propósito: é arrumação da
-    /// janela, não da conversa — nada aqui merece ir para o disco.
+    /// janela, não da conversa.
     @State private var collapsed: Set<String> = []
 
-    /// O que está sendo renomeado agora, se algo estiver.
     @State private var editing: EditTarget?
     @State private var draft = ""
     @FocusState private var editorFocused: Bool
@@ -20,126 +25,89 @@ struct SidebarView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            list
-        }
-        .frame(minWidth: 250)
-    }
-
-    // MARK: - Topo
-
-    private var topBar: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-                TextField("Buscar sessões", text: $workspace.search)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 7))
-
-            Menu {
-                // Onde a conversa nasce é escolhido AQUI, no gesto que a cria,
-                // e não num seletor de "pasta atual" escondido no rodapé: um
-                // estado global que decide onde a próxima coisa acontece é o
-                // tipo de coisa que o usuário esquece de conferir.
-                if workspace.folders.isEmpty {
-                    Button("Nova sessão…") { addFolderThenCreate() }
-                } else {
-                    ForEach(workspace.folders, id: \.path) { folder in
-                        Button("Nova sessão em \(workspace.displayName(for: folder))") {
-                            Task { await workspace.newSession(in: folder) }
-                        }
+        List(selection: selectionBinding) {
+            ForEach(workspace.groups) { group in
+                Section(isExpanded: expansion(group.id)) {
+                    ForEach(group.sessions) { summary in
+                        sessionRow(summary).tag(summary.id)
                     }
-                }
-                Divider()
-                Button("Adicionar pasta…") { addFolder() }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("Nova sessão ou nova pasta")
-        }
-        .padding(10)
-    }
-
-    // MARK: - Lista
-
-    private var list: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 2) {
-                ForEach(workspace.groups) { group in
+                    if group.sessions.isEmpty {
+                        Text("nenhuma conversa")
+                            .font(.callout)
+                            .foregroundStyle(.tertiary)
+                    }
+                } header: {
                     folderHeader(group)
-                    if !collapsed.contains(group.id) {
-                        ForEach(group.sessions) { summary in
-                            sessionRow(summary)
-                        }
-                        if group.sessions.isEmpty {
-                            Text("nenhuma conversa nesta pasta")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.tertiary)
-                                .padding(.horizontal, 33)
-                                .padding(.vertical, 3)
-                        }
-                    }
                 }
             }
-            .padding(.bottom, 10)
-            .animation(.easeInOut(duration: 0.18), value: collapsed)
+        }
+        .listStyle(.sidebar)
+        .searchable(text: $workspace.search, placement: .sidebar, prompt: "Buscar sessões")
+        .toolbar {
+            ToolbarItem {
+                Menu {
+                    // Onde a conversa nasce é escolhido no gesto que a cria, e
+                    // não num estado global de "pasta atual": um estado que
+                    // decide onde a próxima coisa acontece é o tipo de coisa
+                    // que se esquece de conferir antes de clicar.
+                    if workspace.folders.isEmpty {
+                        Button("Nova sessão…") { addFolderThenCreate() }
+                    } else {
+                        ForEach(workspace.folders, id: \.path) { folder in
+                            Button("Nova sessão em \(workspace.displayName(for: folder))") {
+                                Task { await workspace.newSession(in: folder) }
+                            }
+                        }
+                    }
+                    Divider()
+                    Button("Adicionar pasta…") { addFolder() }
+                } label: {
+                    Label("Nova", systemImage: "plus")
+                }
+                .help("Nova sessão ou nova pasta")
+            }
         }
     }
+
+    // MARK: - Seleção
+
+    /// A seleção da `List` e a do workspace são a mesma coisa, com um efeito
+    /// colateral: escolher uma conversa fria a carrega do disco.
+    private var selectionBinding: Binding<UUID?> {
+        Binding(
+            get: { workspace.selectedID },
+            set: { id in
+                guard let id else { return }
+                Task { await workspace.select(id) }
+            }
+        )
+    }
+
+    private func expansion(_ id: String) -> Binding<Bool> {
+        Binding(
+            get: { !collapsed.contains(id) },
+            set: { open in if open { collapsed.remove(id) } else { collapsed.insert(id) } }
+        )
+    }
+
+    // MARK: - Linhas
 
     private func folderHeader(_ group: WorkspaceModel.Group) -> some View {
-        let isCollapsed = collapsed.contains(group.id)
-        return HStack(spacing: 7) {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.tertiary)
-                .rotationEffect(.degrees(isCollapsed ? 0 : 90))
-            Image(systemName: "folder.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-
+        HStack(spacing: 6) {
             if editing == .folder(group.id) {
-                editor(size: 14, weight: .semibold) {
-                    workspace.renameFolder(group.id, to: draft)
-                }
+                editor { workspace.renameFolder(group.id, to: draft) }
             } else {
-                Text(group.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                Text(group.name).lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 4)
+                Text("\(group.sessions.count)").foregroundStyle(.tertiary)
             }
-
-            Spacer(minLength: 6)
-            Text("\(group.sessions.count)")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 14)
-        .padding(.bottom, 5)
-        // A linha inteira é o alvo: um alvo do tamanho da palavra obriga a mirar.
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { beginEditing(.folder(group.id), with: group.name) }
-        .onTapGesture {
-            if isCollapsed { collapsed.remove(group.id) } else { collapsed.insert(group.id) }
-        }
         .contextMenu {
             Button("Renomear") { beginEditing(.folder(group.id), with: group.name) }
             Button("Nova sessão aqui") {
-                workspace.workingDirectory = group.url
-                Task { await workspace.newSession() }
+                Task { await workspace.newSession(in: group.url) }
             }
             Divider()
             Button("Remover da lista") { workspace.removeFolder(group.url) }
@@ -147,40 +115,27 @@ struct SidebarView: View {
     }
 
     private func sessionRow(_ summary: SessionSummary) -> some View {
-        let isSelected = workspace.selectedID == summary.id
-        return HStack(spacing: 7) {
-            HarnessBadge(harness: summary.harnesses.first)
+        HStack(spacing: 8) {
+            HarnessBadge(harness: summary.harnesses.first, size: 16)
 
             VStack(alignment: .leading, spacing: 1) {
                 if editing == .session(summary.id) {
-                    editor(size: 12, weight: .regular) {
-                        Task { await workspace.renameSession(summary.id, to: draft) }
-                    }
+                    editor { Task { await workspace.renameSession(summary.id, to: draft) } }
                 } else {
-                    Text(summary.title)
-                        .font(.system(size: 12))
-                        .lineLimit(1)
+                    Text(summary.title).lineLimit(1)
                 }
                 Text(subtitle(for: summary))
-                    .font(.system(size: 10))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.75))
-                                               : AnyShapeStyle(.secondary))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(isSelected ? Color.accentColor : .clear,
-                    in: RoundedRectangle(cornerRadius: 7))
-        .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+        .padding(.vertical, 1)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { beginEditing(.session(summary.id), with: summary.title) }
-        .onTapGesture { Task { await workspace.select(summary.id) } }
         .contextMenu {
             Button("Renomear") { beginEditing(.session(summary.id), with: summary.title) }
         }
-        .padding(.horizontal, 8)
     }
 
     // MARK: - Edição em linha
@@ -190,11 +145,9 @@ struct SidebarView: View {
     /// Confirma no Enter, cancela no Esc, e confirma também ao perder o foco —
     /// clicar fora é o gesto mais natural de "terminei", e tratá-lo como
     /// cancelamento jogaria fora o que a pessoa acabou de digitar.
-    private func editor(size: CGFloat, weight: Font.Weight,
-                        commit: @escaping () -> Void) -> some View {
+    private func editor(commit: @escaping () -> Void) -> some View {
         TextField("", text: $draft)
             .textFieldStyle(.plain)
-            .font(.system(size: size, weight: weight))
             .focused($editorFocused)
             .onSubmit { commit(); editing = nil }
             .onExitCommand { editing = nil }
@@ -206,8 +159,7 @@ struct SidebarView: View {
     private func beginEditing(_ target: EditTarget, with current: String) {
         draft = current
         editing = target
-        // Um quadro depois: o campo só existe depois que a view redesenha, e
-        // focar antes disso não encontra nada para focar.
+        // Um quadro depois: o campo só existe depois que a view redesenha.
         DispatchQueue.main.async { editorFocused = true }
     }
 
@@ -223,10 +175,6 @@ struct SidebarView: View {
         let unique = NSOrderedSet(array: names).compactMap { $0 as? String }
         let when = summary.updatedAt.formatted(.relative(presentation: .named))
         return unique.isEmpty ? when : "\(unique.joined(separator: " → ")) · \(when)"
-    }
-
-    private func abbreviated(_ url: URL) -> String {
-        url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }
 
     @discardableResult
