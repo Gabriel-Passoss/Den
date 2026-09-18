@@ -243,13 +243,7 @@ struct ChatView: View {
                 .onSubmit { Task { await cockpit.send() } }
 
             HStack(spacing: 8) {
-                if !cockpit.model.isEmpty {
-                    Text(cockpit.model)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(.quaternary.opacity(0.4), in: Capsule())
-                }
+                modelBadge
                 if cockpit.isBusy {
                     ProgressView().controlSize(.small).scaleEffect(0.7)
                     Text("trabalhando").font(.system(size: 10)).foregroundStyle(.secondary)
@@ -264,14 +258,12 @@ struct ChatView: View {
                     .help("Parar o que está rodando")
                 } else if cockpit.pending != nil {
                     Text("aguardando você").font(.system(size: 10)).foregroundStyle(.orange)
-                } else if !cockpit.status.isEmpty {
-
-                    Text(cockpit.status)
+                } else if let status = visibleStatus {
+                    Text(status)
                         .font(.system(size: 10))
-                        .foregroundStyle(cockpit.status.hasPrefix("falhou")
-                                         || cockpit.status.hasPrefix("encerrada")
-                                         ? AnyShapeStyle(.orange)
-                                         : AnyShapeStyle(.secondary))
+                        .foregroundStyle(status.hasPrefix("procurando")
+                                         ? AnyShapeStyle(.secondary)
+                                         : AnyShapeStyle(.orange))
                         .lineLimit(1)
                 }
                 Spacer()
@@ -291,5 +283,62 @@ struct ChatView: View {
         .padding(.bottom, 16)
         .frame(maxWidth: 800)
         .frame(maxWidth: .infinity)
+    }
+
+    private var modelBadge: some View {
+        Menu {
+            Picker("Modelo", selection: modelSelection) {
+                ForEach(CockpitModel.modelChoices, id: \.id) { choice in
+                    Text(choice.name).tag(choice.id)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 3) {
+                Text(modelLabel)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 7))
+            }
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(.quaternary.opacity(0.4), in: Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Escolher o modelo das próximas mensagens")
+    }
+
+    private var modelSelection: Binding<String?> {
+        Binding(
+            get: {
+                if let id = cockpit.preferredModel { return id }
+                let reported = cockpit.model.lowercased()
+                return CockpitModel.modelChoices.first { choice in
+                    choice.id.map { reported.contains($0) } ?? false
+                }?.id
+            },
+            set: { id in Task { await cockpit.choose(model: id) } }
+        )
+    }
+
+    private var modelLabel: String {
+        let reported = cockpit.model
+        guard let alias = cockpit.preferredModel else {
+            return reported.isEmpty ? "modelo" : CockpitModel.displayName(for: reported)
+        }
+        if reported.lowercased().contains(alias.lowercased()) {
+            return CockpitModel.displayName(for: reported)
+        }
+        return CockpitModel.modelChoices.first { $0.id == alias }?.name ?? alias
+    }
+
+    private var visibleStatus: String? {
+        let status = cockpit.status
+        guard status.hasPrefix("falhou") || status.hasPrefix("encerrada")
+                || status.hasPrefix("procurando") else { return nil }
+        return status
     }
 }

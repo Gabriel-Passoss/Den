@@ -33,6 +33,15 @@ final class CockpitModel {
 
     var branch: String?
 
+    var preferredModel: String?
+
+    static let modelChoices: [(name: String, id: String?)] = [
+        ("Fable", "fable"),
+        ("Opus", "opus"),
+        ("Sonnet", "sonnet"),
+        ("Haiku", "haiku"),
+    ]
+
     private let store: FileTranscriptStore
     private var session: ClaudeSession?
     private var consumer: Task<Void, Never>?
@@ -117,7 +126,8 @@ final class CockpitModel {
             let launch = ClaudeLaunch.make(
                 installation: installation,
                 workingDirectory: workingDirectory,
-                session: start
+                session: start,
+                model: preferredModel
             )
             let live = ClaudeSession(channel: ControlChannel(transport: ProcessTransport()))
             let updates = try await live.start(launch)
@@ -169,6 +179,32 @@ final class CockpitModel {
         } catch {
             append(.notice, "não consegui responder a permissão: \(error)")
         }
+    }
+
+    nonisolated static func displayName(for modelID: String) -> String {
+        var words = modelID.split(separator: "-").map(String.init)
+        if words.first?.lowercased() == "claude" { words.removeFirst() }
+        if let last = words.last, last.count == 8, last.allSatisfy(\.isNumber) {
+            words.removeLast()
+        }
+        var parts: [String] = []
+        for word in words {
+            if word.allSatisfy(\.isNumber), let previous = parts.last,
+               previous.last?.isNumber == true {
+                parts[parts.count - 1] = previous + "." + word
+            } else {
+                parts.append(word.allSatisfy(\.isNumber) ? word : word.capitalized)
+            }
+        }
+        return parts.joined(separator: " ")
+    }
+
+    func choose(model id: String?) async {
+        guard preferredModel != id else { return }
+        preferredModel = id
+        guard !isBusy else { return }
+        if session != nil { await stop() }
+        await start()
     }
 
     func stop() async {
