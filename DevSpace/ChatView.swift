@@ -8,8 +8,6 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
             transcript
             if let pending = cockpit.pending {
                 permissionCard(pending)
@@ -18,29 +16,20 @@ struct ChatView: View {
             }
             composer
         }
-    }
-
-    // MARK: - Cabeçalho
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(cockpit.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                Text(cockpit.workingDirectory.lastPathComponent
-                     + (cockpit.status.isEmpty ? "" : " · \(cockpit.status)"))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if cockpit.isLive {
-                Button("Parar") { Task { await cockpit.stop() } }
-                    .controlSize(.small)
+        // O título da janela É o título da conversa, e o subtítulo diz onde ela
+        // está rodando. A barra de título já é o lugar do macOS para isso;
+        // repeti-la dentro da view seria dizer a mesma coisa duas vezes e
+        // roubar altura do transcript.
+        .navigationTitle(cockpit.title)
+        .navigationSubtitle(cockpit.locationSummary)
+        .toolbar {
+            ToolbarItem {
+                if cockpit.isLive {
+                    Button("Parar") { Task { await cockpit.stop() } }
+                }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .task(id: cockpit.sessionID) { await cockpit.loadBranch() }
     }
 
     // MARK: - Transcript

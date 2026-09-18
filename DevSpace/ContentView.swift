@@ -41,6 +41,8 @@ struct ContentView: View {
             Button("Nova conversa") { Task { await workspace.newSession() } }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("DevSpace")
+        .navigationSubtitle("")
     }
 }
 

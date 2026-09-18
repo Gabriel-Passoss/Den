@@ -38,6 +38,10 @@ final class CockpitModel {
     var status: String = ""
     var model: String = ""
     var isBusy = false
+    /// A branch do git da pasta, quando ela é um repositório. `nil` quando não
+    /// é — e aí a barra de título só mostra a pasta, em vez de inventar uma
+    /// branch que não existe.
+    var branch: String?
 
     private let store: FileTranscriptStore
     private var session: ClaudeSession?
@@ -86,6 +90,27 @@ final class CockpitModel {
 
     func persistMetadata() async {
         try? await store.saveMetadata(domainSession)
+    }
+
+    /// Lê a branch com `git -C`, porque `CommandRunner` não recebe diretório
+    /// de trabalho — e acrescentar um parâmetro ao protocolo só para isto
+    /// mudaria uma API do núcleo por conveniência da tela.
+    ///
+    /// Uma pasta que não é repositório faz o `git` sair com código diferente
+    /// de zero, o que vira erro e portanto `nil`. É a resposta certa: não há
+    /// branch.
+    func loadBranch() async {
+        let output = try? await SystemCommandRunner().run(
+            "/usr/bin/git", ["-C", workingDirectory.path, "rev-parse", "--abbrev-ref", "HEAD"])
+        let name = output?.trimmingCharacters(in: .whitespacesAndNewlines)
+        branch = (name?.isEmpty == false) ? name : nil
+    }
+
+    /// O que a barra de título mostra abaixo do nome da conversa.
+    var locationSummary: String {
+        let folder = workingDirectory.lastPathComponent
+        guard let branch else { return folder }
+        return "\(folder) · branch \(branch)"
     }
 
     // MARK: - Ciclo de vida
