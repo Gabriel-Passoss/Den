@@ -37,6 +37,10 @@ final class CockpitModel {
 
     var preferredEffort: EffortLevel?
 
+    var preferredMode: PermissionMode?
+
+    var detectedMode: PermissionMode?
+
     var detectedEffort: EffortLevel?
 
     static let modelChoices: [(name: String, id: String?)] = [
@@ -78,6 +82,8 @@ final class CockpitModel {
         self.harnessSessionID = self.sessionID
         self.isRestored = false
         self.detectedEffort = ClaudeSettings.effortLevel(forWorkingDirectory: workingDirectory)
+        self.detectedMode = ClaudeSettings.permissionMode(forWorkingDirectory: workingDirectory)
+        restorePreferences()
     }
 
     init(store: FileTranscriptStore, restoring session: Session) {
@@ -92,6 +98,8 @@ final class CockpitModel {
         self.isRestored = true
         self.status = "fria"
         self.detectedEffort = ClaudeSettings.effortLevel(forWorkingDirectory: session.workingDirectory)
+        self.detectedMode = ClaudeSettings.permissionMode(forWorkingDirectory: session.workingDirectory)
+        restorePreferences()
         for entry in session.allEntries { render(entry, persist: false) }
     }
 
@@ -142,7 +150,8 @@ final class CockpitModel {
                 workingDirectory: workingDirectory,
                 session: start,
                 model: preferredModel,
-                effort: preferredEffort
+                effort: preferredEffort,
+                permissionMode: preferredMode
             )
             let live = ClaudeSession(channel: ControlChannel(transport: ProcessTransport()))
             let updates = try await live.start(launch)
@@ -217,13 +226,44 @@ final class CockpitModel {
     func choose(model id: String?) async {
         guard preferredModel != id else { return }
         preferredModel = id
+        persistPreferences()
         await relaunchIfIdle()
     }
 
     func choose(effort level: EffortLevel?) async {
         guard preferredEffort != level else { return }
         preferredEffort = level
+        persistPreferences()
         await relaunchIfIdle()
+    }
+
+    func choose(mode: PermissionMode) async {
+        guard preferredMode != mode else { return }
+        preferredMode = mode
+        persistPreferences()
+        await relaunchIfIdle()
+    }
+
+    private static let preferencesKey = "DevSpace.sessionPreferences"
+
+    private func restorePreferences() {
+        let all = UserDefaults.standard.dictionary(forKey: Self.preferencesKey)
+            as? [String: [String: String]] ?? [:]
+        guard let mine = all[sessionID.uuidString] else { return }
+        preferredModel = mine["model"]
+        preferredEffort = mine["effort"].flatMap(EffortLevel.init(rawValue:))
+        preferredMode = mine["mode"].flatMap(PermissionMode.init(rawValue:))
+    }
+
+    private func persistPreferences() {
+        var all = UserDefaults.standard.dictionary(forKey: Self.preferencesKey)
+            as? [String: [String: String]] ?? [:]
+        var mine: [String: String] = [:]
+        mine["model"] = preferredModel
+        mine["effort"] = preferredEffort?.rawValue
+        mine["mode"] = preferredMode?.rawValue
+        all[sessionID.uuidString] = mine.isEmpty ? nil : mine
+        UserDefaults.standard.set(all, forKey: Self.preferencesKey)
     }
 
     private func relaunchIfIdle() async {
@@ -322,6 +362,9 @@ final class CockpitModel {
         case .permissionDecision(_, let decision):
             if case .deny(let message, _) = decision { append(.notice, message, at: moment) }
         case .systemNotice(let subtype, let text):
+            if subtype == "init", let raw = entry.raw["permissionMode"]?.stringValue {
+                detectedMode = raw == "default" ? .manual : PermissionMode(rawValue: raw)
+            }
             if subtype != "init" && subtype != "rate_limit" { append(.notice, text, at: moment) }
         case .turnResult(let result):
 

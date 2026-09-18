@@ -49,3 +49,26 @@ private func write(_ json: String, to base: URL, file: String) throws {
     try write(#"{"effortLevel":"turbo"}"#, to: home, file: "settings.json")
     #expect(ClaudeSettings.effortLevel(forWorkingDirectory: project, home: home) == nil)
 }
+
+@Test func theUserSettingsProvideThePermissionMode() throws {
+    let (root, project, home) = try makeTree()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try write(#"{"permissions":{"defaultMode":"auto"}}"#, to: home, file: "settings.json")
+    #expect(ClaudeSettings.permissionMode(forWorkingDirectory: project, home: home) == .auto)
+}
+
+@Test func theSpellingDefaultMeansManual() throws {
+    let (root, project, home) = try makeTree()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try write(#"{"permissions":{"defaultMode":"default"}}"#, to: home, file: "settings.json")
+    #expect(ClaudeSettings.permissionMode(forWorkingDirectory: project, home: home) == .manual)
+}
+
+@Test func theProjectModeWinsAndAbsenceYieldsNil() throws {
+    let (root, project, home) = try makeTree()
+    defer { try? FileManager.default.removeItem(at: root) }
+    #expect(ClaudeSettings.permissionMode(forWorkingDirectory: project, home: home) == nil)
+    try write(#"{"permissions":{"defaultMode":"auto"}}"#, to: home, file: "settings.json")
+    try write(#"{"permissions":{"defaultMode":"plan"}}"#, to: project, file: "settings.json")
+    #expect(ClaudeSettings.permissionMode(forWorkingDirectory: project, home: home) == .plan)
+}

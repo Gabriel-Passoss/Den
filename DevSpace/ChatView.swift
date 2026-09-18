@@ -5,6 +5,7 @@ import ClaudeHarness
 struct ChatView: View {
     @Bindable var cockpit: CockpitModel
     @State private var expanded: Set<UUID> = []
+    @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +22,26 @@ struct ChatView: View {
         .navigationSubtitle(cockpit.locationSummary)
 
         .task(id: cockpit.sessionID) { await cockpit.loadBranch() }
+        .onChange(of: cockpit.sessionID, initial: true) { installKeyMonitor() }
+        .onDisappear { removeKeyMonitor() }
+    }
+
+    private func installKeyMonitor() {
+        removeKeyMonitor()
+        let cockpit = self.cockpit
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == 48, event.modifierFlags.contains(.shift) else { return event }
+            let modes = Self.modeChoices.map(\.mode)
+            let current = cockpit.preferredMode ?? cockpit.detectedMode ?? .manual
+            let next = modes[((modes.firstIndex(of: current) ?? 0) + 1) % modes.count]
+            Task { await cockpit.choose(mode: next) }
+            return nil
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
     }
 
     // MARK: - Transcript
@@ -244,6 +265,7 @@ struct ChatView: View {
                 .onSubmit { Task { await cockpit.send() } }
 
             HStack(spacing: 8) {
+                modeBadge
                 modelBadge
                 effortBadge
                 if cockpit.isBusy {
@@ -311,6 +333,56 @@ struct ChatView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Escolher o modelo das próximas mensagens")
+    }
+
+    static let modeChoices: [(mode: PermissionMode, name: String, symbol: String, color: Color)] = [
+        (.auto, "Automático", "forward.fill", .yellow),
+        (.plan, "Planejamento", "pause.fill", .blue),
+        (.acceptEdits, "Aceitar edições", "forward.fill", .purple),
+        (.manual, "Manual", "pause.fill", .gray),
+    ]
+
+    private var currentMode: PermissionMode {
+        cockpit.preferredMode ?? cockpit.detectedMode ?? .manual
+    }
+
+    private var modeBadge: some View {
+        let current = currentMode
+        let choice = Self.modeChoices.first { $0.mode == current }
+            ?? (mode: current, name: current.rawValue, symbol: "pause.fill", color: Color.gray)
+        return Menu {
+            Picker("Modo", selection: modeSelection) {
+                ForEach(Self.modeChoices, id: \.mode) { choice in
+                    Label(choice.name, systemImage: choice.symbol).tag(choice.mode)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: choice.symbol)
+                    .font(.system(size: 8))
+                Text(choice.name)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 7))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.system(size: 10))
+            .foregroundStyle(choice.color)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(.quaternary.opacity(0.4), in: Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Modo de permissão — Shift+Tab alterna")
+    }
+
+    private var modeSelection: Binding<PermissionMode> {
+        Binding(
+            get: { currentMode },
+            set: { mode in Task { await cockpit.choose(mode: mode) } }
+        )
     }
 
     private var effortBadge: some View {
