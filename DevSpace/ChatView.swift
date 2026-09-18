@@ -58,7 +58,10 @@ struct ChatView: View {
                         }
                     }
                     if !cockpit.streaming.isEmpty {
-                        assistantText(cockpit.streaming).id("streaming")
+                        // Sem hora enquanto chega: o turno ainda não fechou, e
+                        // carimbar o instante do primeiro delta seria dizer que
+                        // a mensagem terminou quando ela mal começou.
+                        assistantBubble(cockpit.streaming, at: nil).id("streaming")
                     }
                 }
                 .padding(.horizontal, 20)
@@ -85,7 +88,7 @@ struct ChatView: View {
             userBubble(line)
 
         case .assistant:
-            assistantText(line.text)
+            assistantBubble(line.text, at: line.timestamp)
 
         case .thinking:
             HStack(alignment: .top, spacing: 7) {
@@ -116,35 +119,46 @@ struct ChatView: View {
     /// do balão.
     ///
     /// O `Spacer` com folga mínima é o que impede o balão de esticar até a
-    /// borda: ele encolhe até o conteúdo e para. E a hora fica alinhada pela
-    /// ÚLTIMA linha de base do texto, não pelo centro — é isso que a põe ao pé
-    /// do balão quando a mensagem tem várias linhas, em vez de flutuando no
-    /// meio da altura.
+    /// borda: ele encolhe até o conteúdo e para.
     private func userBubble(_ line: CockpitModel.Line) -> some View {
         HStack(spacing: 0) {
             Spacer(minLength: 64)
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                Text(line.text)
-                    .font(.system(size: 13))
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(line.timestamp, format: .dateTime.hour().minute())
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.accentColor.opacity(0.22),
-                        in: RoundedRectangle(cornerRadius: 13))
+            bubble(text: line.text, moment: line.timestamp,
+                   tint: AnyShapeStyle(Color.accentColor.opacity(0.22)))
         }
     }
 
-    private func assistantText(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 13))
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    /// A mensagem do Claude: mesmo balão, do outro lado.
+    ///
+    /// Tom neutro em vez do tom de acento — a cor é o que diz de quem é a fala,
+    /// e as duas competindo pelo mesmo destaque anulariam a distinção.
+    private func assistantBubble(_ text: String, at moment: Date?) -> some View {
+        HStack(spacing: 0) {
+            bubble(text: text, moment: moment, tint: AnyShapeStyle(.quaternary.opacity(0.4)))
+            Spacer(minLength: 64)
+        }
+    }
+
+    /// O corpo comum dos dois balões.
+    ///
+    /// A hora fica alinhada pela ÚLTIMA linha de base do texto, não pelo
+    /// centro: é isso que a põe ao pé do balão numa mensagem de várias linhas,
+    /// em vez de flutuando no meio da altura.
+    private func bubble(text: String, moment: Date?, tint: AnyShapeStyle) -> some View {
+        HStack(alignment: .lastTextBaseline, spacing: 8) {
+            Text(text)
+                .font(.system(size: 13))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            if let moment {
+                Text(moment, format: .dateTime.hour().minute())
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(tint, in: RoundedRectangle(cornerRadius: 13))
     }
 
     private func chip(icon: String, text: String, mono: Bool, dim: Bool = false) -> some View {
