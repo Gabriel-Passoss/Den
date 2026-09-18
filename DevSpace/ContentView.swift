@@ -2,11 +2,12 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var workspace = WorkspaceModel()
-    
+
     @State private var columns = NavigationSplitViewVisibility.all
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
+
             SidebarView(workspace: workspace)
                 .toolbar(removing: .sidebarToggle)
         } detail: {
@@ -17,11 +18,14 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 860, minHeight: 560)
-        .task { await workspace.refresh() }
+        .task {
+            await workspace.refresh()
+            #if DEBUG
+            DebugSnapshot.arm()
+            #endif
+        }
     }
 
-    /// Sem pasta nenhuma, criar uma conversa precisa perguntar ONDE primeiro —
-    /// senão ela nasceria na pasta pessoal do usuário sem ele ter pedido.
     private func startFirstConversation() {
         if let folder = workspace.folders.first {
             Task { await workspace.newSession(in: folder) }

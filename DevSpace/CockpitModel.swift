@@ -3,11 +3,6 @@ import Observation
 import HarnessCore
 import ClaudeHarness
 
-/// Uma conversa, do jeito que a tela precisa dela.
-///
-/// Fica entre o `ClaudeSession` (que fala o protocolo) e a view (que desenha),
-/// e é quem grava no store: é o único ponto que enxerga as entradas duráveis
-/// no instante em que nascem.
 @MainActor
 @Observable
 final class CockpitModel {
@@ -16,11 +11,9 @@ final class CockpitModel {
         let id: UUID
         let role: Role
         let text: String
-        /// Quando aconteceu. Vem do `TranscriptEntry`, não do relógio de quem
-        /// desenha — uma conversa reaberta do disco mostra a hora em que foi
-        /// dita, não a hora em que foi lida.
+
         let timestamp: Date
-        /// Só para `.tool`: o verbo canônico, quando existe.
+
         var verb: CanonicalTool?
     }
 
@@ -30,28 +23,26 @@ final class CockpitModel {
     var workingDirectory: URL
 
     var lines: [Line] = []
-    /// O que está chegando agora, delta a delta. Vira linha quando o turno
-    /// consolida — a distinção efêmero/durável da spec §4.4 na tela.
+
     var streaming: String = ""
     var pending: PermissionRequest?
     var prompt: String = ""
     var status: String = ""
     var model: String = ""
     var isBusy = false
-    /// A branch do git da pasta, quando ela é um repositório. `nil` quando não
-    /// é — e aí a barra de título só mostra a pasta, em vez de inventar uma
-    /// branch que não existe.
+
     var branch: String?
 
     private let store: FileTranscriptStore
     private var session: ClaudeSession?
     private var consumer: Task<Void, Never>?
     private var hasTitle = false
-    /// O `--session-id` que demos ao harness. Igual ao nosso id na primeira
-    /// vez; é por ele que a retomada acontece.
-    private let harnessSessionID: UUID
-    /// Uma conversa reaberta do disco retoma, não recomeça.
+
+    private var harnessSessionID: UUID
+
     private let isRestored: Bool
+
+    private var hasLaunched = false
 
     var isLive: Bool { session != nil }
 
@@ -67,7 +58,6 @@ final class CockpitModel {
         self.isRestored = false
     }
 
-    /// Reabre uma conversa que já está em disco.
     init(store: FileTranscriptStore, restoring session: Session) {
         self.store = store
         self.sessionID = session.id
@@ -92,13 +82,6 @@ final class CockpitModel {
         try? await store.saveMetadata(domainSession)
     }
 
-    /// Lê a branch com `git -C`, porque `CommandRunner` não recebe diretório
-    /// de trabalho — e acrescentar um parâmetro ao protocolo só para isto
-    /// mudaria uma API do núcleo por conveniência da tela.
-    ///
-    /// Uma pasta que não é repositório faz o `git` sair com código diferente
-    /// de zero, o que vira erro e portanto `nil`. É a resposta certa: não há
-    /// branch.
     func loadBranch() async {
         let output = try? await SystemCommandRunner().run(
             "/usr/bin/git", ["-C", workingDirectory.path, "rev-parse", "--abbrev-ref", "HEAD"])
@@ -106,7 +89,6 @@ final class CockpitModel {
         branch = (name?.isEmpty == false) ? name : nil
     }
 
-    /// O que a barra de título mostra abaixo do nome da conversa.
     var locationSummary: String {
         let folder = workingDirectory.lastPathComponent
         guard let branch else { return folder }
@@ -120,13 +102,18 @@ final class CockpitModel {
         status = "procurando o claude…"
         do {
             let installation = try await ClaudeDiscovery().discover()
-            // O ciclo `idle → hot` da spec §5.1: reabrir uma conversa fria
-            // RETOMA a sessão do harness, não começa outra. Sem isto, o CLI
-            // receberia um `--session-id` que ele já conhece e a conversa
-            // reabriria vazia.
-            let start: SessionStart = isRestored
-                ? .resume(harnessSessionID: harnessSessionID)
-                : .fresh(sessionID: harnessSessionID)
+
+            let start: SessionStart
+            if lines.contains(where: { $0.role == .assistant }) {
+                start = .resume(harnessSessionID: harnessSessionID)
+            } else {
+                if isRestored || hasLaunched {
+                    harnessSessionID = UUID()
+                    await persistMetadata()
+                }
+                start = .fresh(sessionID: harnessSessionID)
+            }
+            hasLaunched = true
             let launch = ClaudeLaunch.make(
                 installation: installation,
                 workingDirectory: workingDirectory,
@@ -137,13 +124,13 @@ final class CockpitModel {
             session = live
             status = "pronta"
 
-            // O `Task` herda o isolamento do `@MainActor` deste tipo, então
-            // `apply` corre sem salto de ator — é por isso que não há `await`.
             consumer = Task { [weak self] in
                 for await update in updates { self?.apply(update) }
             }
         } catch {
             status = "falhou: \(error)"
+
+            append(.notice, "não consegui subir o harness: \(error)")
         }
     }
 
@@ -154,8 +141,6 @@ final class CockpitModel {
         guard let session else { return }
         prompt = ""
 
-        // O CLI não ecoa de volta o turno que escrevemos, então quem o registra
-        // é quem o envia — senão o transcript teria respostas sem perguntas.
         let entry = TranscriptEntry(
             timestamp: Date(),
             kind: .userMessage(text: text, attachments: []),
@@ -195,14 +180,11 @@ final class CockpitModel {
         status = "fria"
     }
 
-    /// Aceita um título vindo de fora (o usuário renomeou na sidebar) e para
-    /// de tentar batizar a conversa pelo primeiro turno.
     func adoptTitle(_ newTitle: String) {
         title = newTitle
         hasTitle = true
     }
 
-    /// O título sai do primeiro turno, que é o que o usuário reconhece na lista.
     private func nameFromFirstTurn(_ text: String) async {
         guard !hasTitle else { return }
         hasTitle = true
@@ -240,9 +222,18 @@ final class CockpitModel {
                    + (unrecognized.wasAnswered ? "" : " — a sessão pode estar travada"))
 
         case .ended(let error):
+
+            let midTurn = isBusy
             isBusy = false
             status = error.map { "encerrada: \($0)" } ?? "fria"
             session = nil
+            if let error {
+                append(.notice, "a sessão caiu: \(error)")
+            } else if midTurn {
+                append(.notice, "o harness encerrou sem responder ao turno "
+                       + "— a inicialização pode ter travado (um servidor MCP "
+                       + "lento ou sem autorização atrasa o init)")
+            }
         }
     }
 
@@ -271,12 +262,19 @@ final class CockpitModel {
             if case .deny(let message, _) = decision { append(.notice, message, at: moment) }
         case .systemNotice(let subtype, let text):
             if subtype != "init" && subtype != "rate_limit" { append(.notice, text, at: moment) }
-        case .turnResult:
-            // Nada na tela: tokens e custo não são a conversa, e o custo de uma
-            // conta de assinatura não é dinheiro que o usuário paga por turno.
+        case .turnResult(let result):
+
             isBusy = false
             streaming = ""
+            if result.isError {
+                append(.notice, "o turno falhou no harness"
+                       + (result.stopReason.map { " (\($0))" } ?? ""), at: moment)
+            }
         case .permissionRequest, .unrecognized:
+
+            if entry.raw["type"]?.stringValue == "system",
+               let subtype = entry.raw["subtype"]?.stringValue,
+               subtype == "hook_started" || subtype == "hook_response" { return }
             append(.unknown, oneLine(entry.raw), at: moment)
         }
     }
@@ -289,7 +287,6 @@ final class CockpitModel {
                           timestamp: moment, verb: verb))
     }
 
-    /// Uma chamada de ferramenta, resumida do jeito que se lê.
     private func summary(of call: ToolCall) -> String {
         let input = call.input
         if let command = input["command"]?.stringValue { return command }
@@ -319,8 +316,6 @@ final class CockpitModel {
 
     // MARK: - Agrupamento para desenhar
 
-    /// Corridas consecutivas de eventos não reconhecidos viram UM bloco
-    /// recolhido. Spec §5.4: preservado e exibido, sem afogar a conversa.
     var blocks: [Block] {
         var result: [Block] = []
         var run: [Line] = []

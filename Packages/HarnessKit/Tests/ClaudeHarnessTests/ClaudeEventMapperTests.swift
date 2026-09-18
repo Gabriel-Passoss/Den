@@ -3,11 +3,6 @@ import Foundation
 @testable import HarnessCore
 @testable import ClaudeHarness
 
-/// `@testable` em `HarnessCore` para alcançar
-/// `TranscriptEntry.Kind.knownDiscriminators`, que é `internal`.
-
-/// Um instante fixo: nenhuma asserção deste arquivo depende do relógio de
-/// parede.
 private let fixedNow = Date(timeIntervalSince1970: 1_000_000)
 
 private func makeMapper() -> ClaudeEventMapper {
@@ -45,8 +40,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(out.events == [.toolInputDelta(blockIndex: 2, partialJSON: "{\"comm")])
 }
 
-/// D7: a assinatura do bloco de raciocínio não tem nada a mostrar delta a
-/// delta; ela chega inteira no `raw` do bloco consolidado.
 @Test func aSignatureDeltaProducesNothing() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"stream_event","event":{"type":"content_block_delta","index":1,
@@ -64,9 +57,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(out.entries.isEmpty)
 }
 
-/// Os quadros de moldura do stream não interessam a ninguém: o começo e o fim
-/// de bloco a UI infere do índice dos deltas, e o fim de mensagem chega
-/// consolidado na linha `assistant`.
 @Test func theStreamFramingEventsProduceNothing() throws {
     for frame in [
         #"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#,
@@ -79,10 +69,6 @@ private func json(_ text: String) throws -> JSONValue {
     }
 }
 
-/// D1, o invariante que este plano existe para garantir: o fluxo de deltas
-/// NUNCA alimenta o transcript. São 298 `stream_event` contra 17 `assistant`
-/// no corpus — se os dois alimentassem, todo turno apareceria centenas de
-/// vezes no store.
 @Test func noStreamEventEverProducesADurableEntry() throws {
     let malformed = [
         #"{"type":"stream_event"}"#,
@@ -122,9 +108,6 @@ private func json(_ text: String) throws -> JSONValue {
             == .unrecognized(discriminator: "claude:nonJSON", payload: .string("isto não é json")))
 }
 
-/// O prefixo é o que impede um `"type":"turnResult"` futuro de virar um
-/// discriminador que um leitor confunde com o caso conhecido `turnResult` —
-/// ver a nota da task.
 @Test func theDiscriminatorNeverCollidesWithAKnownKind() throws {
     let line = try json(#"{"type":"turnResult"}"#)
     guard case .unrecognized(let discriminator, _) =
@@ -150,19 +133,16 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(out.events.isEmpty)
     #expect(out.entries.count == 1)
     #expect(out.entries[0].kind == .assistantText("OK"))
-    // D4: o `raw` de uma entrada derivada de bloco é o bloco.
+
     #expect(out.entries[0].raw == .object(["type": .string("text"), "text": .string("OK")]))
 }
 
-/// A linha traz `timestamp` próprio — o relógio injetado não é usado.
 @Test func anAssistantEntryUsesTheLineTimestamp() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"assistant","timestamp":"2026-09-17T02:20:59.447Z",
      "message":{"content":[{"type":"text","text":"x"}]}}
     """#))
-    // Tolerância, não igualdade: `Date` compara `Double`, e o valor que sai
-    // do parser não é bit a bit o mesmo que o literal. Isto afere a análise do
-    // carimbo, não o relógio de parede.
+
     let expected = Date(timeIntervalSince1970: 1_789_611_659.447)
     #expect(abs(out.entries[0].timestamp.timeIntervalSince(expected)) < 0.001)
 }
@@ -182,7 +162,7 @@ private func json(_ text: String) throws -> JSONValue {
     """#))
     #expect(out.entries.count == 1)
     #expect(out.entries[0].kind == .assistantThinking("deixa eu ver"))
-    // A assinatura sobrevive no raw, que é o que o D7 prometeu.
+
     #expect(out.entries[0].raw["signature"]?.stringValue == "abc")
 }
 
@@ -226,7 +206,6 @@ private func json(_ text: String) throws -> JSONValue {
     if case .toolCall = out.entries[2].kind {} else { Issue.record("esperava .toolCall em 2") }
 }
 
-/// Spec §5.4: nenhum bloco é descartado, nem o que não sabemos ler.
 @Test func anUnknownOrMalformedBlockIsPreservedNotDropped() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"assistant","message":{"content":[
@@ -264,8 +243,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(result.content.stringValue == "total 16")
 }
 
-/// `is_error` chega ausente em parte das linhas do corpus. Ausente significa
-/// "deu certo" — não "não sabemos".
 @Test func aToolResultWithoutIsErrorIsNotAnError() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"user","message":{"content":[
@@ -288,8 +265,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(result.isError == true)
 }
 
-/// Forma sintética: o CLI observado não ecoa o turno que escrevemos. Ver a
-/// nota da task.
 @Test func aUserLineWithStringContentBecomesAUserMessage() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"user","message":{"role":"user","content":"liste a pasta"}}
@@ -298,25 +273,18 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(out.entries[0].kind == .userMessage(text: "liste a pasta", attachments: []))
 }
 
-/// Espelha `anAssistantLineWithoutContentIsPreservedWhole`: o caminho
-/// `assistant` já tinha este teste, o `user` não.
 @Test func aUserLineWithoutContentIsPreservedWhole() throws {
     let line = try json(#"{"type":"user","message":{"role":"user"}}"#)
     let entry = try #require(makeMapper().map(line).entries.first)
     #expect(entry.kind == .unrecognized(discriminator: "claude:user", payload: line))
 }
 
-/// `content` presente mas nem string nem array — um número, por exemplo.
-/// Mesmo discriminador do caso sem `content`: os dois caem na mesma guarda.
 @Test func aUserLineWithNeitherStringNorArrayContentIsPreservedWhole() throws {
     let line = try json(#"{"type":"user","message":{"content":42}}"#)
     let entry = try #require(makeMapper().map(line).entries.first)
     #expect(entry.kind == .unrecognized(discriminator: "claude:user", payload: line))
 }
 
-/// Espelha `anUnknownOrMalformedBlockIsPreservedNotDropped` do lado
-/// `assistant`: um bloco `tool_result` sem `tool_use_id` não pode virar
-/// `ToolResult` — não há a que chamada apontar — e degrada em vez de adivinhar.
 @Test func aToolResultBlockWithoutAToolUseIDIsPreservedNotGuessed() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"user","message":{"content":[
@@ -348,12 +316,10 @@ private func json(_ text: String) throws -> JSONValue {
                                       costUSD: 0.133027))
     #expect(turn.stopReason == "end_turn")
     #expect(turn.isError == false)
-    // A linha não traz timestamp: vale o relógio injetado.
+
     #expect(out.entries[0].timestamp == fixedNow)
 }
 
-/// D3: a prosa final da linha `result` é a MESMA do último bloco `text` da
-/// linha `assistant`. Mapeá-la duplicaria o último parágrafo de todo turno.
 @Test func theFinalProseIsNotDuplicatedAsAssistantText() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"result","is_error":false,"result":"OK","usage":{}}
@@ -362,7 +328,7 @@ private func json(_ text: String) throws -> JSONValue {
     for entry in out.entries {
         if case .assistantText = entry.kind { Issue.record("prosa final duplicada") }
     }
-    // Mas continua recuperável: o raw guarda a linha inteira.
+
     #expect(out.entries[0].raw["result"]?.stringValue == "OK")
 }
 
@@ -387,13 +353,10 @@ private func json(_ text: String) throws -> JSONValue {
                                                harnessSessionID: "cf77236a-23fd-43ad-95ed-a5ea2792daba")])
     #expect(out.entries.count == 1)
     #expect(out.entries[0].kind == .systemNotice(subtype: "init", text: "claude-opus-5"))
-    // D4: entrada derivada da linha carrega a linha inteira.
+
     #expect(out.entries[0].raw["cwd"]?.stringValue == "/tmp")
 }
 
-/// D2: 21 das 30 linhas `system` do corpus são progresso de exibição. Elas vão
-/// para a UI e morrem ali — o transcript é registro semântico, não log de
-/// exibição (spec §4.2).
 @Test func statusAndThinkingTokensAreEphemeralOnly() throws {
     let status = makeMapper().map(try json(#"""
     {"type":"system","subtype":"status","status":"Analisando","session_id":"s"}
@@ -407,6 +370,24 @@ private func json(_ text: String) throws -> JSONValue {
     """#))
     #expect(thinking.events == [.notice(subtype: "thinking_tokens", text: "1024")])
     #expect(thinking.entries.isEmpty)
+}
+
+@Test func hookLifecycleLinesAreEphemeralOnly() throws {
+
+    let started = makeMapper().map(try json(#"""
+    {"type":"system","subtype":"hook_started","hook_event":"SessionStart",
+     "hook_id":"a9170fde","hook_name":"SessionStart:startup","session_id":"s"}
+    """#))
+    #expect(started.events == [.notice(subtype: "hook_started", text: "SessionStart:startup")])
+    #expect(started.entries.isEmpty)
+
+    let response = makeMapper().map(try json(#"""
+    {"type":"system","subtype":"hook_response","hook_event":"SessionStart",
+     "hook_id":"a9170fde","hook_name":"SessionStart:startup","outcome":"success",
+     "exit_code":0,"stdout":"ok","stderr":"","session_id":"s"}
+    """#))
+    #expect(response.events == [.notice(subtype: "hook_response", text: "SessionStart:startup")])
+    #expect(response.entries.isEmpty)
 }
 
 @Test func permissionDeniedIsADecisionNotANotice() throws {
@@ -439,7 +420,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(entry.kind == .unrecognized(discriminator: "claude:system", payload: line))
 }
 
-/// Durável: é o que explica um turno que parou.
 @Test func aRateLimitEventLandsInTheTranscript() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1789617600,

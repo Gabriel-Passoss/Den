@@ -2,11 +2,6 @@ import Testing
 import Foundation
 @testable import HarnessCore
 
-// Dois ids neutros para exercitar "uma sessão atravessa dois harnesses" sem
-// que `HarnessCoreTests` precise nomear um harness específico —
-// `HarnessID.claudeCode` mora em `ClaudeHarness` (spec §7.1;
-// `harnessCoreNeverNamesASpecificHarness` em ModuleBoundaryTests.swift), e
-// este alvo de teste não depende de `ClaudeHarness`.
 private let harnessA = HarnessID(rawValue: "harness-a")
 private let harnessB = HarnessID(rawValue: "harness-b")
 
@@ -27,7 +22,7 @@ private func segment(
 }
 
 @Test func oneSessionSpansSeveralHarnesses() {
-    // A ideia central: a conversa é nossa; cada harness hospeda um trecho.
+
     let session = Session(
         id: UUID(), title: "refatorar o webhook",
         workingDirectory: URL(fileURLWithPath: "/tmp/repo"),
@@ -89,12 +84,6 @@ private func segment(
     #expect(back.workingDirectory.path == "/tmp/a b")
 }
 
-/// - Note: o nome antigo desta função era
-///   "aSummaryDescribesASessionWithoutItsEntries", e ela passa
-///   `session.allEntries.count` — descreve uma sessão COM as entradas
-///   carregadas, que é o caso fácil. Quem cobre "sem as entradas" é
-///   `aSummaryOfAPartiallyLoadedSessionTrustsTheCallersEntryCountNotTheEmptyArrays`
-///   logo abaixo.
 @Test func aSummaryDerivesTheMetadataFromTheSessionAndTakesTheCountFromTheCaller() {
     let session = Session(
         id: UUID(), title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
@@ -112,14 +101,7 @@ private func segment(
 }
 
 @Test func aSummaryOfAPartiallyLoadedSessionTrustsTheCallersEntryCountNotTheEmptyArrays() {
-    // O cenário motivador do finding do reviewer: a Task 4 carrega sessões
-    // com segmentos que têm `usage`/`harness`/`seededBy` preenchidos mas
-    // `entries: []`, porque as entradas moram em arquivos NDJSON separados.
-    // Se `SessionSummary` calculasse `entryCount` a partir de
-    // `session.allEntries.count` aqui, reportaria zero — exatamente o
-    // cenário em que este tipo existe para ser útil. `usage` não sofre disso
-    // porque mora em `Segment` diretamente, independente das `entries`
-    // estarem carregadas.
+
     let session = Session(
         id: UUID(), title: "sessão parcialmente carregada",
         workingDirectory: URL(fileURLWithPath: "/tmp"),
@@ -127,9 +109,9 @@ private func segment(
             segment(harnessA, entries: [], usage: UsageTotals(inputTokens: 100)),
             segment(harnessB, entries: [], usage: UsageTotals(inputTokens: 50)),
         ])
-    #expect(session.allEntries.isEmpty) // pré-condição: nenhuma entrada carregada
+    #expect(session.allEntries.isEmpty)
 
     let summary = SessionSummary(session: session, entryCount: 347, updatedAt: when)
-    #expect(summary.usage.inputTokens == 150) // usage é correto mesmo sem entries
-    #expect(summary.entryCount == 347) // vem do chamador, não das entries vazias
+    #expect(summary.usage.inputTokens == 150)
+    #expect(summary.entryCount == 347)
 }

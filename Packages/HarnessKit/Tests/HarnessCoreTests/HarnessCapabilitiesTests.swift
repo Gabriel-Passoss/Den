@@ -2,8 +2,7 @@ import Testing
 import HarnessCore
 
 @Test func capabilitiesDefaultToTheConservativeAnswer() {
-    // Um harness novo não suporta nada até declarar que suporta. A UI esconde
-    // o que não foi declarado, em vez de oferecer botões que falham.
+
     let c = HarnessCapabilities()
     #expect(!c.routesPermissionRequests)
     #expect(!c.canInterrupt)

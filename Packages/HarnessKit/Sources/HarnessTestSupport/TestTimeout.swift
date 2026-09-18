@@ -4,11 +4,6 @@ public struct TimedOut: Error, Equatable {
     public init() {}
 }
 
-/// Corre `operation` competindo com um sleep; se o sleep vencer, falha em vez
-/// de travar a suíte inteira. Não usa `TaskGroup` de propósito: sair do escopo
-/// de um `TaskGroup` espera implicitamente todas as child tasks terminarem, o
-/// que inclui a travada — anulando o timeout. Uma continuation avulsa,
-/// resolvida uma única vez por quem chegar primeiro, não tem essa espera.
 @discardableResult
 public func withTimeout<T: Sendable>(
     seconds: Double,

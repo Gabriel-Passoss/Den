@@ -2,23 +2,6 @@ import Darwin
 import Foundation
 import Synchronization
 
-/// Segura o enquadrador, os handles e o stderr acumulado atrás de um lock.
-///
-/// `readabilityHandler` e `terminationHandler` rodam em filas diferentes, então
-/// todo estado mutável compartilhado entre eles precisa de sincronização
-/// explícita — sob concorrência estrita do Swift 6, capturar um `var` local
-/// nesses closures nem compila.
-///
-/// As leituras dos descritores acontecem dentro do mesmo lock que o
-/// enquadramento, e não fora dele: desarmar um `readabilityHandler` não espera
-/// pelos callbacks já agendados, então o dreno final e um callback em voo
-/// podem correr juntos. Lendo os dois sob o lock, os bytes chegam ao
-/// enquadrador na mesma ordem em que saíram do pipe.
-///
-/// Interno, e não privado, de propósito: o teto da varredura final só é
-/// mensurável chamando `readPending` direto. Pelo fluxo público ele fica
-/// escondido atrás das centenas de KiB que o `readabilityHandler` drena
-/// enquanto o filho ainda está vivo — ruído maior que o próprio teto.
 final class StreamIO: @unchecked Sendable {
     private let lock = NSLock()
     private let outputHandle: FileHandle
@@ -40,17 +23,6 @@ final class StreamIO: @unchecked Sendable {
         return String(decoding: errorBytes, as: UTF8.self)
     }
 
-    /// Arma os dois leitores. `onFramingFailure` é chamado no máximo uma vez;
-    /// depois dele o stdout para de ser enquadrado, mas o stderr continua sendo
-    /// drenado — um pipe de stderr cheio trava o filho (spec §4.4).
-    ///
-    /// Todo caminho que volta *sem* consumir o descritor desarma o handler
-    /// antes: `readabilityHandler` é disparado por nível (é uma dispatch source
-    /// de leitura), então um bloco que devolve deixando bytes ou EOF legíveis é
-    /// reagendado na hora, em laço fechado, queimando uma thread da fila
-    /// compartilhada até alguém desarmar. Desarmar aqui é seguro porque o dreno
-    /// final é o único outro leitor destes descritores, e ele começa
-    /// justamente desarmando os dois.
     func startReading(
         onLines: @escaping @Sendable ([Data]) -> Void,
         onFramingFailure: @escaping @Sendable (any Error) -> Void
@@ -62,8 +34,7 @@ final class StreamIO: @unchecked Sendable {
                 handle.readabilityHandler = nil
                 return
             }
-            // Chunk vazio num handle legível é EOF, e EOF num pipe é
-            // definitivo: o nível fica alto para sempre.
+
             let chunk = handle.availableData
             guard !chunk.isEmpty else {
                 handle.readabilityHandler = nil
@@ -93,15 +64,6 @@ final class StreamIO: @unchecked Sendable {
         }
     }
 
-    /// Solta os handlers e devolve as linhas que ainda estavam no pipe de
-    /// stdout. Idempotente: chamadas seguintes não devolvem nada.
-    ///
-    /// Desarmar os handlers acontece fora do lock de propósito — um callback em
-    /// voo pode estar segurando ele neste instante.
-    ///
-    /// Propaga erro de enquadramento em vez de engolir: num processo curto que
-    /// escreve e sai na mesma hora, o callback de leitura pode nunca chegar a
-    /// rodar, e aí esta é a *única* passagem dos bytes pelo enquadrador.
     func finishReading() throws -> [Data] {
         outputHandle.readabilityHandler = nil
         errorHandle.readabilityHandler = nil
@@ -121,40 +83,12 @@ final class StreamIO: @unchecked Sendable {
         }
     }
 
-    /// Tamanho de cada leitura da varredura — uma carga cheia de pipe.
     static let sweepReadSize = 64 * 1024
 
-    /// Teto de bytes de uma varredura: duas cargas cheias de pipe.
-    ///
-    /// Um pipe no macOS guarda no máximo 65536 bytes (`BIG_PIPE_SIZE`, medido),
-    /// e o filho já saiu quando a varredura começa — então a cauda legítima
-    /// inteira cabe numa única leitura, e 128 KiB dão o dobro disso de folga sem
-    /// nunca truncar saída de verdade. Manter o teto rente ao pipe também
-    /// importa porque o dreno entrega tudo ao enquadrador de uma vez só: um teto
-    /// generoso transformaria um neto tagarela num `framer.push` gigante.
     static let sweepByteLimit = 2 * sweepReadSize
 
-    /// Prazo de uma varredura. O teto de bytes sozinho não fecha o caso do neto
-    /// que goteja devagar: ele mantém o pipe quase sempre não-vazio sem nunca
-    /// enchê-lo, e aí a varredura demoraria muito para bater no teto. 100 ms é
-    /// ordens de grandeza mais do que uma drenagem honesta de ≤64 KiB precisa
-    /// (microssegundos) e curto o bastante para não travar de forma perceptível
-    /// nem o `terminationHandler` nem o `standardError`, que espera o mesmo lock.
     static let sweepBudget = Duration.milliseconds(100)
 
-    /// Lê, sem nunca bloquear, o que já está no pipe — e para por aí.
-    ///
-    /// `readDataToEndOfFile()` só volta quando *todo* escritor fecha o
-    /// descritor, e um neto que herdou o pipe sobrevive ao harness — isso
-    /// travaria o `terminationHandler` e o fluxo nunca terminaria.
-    ///
-    /// A varredura é limitada de propósito. Tudo o que o filho escreveu antes de
-    /// sair já está no pipe neste ponto; o que chegar depois veio de um neto que
-    /// continua escrevendo, e persegui-lo é o mesmo travamento por outro
-    /// caminho — ele reenche o pipe tão rápido quanto o dreno esvazia, `poll`
-    /// nunca devolve 0, `continuation.finish()` nunca é alcançado, e isso tudo
-    /// com o lock na mão e o buffer crescendo na velocidade do pipe. Perder o
-    /// retardatário é melhor do que congelar a sessão.
     static func readPending(_ handle: FileHandle) -> Data {
         let descriptor = handle.fileDescriptor
         let deadline = ContinuousClock.now + sweepBudget
@@ -172,12 +106,6 @@ final class StreamIO: @unchecked Sendable {
     }
 }
 
-/// Dá spawn num harness de linha de comando e converte o stdout dele num
-/// fluxo de linhas NDJSON.
-///
-/// stderr é drenado continuamente e sem exceção: um pipe de stderr cheio trava
-/// o processo filho, e o sintoma é uma sessão que congela sem erro nenhum
-/// (spec §4.4).
 public actor ProcessTransport {
     public struct Launch: Sendable {
         public var executable: String
@@ -199,11 +127,9 @@ public actor ProcessTransport {
     }
 
     public enum TransportError: Error, Equatable {
-        /// Não há processo vivo aceitando entrada — ou ele já saiu, ou o stdin
-        /// já foi fechado por `endInput()`.
+
         case notRunning
-        /// `start(_:)` já subiu um processo neste transporte. Ver o contrato de
-        /// uso único em `start(_:)`.
+
         case alreadyStarted
     }
 
@@ -214,23 +140,8 @@ public actor ProcessTransport {
     private var standardInput: FileHandle?
     private var io: StreamIO?
 
-    /// O mesmo handle de `standardInput`, alcançável sem `await`.
-    ///
-    /// Existe por causa de `writeSync(_:)`: há chamadores que precisam escrever
-    /// *sem* atravessar um ponto de suspensão. Ver o contrato lá.
     private let syncStandardInput = Mutex<FileHandle?>(nil)
 
-    /// - Parameters:
-    ///   - terminationGracePeriod: quanto `terminate()` espera pelo SIGTERM
-    ///     antes de escalar para SIGKILL. Default 5 s (spec §5.5).
-    ///   - killGracePeriod: quanto `terminate()` espera depois do SIGKILL.
-    ///     Default 3 s (spec §5.5).
-    ///
-    /// As duas durações são injetáveis pela mesma razão que `framingLimit` é:
-    /// com os defaults da spec, o ramo de escalada só seria observável num
-    /// teste que gastasse 5 segundos de relógio. Com orçamentos curtos ele
-    /// cabe em milissegundos, e o caminho que só roda em emergência deixa de
-    /// ser código sem evidência nenhuma.
     public init(
         framingLimit: Int = 8 * 1024 * 1024,
         terminationGracePeriod: Duration = .seconds(5),
@@ -241,42 +152,13 @@ public actor ProcessTransport {
         self.killGracePeriod = killGracePeriod
     }
 
-    /// Tudo que o harness escreveu em stderr até agora. Quando o fluxo termina,
-    /// já inclui o que estava no pipe no instante da saída.
     public var standardError: String { io?.collectedStandardError ?? "" }
 
-    /// O código de saída do processo, ou `nil` em duas situações distintas
-    /// que este tipo não separa: o processo ainda está rodando, ou `start(_:)`
-    /// nunca chegou a subir um (nunca foi chamado, ou falhou no `run()`). Quem
-    /// precisar distinguir as duas tem que guardar por fora o fato de ter
-    /// chamado `start(_:)` com sucesso.
     public var terminationStatus: Int32? {
         guard let process, !process.isRunning else { return nil }
         return process.terminationStatus
     }
 
-    /// Sobe o harness e devolve o fluxo de linhas do stdout dele.
-    ///
-    /// **Um transporte é de uso único.** Um `start(_:)` bem-sucedido casa este
-    /// transporte com um processo para sempre: `terminationStatus` continua
-    /// respondendo pelo processo já colhido, e o fluxo, o stdin e os leitores
-    /// pertencem àquela execução. Uma segunda chamada lança
-    /// `TransportError.alreadyStarted` em vez de sobrescrever `process`,
-    /// `standardInput` e `io` — sobrescrevê-los deixaria o primeiro filho vivo,
-    /// com leitores armados e sem nenhuma referência capaz de alcançá-lo:
-    /// exatamente o órfão que a spec §5.2 existe para impedir, e sem nenhum
-    /// erro visível. Um ciclo `idle → hot` (spec §5.1) cria um transporte novo
-    /// por ciclo; é barato, e é o que torna a reentrância irrepresentável em
-    /// vez de meramente desaconselhada.
-    ///
-    /// A guarda é um `throw`, não uma `precondition`: `start(_:)` já lança, o
-    /// chamador já trata erro, e derrubar o app inteiro por um reuso indevido
-    /// seria pior do que o defeito que estamos prevenindo. Um erro é
-    /// recuperável, testável e nomeia a causa.
-    ///
-    /// Um `start(_:)` que **falha** não queima o transporte: `process` só é
-    /// preenchido depois de `run()` voltar, então uma tentativa de spawn
-    /// malsucedida pode ser repetida.
     public func start(_ launch: Launch) throws -> AsyncThrowingStream<Data, Error> {
         guard self.process == nil else { throw TransportError.alreadyStarted }
 
@@ -291,9 +173,6 @@ public actor ProcessTransport {
         process.standardOutput = output
         process.standardError = errorOutput
 
-        // Sem isso, escrever depois que o filho fechou o stdin dispara SIGPIPE,
-        // cuja ação padrão mata o processo *pai* — o DevSpace inteiro. Com a
-        // flag, o `write` devolve EPIPE e vira um erro que dá para tratar.
         _ = fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
 
         let io = StreamIO(
@@ -309,16 +188,11 @@ public actor ProcessTransport {
                 },
                 onFramingFailure: { error in
                     continuation.finish(throwing: error)
-                    // Saída corrompida: ninguém mais vai ler o stdout dele, e
-                    // sem isso o harness fica órfão travado na escrita.
+
                     Task { await self.terminate() }
                 }
             )
 
-            // Chamado uma única vez pelo Foundation. Recolhe a cauda que ainda
-            // estava nos pipes entre o último callback de leitura e a saída.
-            // `finish()` depois de um `finish(throwing:)` é no-op, então a
-            // corrida com uma falha de enquadramento é inofensiva.
             process.terminationHandler = { _ in
                 do {
                     for line in try io.finishReading() { continuation.yield(line) }
@@ -332,14 +206,11 @@ public actor ProcessTransport {
         do {
             try process.run()
         } catch {
-            // Sem filho, o `terminationHandler` nunca roda — e os leitores
-            // armados segurariam o `StreamIO` vivo para sempre.
+
             _ = try? io.finishReading()
             throw error
         }
 
-        // Só depois de subir de verdade: um `Process` que nunca rodou levanta
-        // exceção quando alguém pergunta o `terminationStatus` dele.
         self.process = process
         self.standardInput = input.fileHandleForWriting
         syncStandardInput.withLock { $0 = input.fileHandleForWriting }
@@ -347,74 +218,18 @@ public actor ProcessTransport {
         return stream
     }
 
-    /// Escreve uma linha no stdin do harness, verificando antes que há um
-    /// processo vivo para recebê-la.
-    ///
-    /// A escrita em si é delegada a `writeSync(_:)` — não porque dê menos
-    /// trabalho, mas porque o pipe precisa de **um** portão só. Os dois métodos
-    /// vivem em domínios de isolamento diferentes (este é membro do ator,
-    /// aquele é `nonisolated`), então nada além de um lock em comum os ordena;
-    /// e o kernel só garante escrita atômica até `PIPE_BUF` (512 bytes no
-    /// Darwin). Uma linha maior que isso — um turno do usuário, por exemplo —
-    /// pode ser fatiada, e um `control_request` vindo do outro caminho se
-    /// enfiaria na fresta: o harness receberia uma única linha NDJSON
-    /// corrompida, perdendo as duas mensagens de uma vez.
-    ///
-    /// Saída de emergência: a escrita delegada é bloqueante, e este método é
-    /// membro do ator. Se o harness parar de ler o próprio stdin e o pipe de
-    /// 64 KiB encher, esta chamada segura o job do ator — e `terminate()`,
-    /// que é o último recurso para derrubar o filho, é método deste **mesmo**
-    /// ator e fica na fila atrás dela. Nesse estado não há como alcançar o
-    /// transporte por nenhuma porta. A correção sistêmica (`O_NONBLOCK` mais
-    /// uma fila de escrita) é trabalho da Etapa 5; até lá, isto é uma
-    /// limitação conhecida e não uma garantia.
     public func write(_ line: Data) throws {
         guard standardInput != nil, process?.isRunning == true else { throw TransportError.notRunning }
         try writeSync(line)
     }
 
-    /// Fecha o stdin do harness.
-    ///
-    /// Saída de emergência: isto **não** destrava uma escrita presa. O fecho
-    /// acontece dentro do mesmo mutex em que a escrita acontece — é o que
-    /// garante que o handle nunca seja fechado no meio de uma linha —, então
-    /// uma escrita bloqueada num pipe cheio segura este método junto. "Fecha o
-    /// stdin para o filho desistir" não é um plano de recuperação disponível.
     public func endInput() {
-        // Limpar o espelho antes de fechar, não depois: assim um `writeSync`
-        // concorrente ou vê o handle ainda aberto, ou vê `nil` — nunca um
-        // descritor já fechado. E como a escrita acontece *dentro* deste mesmo
-        // lock, esta linha também espera a escrita em voo terminar: o handle
-        // nunca é fechado no meio de uma linha.
+
         syncStandardInput.withLock { $0 = nil }
         try? standardInput?.close()
         standardInput = nil
     }
 
-    /// Escrita sem suspensão, para chamadores que precisam registrar estado
-    /// antes de a resposta poder chegar. Mesmo contrato de `write(_:)`.
-    ///
-    /// `write(_:)` é membro de ator: chega-se a ele com `await`, e uma suspensão
-    /// entre "registrar quem espera a resposta" e "escrever o pedido" abre a
-    /// janela em que a resposta chega e é descartada por não ter dono. Sendo
-    /// `nonisolated` sobre um handle guardado por lock, esta versão não tem
-    /// essa janela.
-    ///
-    /// Diferente de `write(_:)`, não verifica se o processo ainda está vivo —
-    /// esse campo é isolado no ator. Escrever num filho já morto devolve EPIPE
-    /// (o `F_SETNOSIGPIPE` de `start(_:)` garante erro em vez de sinal), então
-    /// o caso continua sendo um `throw`, só com outro erro.
-    ///
-    /// A escrita acontece **dentro** do lock, e não depois de soltá-lo: é isso
-    /// que serializa este caminho com o `write(_:)` do ator. Guardar só o
-    /// ponteiro do handle não bastaria — o que precisa ser indivisível é a
-    /// linha inteira chegando ao pipe.
-    ///
-    /// Consequência a encarar de frente: este é um `write(2)` bloqueante feito
-    /// com o job do chamador na mão. Se o harness parar de ler o próprio stdin
-    /// e o pipe (64 KiB) encher, esta chamada bloqueia a thread cooperativa, e
-    /// quem chama de dentro de um ator bloqueia o ator junto. Ver o contrato de
-    /// `ControlChannel.send(_:)`, que é quem paga essa conta.
     nonisolated public func writeSync(_ line: Data) throws {
         try syncStandardInput.withLock { handle in
             guard let handle else { throw TransportError.notRunning }
@@ -422,11 +237,6 @@ public actor ProcessTransport {
         }
     }
 
-    /// SIGTERM, depois SIGKILL se necessário (spec §5.5).
-    ///
-    /// Aguarda por polling em vez de dormir o intervalo inteiro: um processo
-    /// que obedece ao SIGTERM sai em milissegundos, e não faz sentido cobrar
-    /// 5 segundos de todo encerramento bem comportado.
     public func terminate() async {
         guard let process, process.isRunning else { return }
         process.terminate()
@@ -436,15 +246,6 @@ public actor ProcessTransport {
         _ = await waitForExit(process, within: killGracePeriod)
     }
 
-    /// Recebe o processo por parâmetro em vez de reler `self.process`.
-    ///
-    /// O laço atravessa pontos de suspensão, e ler o campo do actor depois de
-    /// cada um deles significaria observar um processo possivelmente diferente
-    /// do que `terminate()` acabou de sinalizar — devolvendo `true` para uma
-    /// saída que não é a dele, ou mandando SIGKILL contra um pid já colhido.
-    /// A guarda de uso único em `start(_:)` já impede que o campo mude, mas a
-    /// correção certa é não depender disso: a decisão é sobre *este* processo,
-    /// então é ele que precisa estar na mão.
     private func waitForExit(_ process: Process, within duration: Duration) async -> Bool {
         let deadline = ContinuousClock.now + duration
         while ContinuousClock.now < deadline {

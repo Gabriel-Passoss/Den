@@ -20,8 +20,6 @@ import HarnessCore
     #expect(MappedOutput.empty.entries.isEmpty)
 }
 
-/// Os deltas se distinguem pelo índice do bloco: dois blocos de texto no mesmo
-/// turno chegam intercalados e a UI precisa saber em qual rascunho escrever.
 @Test func deltasAreDistinguishedByBlockIndex() {
     let a = SessionEvent.textDelta(blockIndex: 0, text: "oi")
     let b = SessionEvent.textDelta(blockIndex: 1, text: "oi")

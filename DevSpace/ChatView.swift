@@ -1,7 +1,6 @@
 import SwiftUI
 import HarnessCore
 
-/// A conversa: o que já aconteceu, o que está chegando, e o que se digita.
 struct ChatView: View {
     @Bindable var cockpit: CockpitModel
     @State private var expanded: Set<UUID> = []
@@ -16,19 +15,10 @@ struct ChatView: View {
             }
             composer
         }
-        // O título da janela É o título da conversa, e o subtítulo diz onde ela
-        // está rodando. A barra de título já é o lugar do macOS para isso;
-        // repeti-la dentro da view seria dizer a mesma coisa duas vezes e
-        // roubar altura do transcript.
+
         .navigationTitle(cockpit.title)
         .navigationSubtitle(cockpit.locationSummary)
-        .toolbar {
-            ToolbarItem {
-                if cockpit.isLive {
-                    Button("Parar") { Task { await cockpit.stop() } }
-                }
-            }
-        }
+
         .task(id: cockpit.sessionID) { await cockpit.loadBranch() }
     }
 
@@ -47,9 +37,7 @@ struct ChatView: View {
                         }
                     }
                     if !cockpit.streaming.isEmpty {
-                        // Sem hora enquanto chega: o turno ainda não fechou, e
-                        // carimbar o instante do primeiro delta seria dizer que
-                        // a mensagem terminou quando ela mal começou.
+
                         assistantBubble(cockpit.streaming, at: nil).id("streaming")
                     }
                 }
@@ -104,11 +92,6 @@ struct ChatView: View {
         }
     }
 
-    /// A mensagem do usuário: encostada à direita, contida, com a hora dentro
-    /// do balão.
-    ///
-    /// O `Spacer` com folga mínima é o que impede o balão de esticar até a
-    /// borda: ele encolhe até o conteúdo e para.
     private func userBubble(_ line: CockpitModel.Line) -> some View {
         HStack(spacing: 0) {
             Spacer(minLength: 64)
@@ -117,10 +100,6 @@ struct ChatView: View {
         }
     }
 
-    /// A mensagem do Claude: mesmo balão, do outro lado.
-    ///
-    /// Tom neutro em vez do tom de acento — a cor é o que diz de quem é a fala,
-    /// e as duas competindo pelo mesmo destaque anulariam a distinção.
     private func assistantBubble(_ text: String, at moment: Date?) -> some View {
         HStack(spacing: 0) {
             bubble(text: text, moment: moment, tint: AnyShapeStyle(.quaternary.opacity(0.4)))
@@ -128,11 +107,6 @@ struct ChatView: View {
         }
     }
 
-    /// O corpo comum dos dois balões.
-    ///
-    /// A hora fica alinhada pela ÚLTIMA linha de base do texto, não pelo
-    /// centro: é isso que a põe ao pé do balão numa mensagem de várias linhas,
-    /// em vez de flutuando no meio da altura.
     private func bubble(text: String, moment: Date?, tint: AnyShapeStyle) -> some View {
         HStack(alignment: .lastTextBaseline, spacing: 8) {
             Text(text)
@@ -168,8 +142,6 @@ struct ChatView: View {
         .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    /// O verbo canônico vira ícone. É o vocabulário da spec §4.1 aparecendo:
-    /// a mesma forma serve a qualquer harness, porque o verbo é o mesmo.
     private func icon(for verb: CanonicalTool?) -> String {
         switch verb {
         case .read: "doc.text"
@@ -182,7 +154,6 @@ struct ChatView: View {
         }
     }
 
-    /// Spec §5.4: preservado e exibido, a um clique — sem competir com a conversa.
     @ViewBuilder
     private func unrecognized(id: UUID, lines: [CockpitModel.Line]) -> some View {
         let isOpen = expanded.contains(id)
@@ -282,8 +253,26 @@ struct ChatView: View {
                 if cockpit.isBusy {
                     ProgressView().controlSize(.small).scaleEffect(0.7)
                     Text("trabalhando").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Button {
+                        Task { await cockpit.stop() }
+                    } label: {
+                        Image(systemName: "stop.circle")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Parar o que está rodando")
                 } else if cockpit.pending != nil {
                     Text("aguardando você").font(.system(size: 10)).foregroundStyle(.orange)
+                } else if !cockpit.status.isEmpty {
+
+                    Text(cockpit.status)
+                        .font(.system(size: 10))
+                        .foregroundStyle(cockpit.status.hasPrefix("falhou")
+                                         || cockpit.status.hasPrefix("encerrada")
+                                         ? AnyShapeStyle(.orange)
+                                         : AnyShapeStyle(.secondary))
+                        .lineLimit(1)
                 }
                 Spacer()
                 Button {

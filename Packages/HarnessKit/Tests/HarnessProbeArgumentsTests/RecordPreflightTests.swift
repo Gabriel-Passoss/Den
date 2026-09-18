@@ -1,8 +1,6 @@
 import Testing
 @testable import HarnessProbeArguments
 
-/// Sistema de arquivos falso: dois conjuntos, nenhum I/O. O que está sendo
-/// testado é a decisão e a ordem dela, não o `FileManager`.
 private func probe(directories: Set<String> = [], files: Set<String> = []) -> FileSystemProbe {
     FileSystemProbe(
         exists: { directories.contains($0) || files.contains($0) },
@@ -60,9 +58,6 @@ struct RecordPreflightTests {
         #expect(problem?.exitCode == 73)
     }
 
-    /// O cenário exato do review: um caractere a mais no `--cwd`, um `--out`
-    /// correto apontando para um fixture que existe. Ambas as checagens falham;
-    /// a que o operador precisa ler é a do argumento que ele digitou errado.
     @Test("with a bad --cwd and an existing --out, the reported error is the --cwd one")
     func cwdIsCheckedBeforeOut() {
         let fixture = "Tests/ClaudeHarnessTests/Fixtures/hello.ndjson"
@@ -73,8 +68,6 @@ struct RecordPreflightTests {
         #expect(problem == .cwdNotFound("/tmp/probe-scratchh"))
     }
 
-    /// As mensagens são a única saída que o operador vê; um erro que não nomeia
-    /// o caminho não é acionável.
     @Test("every message names the offending path")
     func everyMessageNamesTheOffendingPath() {
         #expect(RecordPreflightError.cwdNotFound("/x/y").message.contains("/x/y"))

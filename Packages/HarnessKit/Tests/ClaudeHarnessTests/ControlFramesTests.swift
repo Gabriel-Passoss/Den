@@ -37,9 +37,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
 }
 
 @Test func classifiesAResponseWithAnUnrecognizedSubtypeAsFailure() throws {
-    // Controller ruling (Finding 1): falhar alto em vez de suceder quieto —
-    // um subtipo que não é "success" nem "error" (ex.: um futuro "cancelled")
-    // não pode virar sucesso silencioso.
+
     let line = Data(#"""
     {"type":"control_response","response":{"subtype":"cancelled","request_id":"r1"}}
     """#.utf8)
@@ -64,8 +62,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
 }
 
 @Test func aControlResponseMissingItsResponseBodyIsPreservedNotDiscarded() throws {
-    // Controller ruling (Finding 2): o irmão control_request preserva o
-    // quadro inteiro via .unknownControl; control_response fazia o oposto.
+
     let line = Data(#"""
     {"type":"control_response","oops":true}
     """#.utf8)
@@ -96,8 +93,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
 }
 
 @Test func aPermissionSuggestionMissingItsTypeIsPreservedNotDropped() throws {
-    // Controller ruling (Finding 3): compactMap descartava sugestões sem
-    // "type", fazendo suggestions.count mentir sobre o que o harness enviou.
+
     let line = Data(#"""
     {"type":"control_request","request_id":"a1","request":{"subtype":"can_use_tool","tool_name":"Bash","permission_suggestions":[{"mode":"acceptEdits"}]}}
     """#.utf8)
@@ -111,7 +107,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
 }
 
 @Test func anUnknownControlSubtypeIsPreservedNotRejected() throws {
-    // Spec §5.4: um subtipo desconhecido nunca é erro — degrada, não quebra.
+
     let line = Data(#"""
     {"type":"control_request","request_id":"z","request":{"subtype":"coisa_nova","x":1}}
     """#.utf8)
@@ -122,11 +118,6 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(raw["request"]?["subtype"] == .string("coisa_nova"))
 }
 
-/// Item 4 do review final. Um `can_use_tool` sem `request_id` chegava à UI
-/// como pedido de permissão normal: o diálogo aparecia, o usuário decidia, e a
-/// resposta saía com `request_id: ""` — que o CLI nunca casa. O harness
-/// bloqueava para sempre e o usuário achava que tinha aprovado. Sem id, o
-/// quadro não é um pedido de permissão; é um registro.
 @Test func aPermissionRequestWithoutARequestIDIsNotOfferedToTheUI() throws {
     let line = Data(#"""
     {"type":"control_request","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}
@@ -137,9 +128,6 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(raw["request"]?["tool_name"] == .string("Bash"))
 }
 
-/// E um `request_id` presente mas vazio é o mesmo caso: `""` é tão
-/// irrespondível quanto ausente, e é justamente o valor que o código antigo
-/// fabricava sozinho com `?? ""`.
 @Test func anEmptyRequestIDIsTreatedAsNoRequestIDAtAll() throws {
     let line = Data(#"""
     {"type":"control_request","request_id":"","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}
@@ -149,9 +137,6 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     }
 }
 
-/// A recusa automática do item 1 usa o envelope de erro que o próprio
-/// protocolo já define — o mesmo que `classify` lê na direção oposta. Este
-/// teste fecha o círculo: o que escrevemos é o que sabemos ler.
 @Test func theAutomaticRefusalUsesTheProtocolsOwnErrorEnvelope() throws {
     let data = try ControlErrorResponse(requestID: "r-7", message: "não entendi").data()
     guard case .response(let id, let result) = ControlFrame.classify(data) else {
@@ -162,7 +147,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
 }
 
 @Test func malformedJSONIsTreatedAsConversationNotAsAFailure() throws {
-    // O mapper da Etapa 4 decide o que fazer; o canal de controle não julga.
+
     #expect(ControlFrame.classify(Data("nao sou json".utf8)) == .conversation)
 }
 

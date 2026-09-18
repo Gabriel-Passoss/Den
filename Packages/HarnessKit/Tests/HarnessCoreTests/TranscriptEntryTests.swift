@@ -38,8 +38,7 @@ private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {
 }
 
 @Test func theRawPayloadIsPreservedWholeNotSummarized() throws {
-    // Spec §4.1: o canônico serve ao handoff e à UI; o raw garante que nada é
-    // perdido. Um raw resumido quebraria o replay.
+
     let raw = JSONValue.object([
         "type": .string("assistant"),
         "message": .object(["role": .string("assistant"), "extra": .int(7)]),
@@ -96,9 +95,6 @@ private func decodeAsJSONValue(_ data: Data) throws -> JSONValue {
     try JSONDecoder().decode(JSONValue.self, from: data)
 }
 
-/// Um payload de "kind" de uma versão futura que este binário não conhece —
-/// simula um harness novo (ou uma versão futura do próprio DevSpace)
-/// escrevendo um décimo caso que ainda não existe aqui.
 private let unknownKindJSON = """
 {
   "id": "11111111-1111-1111-1111-111111111111",
@@ -122,8 +118,7 @@ private let unknownKindJSON = """
 }
 
 @Test func theNineKnownCasesStillDecodeToThemselvesNotToUnrecognized() throws {
-    // O mesmo conjunto de everyKindSurvivesARoundTrip, mas o que se verifica
-    // aqui é que o fallback do décimo caso não engoliu o caminho normal.
+
     let kinds: [TranscriptEntry.Kind] = [
         .userMessage(text: "oi", attachments: []),
         .assistantText("olá"),
@@ -152,13 +147,7 @@ private let unknownKindJSON = """
 }
 
 @Test func decodingAnUnknownCaseAndReencodingItIsIdempotent() throws {
-    // Sequência do finding: uma versão nova grava um décimo caso; este binário
-    // (mais velho) abre, não reconhece, e mais tarde regrava a mesma sessão
-    // por qualquer motivo (compactação, migração, etc). O re-encode PRECISA
-    // reemitir o discriminador e o payload originais — nunca a palavra
-    // "unrecognized" — porque a versão nova que gravou o registro original
-    // entende "subagentSpawn" perfeitamente bem; perder esse nome no
-    // round-trip degradaria o registro permanentemente para ela também.
+
     let originalData = Data(unknownKindJSON.utf8)
     let entry = try decodeEntry(unknownKindJSON)
 
@@ -170,15 +159,12 @@ private let unknownKindJSON = """
     let reencodedJSON = try decodeAsJSONValue(reencodedData)
     #expect(reencodedJSON == originalJSON)
 
-    // Precisão adicional sobre o ponto do finding: a chave regravada é o
-    // discriminador original, não "unrecognized".
     #expect(reencodedJSON["kind"]?["subagentSpawn"] != nil)
     #expect(reencodedJSON["kind"]?["unrecognized"] == nil)
 }
 
 @Test func aGenuinelyMalformedEntryStillFailsLoudly() {
-    // Mesma disciplina de escopo do Task 1: degradar um caso desconhecido,
-    // não engolir corrupção real.
+
     let missingID = """
     {
       "timestamp": "2023-11-14T22:13:20Z",

@@ -1,13 +1,8 @@
 import Foundation
 
-/// Converte um fluxo de bytes em linhas NDJSON completas.
-///
-/// Mantém em buffer a linha parcial entre chamadas, porque um chunk lido de um
-/// pipe quase nunca coincide com a fronteira de uma linha.
 public struct NDJSONFramer: Sendable {
     public enum FramingError: Error, Equatable {
-        /// A linha parcial passou do teto sem nenhuma quebra de linha à vista.
-        /// Sinaliza saída corrompida ou não-NDJSON — não vale continuar lendo.
+
         case lineTooLong(limit: Int)
     }
 
@@ -21,35 +16,6 @@ public struct NDJSONFramer: Sendable {
         self.limit = limit
     }
 
-    /// Consome um chunk e devolve as linhas que ficaram completas com ele.
-    /// Linhas vazias são descartadas.
-    ///
-    /// `searchStart` marca ao mesmo tempo (a) de onde a próxima busca por
-    /// `\n` deve continuar e (b) até onde o buffer já foi consumido — as
-    /// duas coisas coincidem porque uma linha só é consumida quando sua
-    /// quebra de linha é encontrada. Isso evita re-fatiar a cauda inteira
-    /// do buffer a cada linha extraída (custo O(n·k) para um chunk com k
-    /// linhas); em vez disso, o prefixo consumido é descartado uma única
-    /// vez, depois do laço — O(n) no total.
-    ///
-    /// **Contrato pós-throw: um throw é terminal.** Depois que `push` lança, o
-    /// enquadrador não volta a funcionar — o buffer retém a linha que estourou
-    /// o teto (quando o throw vem de dentro do laço, o `removeSubrange` é
-    /// pulado e nada é consumido), e todo `push` seguinte lança de novo, para
-    /// sempre, com o buffer crescendo sem limite e nenhuma linha válida saindo.
-    /// As linhas que já tinham ficado prontas *neste* chunk também se perdem:
-    /// o array de retorno não chega ao chamador.
-    ///
-    /// O chamador precisa parar de empurrar e descartar o enquadrador. É o que
-    /// `StreamIO` faz, via `hasFramingFailed`; o tipo não tem como impor.
-    ///
-    /// Cuidado com índices de `Data`: uma fatia (`buffer[a..<b]`) preserva
-    /// o espaço de índices do buffer pai — não começa em 0. `searchStart`
-    /// e `index` abaixo são sempre índices do próprio `buffer`, nunca de
-    /// uma fatia derivada, então nunca ficam fora de base. O único lugar
-    /// em que precisamos reancorar para 0 é ao empacotar uma linha para
-    /// devolução (`Data(buffer[...])`), porque esse valor sai do struct e
-    /// passa a viver com índices próprios.
     public mutating func push(_ chunk: Data) throws -> [Data] {
         buffer.append(chunk)
 
