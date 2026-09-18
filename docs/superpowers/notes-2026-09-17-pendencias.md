@@ -162,3 +162,22 @@ Registrados aqui porque o workspace do plano que os guardava é descartável.
   deste plano). É sensível a carga, o que o põe na mesma família da pendência
   "escrita bloqueante é sistêmica" registrada acima: o erro esperado depende de
   o `write(2)` no pipe morto de fato retornar `EPIPE` dentro da janela do teste.
+
+# Pendências conhecidas ao fim da Etapa 4b (mapeador de eventos)
+
+Mesmo critério: nenhuma bloqueia o merge, julgada na Task 6 e deliberadamente
+adiada, com o raciocínio.
+
+## Do store
+
+**`FileTranscriptStore` trunca a fração de segundo do carimbo.** Descoberto ao
+escrever a Task 6, no teste que leva o corpus de `permission-denied.ndjson`
+inteiro até o disco e de volta: o encoder usa `.iso8601`, que não escreve
+milissegundos, enquanto as linhas `assistant` e `user` do protocolo trazem
+carimbos com fração de segundo ("…:59.447Z"). Um carimbo que vai ao disco
+volta truncado no segundo. Não afeta a ordem do transcript — que é a ordem de
+append no NDJSON, não a do carimbo — nem nenhum teste existente (o teste da
+Task 6, `theMappedTranscriptSurvivesTheStore`, compara carimbos com tolerância
+de 1s em vez de igualdade, exatamente por essa razão), mas é perda de
+fidelidade contra a §4.2. Mudar a estratégia de codificação de data é mudança
+de formato de arquivo e pertence a um plano próprio que toque o store.
