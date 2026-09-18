@@ -73,20 +73,13 @@ struct SidebarView: View {
             Task { await workspace.select(summary.id) }
         } label: {
             HStack(spacing: 7) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.orange)
-                    .frame(width: 14, height: 14)
-                    .overlay(
-                        Image(systemName: "sparkle")
-                            .font(.system(size: 7, weight: .bold))
-                            .foregroundStyle(.white)
-                    )
+                HarnessBadge(harness: summary.harnesses.first)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(summary.title)
                         .font(.system(size: 12))
                         .lineLimit(1)
-                    Text("Claude Code · \(summary.updatedAt.formatted(.relative(presentation: .named)))")
+                    Text(subtitle(for: summary))
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -126,14 +119,26 @@ struct SidebarView: View {
             .buttonStyle(.plain)
 
             HStack(spacing: 5) {
-                Circle().fill(Color.orange).frame(width: 6, height: 6)
-                Text("Claude Code · login da assinatura")
+                HarnessBadge(harness: workspace.defaultHarness, size: 12)
+                Text("\(HarnessBadge.name(for: workspace.defaultHarness)) · login da assinatura")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                 Spacer(minLength: 0)
             }
         }
         .padding(10)
+    }
+
+    /// Os harnesses que hospedaram a conversa, mais quando ela mudou.
+    ///
+    /// Plural de propósito: uma sessão do DevSpace atravessa harnesses, e
+    /// depois da troca a linha precisa contar os dois — é a feature, não um
+    /// detalhe de formatação.
+    private func subtitle(for summary: SessionSummary) -> String {
+        let names = summary.harnesses.map(HarnessBadge.name(for:))
+        let unique = NSOrderedSet(array: names).compactMap { $0 as? String }
+        let when = summary.updatedAt.formatted(.relative(presentation: .named))
+        return unique.isEmpty ? when : "\(unique.joined(separator: " → ")) · \(when)"
     }
 
     private func abbreviated(_ url: URL) -> String {

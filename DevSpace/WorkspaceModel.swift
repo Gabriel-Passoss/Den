@@ -16,6 +16,10 @@ final class WorkspaceModel {
     var search: String = ""
     /// A pasta que uma conversa NOVA vai usar.
     var workingDirectory: URL = URL(fileURLWithPath: NSHomeDirectory())
+    /// O harness que uma conversa nova sobe. Um dia isto vira escolha do
+    /// usuário; hoje é o único que existe. Mora aqui e não na view porque
+    /// saber QUAIS harnesses existem é trabalho do orquestrador.
+    let defaultHarness: HarnessID = .claudeCode
 
     private let store: FileTranscriptStore
     private var cockpits: [UUID: CockpitModel] = [:]

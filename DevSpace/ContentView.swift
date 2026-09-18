@@ -2,8 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var workspace = WorkspaceModel()
-    /// A sidebar não recolhe: ela é a lista de sessões, e um orquestrador de
-    /// múltiplas sessões sem a lista à vista é um app de uma sessão só.
+    
     @State private var columns = NavigationSplitViewVisibility.all
 
     var body: some View {
