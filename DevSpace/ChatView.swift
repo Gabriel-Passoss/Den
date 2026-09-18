@@ -138,17 +138,23 @@ struct ChatView: View {
 
     private func assistantBubble(_ text: String, at moment: Date?) -> some View {
         HStack(spacing: 0) {
-            bubble(text: text, moment: moment, tint: AnyShapeStyle(.quaternary.opacity(0.4)))
+            bubble(text: text, moment: moment, tint: AnyShapeStyle(.quaternary.opacity(0.4)),
+                   markdown: true)
             Spacer(minLength: 64)
         }
     }
 
-    private func bubble(text: String, moment: Date?, tint: AnyShapeStyle) -> some View {
+    private func bubble(text: String, moment: Date?, tint: AnyShapeStyle,
+                        markdown: Bool = false) -> some View {
         HStack(alignment: .lastTextBaseline, spacing: 8) {
-            Text(text)
-                .font(.system(size: 13))
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
+            if markdown {
+                MarkdownText(text: text)
+            } else {
+                Text(text)
+                    .font(.system(size: 13))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let moment {
                 Text(moment, format: .dateTime.hour().minute())
                     .font(.system(size: 9))
