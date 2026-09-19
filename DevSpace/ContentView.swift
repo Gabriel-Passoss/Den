@@ -59,17 +59,7 @@ struct ContentView: View {
     }
 
     private func startFirstConversation() {
-        if let folder = workspace.folders.first {
-            Task { await workspace.newSession(in: folder) }
-            return
-        }
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.prompt = "Adicionar"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        workspace.addFolder(url)
-        Task { await workspace.newSession(in: url) }
+        Task { await workspace.newSession() }
     }
 
     private var empty: some View {

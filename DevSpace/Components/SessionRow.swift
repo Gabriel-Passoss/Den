@@ -6,6 +6,7 @@ struct SessionRow: View {
     let indicator: WorkspaceModel.SessionIndicator?
     var select: () -> Void
     var rename: (String) -> Void
+    var unfile: (() -> Void)? = nil
 
     @State private var isEditing = false
 
@@ -51,6 +52,9 @@ struct SessionRow: View {
         })
         .contextMenu {
             Button("Renomear") { isEditing = true }
+            if let unfile {
+                Button("Remover da pasta", action: unfile)
+            }
         }
     }
 

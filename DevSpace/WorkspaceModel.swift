@@ -13,34 +13,67 @@ final class WorkspaceModel {
 
     var workingDirectory: URL = URL(fileURLWithPath: NSHomeDirectory())
 
-    var folders: [URL] = [] {
-        didSet { Self.persist(folders) }
+    struct Folder: Identifiable, Codable, Equatable {
+        let id: String
+        var name: String
     }
 
-    var folderNames: [String: String] = [:] {
-        didSet { UserDefaults.standard.set(folderNames, forKey: Self.namesKey) }
+    var folders: [Folder] = [] {
+        didSet { Self.persistFolders(folders) }
+    }
+
+    var membership: [String: String] = [:] {
+        didSet { UserDefaults.standard.set(membership, forKey: Self.membershipKey) }
+    }
+
+    var sessionOrder: [String] = [] {
+        didSet { UserDefaults.standard.set(sessionOrder, forKey: Self.orderKey) }
     }
 
     let defaultHarness: HarnessID = .claudeCode
 
     private let store: FileTranscriptStore
     private var cockpits: [UUID: CockpitModel] = [:]
+    private var legacyPathToFolder: [String: String] = [:]
 
-    private static let foldersKey = "DevSpace.folders"
-    private static let namesKey = "DevSpace.folderNames"
+    private static let foldersKey = "DevSpace.folders.v2"
+    private static let membershipKey = "DevSpace.sessionFolders"
+    private static let orderKey = "DevSpace.sessionOrder"
+    private static let legacyFoldersKey = "DevSpace.folders"
+    private static let legacyNamesKey = "DevSpace.folderNames"
 
     init() {
         let root = URL.applicationSupportDirectory.appending(path: "DevSpace/sessions")
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         self.store = FileTranscriptStore(root: root)
-        self.folders = (UserDefaults.standard.array(forKey: Self.foldersKey) as? [String] ?? [])
-            .map { URL(fileURLWithPath: $0) }
-        self.folderNames = UserDefaults.standard.dictionary(forKey: Self.namesKey) as? [String: String] ?? [:]
+
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: Self.foldersKey),
+           let decoded = try? JSONDecoder().decode([Folder].self, from: data) {
+            self.folders = decoded
+        } else {
+            let paths = defaults.array(forKey: Self.legacyFoldersKey) as? [String] ?? []
+            let names = defaults.dictionary(forKey: Self.legacyNamesKey) as? [String: String] ?? [:]
+            var migrated: [Folder] = []
+            for path in paths {
+                let folder = Folder(
+                    id: UUID().uuidString,
+                    name: names[path] ?? URL(fileURLWithPath: path).lastPathComponent)
+                migrated.append(folder)
+                legacyPathToFolder[path] = folder.id
+            }
+            self.folders = migrated
+            Self.persistFolders(migrated)
+        }
+        self.membership = defaults.dictionary(forKey: Self.membershipKey) as? [String: String] ?? [:]
+        self.sessionOrder = defaults.array(forKey: Self.orderKey) as? [String] ?? []
     }
 
-    func renameFolder(_ path: String, to name: String) {
+    func renameFolder(_ id: String, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { folderNames[path] = nil } else { folderNames[path] = trimmed }
+        guard !trimmed.isEmpty,
+              let index = folders.firstIndex(where: { $0.id == id }) else { return }
+        folders[index].name = trimmed
     }
 
     func renameSession(_ id: UUID, to title: String) async {
@@ -52,17 +85,73 @@ final class WorkspaceModel {
         await refresh()
     }
 
-    private static func persist(_ folders: [URL]) {
-        UserDefaults.standard.set(folders.map(\.path), forKey: foldersKey)
+    func moveSession(_ id: UUID, toFolder folderID: String?) {
+        membership[id.uuidString] = folderID
     }
 
-    func addFolder(_ url: URL) {
-        if !folders.contains(where: { $0.path == url.path }) { folders.append(url) }
-        workingDirectory = url
+    private func ordered(_ sessions: [SessionSummary]) -> [SessionSummary] {
+        let index = Dictionary(uniqueKeysWithValues:
+            sessionOrder.enumerated().map { ($1, $0) })
+        return sessions.sorted { a, b in
+            switch (index[a.id.uuidString], index[b.id.uuidString]) {
+            case let (ia?, ib?): ia < ib
+            case (.some, nil): false
+            case (nil, .some): true
+            case (nil, nil): a.updatedAt > b.updatedAt
+            }
+        }
     }
 
-    func removeFolder(_ url: URL) {
-        folders.removeAll { $0.path == url.path }
+    private func fullOrderSnapshot() -> [String] {
+        let valid = Set(folders.map(\.id))
+        let byFolder = Dictionary(grouping: summaries) { membership[$0.id.uuidString] ?? "" }
+        var order: [String] = []
+        for folder in folders {
+            order += ordered(byFolder[folder.id] ?? []).map(\.id.uuidString)
+        }
+        let loose = summaries.filter { summary in
+            guard let folderID = membership[summary.id.uuidString] else { return true }
+            return !valid.contains(folderID)
+        }
+        order += ordered(loose).map(\.id.uuidString)
+        return order
+    }
+
+    func placeSession(_ id: UUID, near targetID: UUID) {
+        guard id != targetID else { return }
+        var order = fullOrderSnapshot()
+        guard let from = order.firstIndex(of: id.uuidString),
+              let to = order.firstIndex(of: targetID.uuidString) else { return }
+        let moved = order.remove(at: from)
+        order.insert(moved, at: to)
+        membership[id.uuidString] = membership[targetID.uuidString]
+        sessionOrder = order
+    }
+
+    func moveFolder(_ id: String, before targetID: String?) {
+        guard id != targetID,
+              let from = folders.firstIndex(where: { $0.id == id }) else { return }
+        let folder = folders.remove(at: from)
+        if let targetID,
+           let to = folders.firstIndex(where: { $0.id == targetID }) {
+            folders.insert(folder, at: to)
+        } else {
+            folders.append(folder)
+        }
+    }
+
+    private static func persistFolders(_ folders: [Folder]) {
+        guard let data = try? JSONEncoder().encode(folders) else { return }
+        UserDefaults.standard.set(data, forKey: foldersKey)
+    }
+
+    func addFolder() {
+        folders.append(Folder(id: UUID().uuidString, name: "Nova pasta"))
+    }
+
+    func removeFolder(_ id: String) {
+        folders.removeAll { $0.id == id }
+        membership = membership.filter { $0.value != id }
     }
 
     var active: CockpitModel? {
@@ -94,35 +183,40 @@ final class WorkspaceModel {
         }
     }
 
-    var groups: [Group] {
-        let matching = search.isEmpty ? summaries : summaries.filter {
+    private var filteredSummaries: [SessionSummary] {
+        search.isEmpty ? summaries : summaries.filter {
             $0.title.localizedCaseInsensitiveContains(search)
             || $0.workingDirectory.lastPathComponent.localizedCaseInsensitiveContains(search)
         }
-        let byPath = Dictionary(grouping: matching) { $0.workingDirectory.path }
+    }
 
-        var paths = folders.map(\.path)
-        for path in byPath.keys where !paths.contains(path) { paths.append(path) }
+    var folderGroups: [Group] {
+        let byFolder = Dictionary(grouping: filteredSummaries) {
+            membership[$0.id.uuidString] ?? ""
+        }
 
-        return paths.compactMap { path -> Group? in
-            let sessions = (byPath[path] ?? []).sorted { $0.updatedAt > $1.updatedAt }
-            let url = URL(fileURLWithPath: path)
+        return folders.compactMap { folder -> Group? in
+            let sessions = ordered(byFolder[folder.id] ?? [])
 
             if !search.isEmpty, sessions.isEmpty,
-               !url.lastPathComponent.localizedCaseInsensitiveContains(search) { return nil }
-            return Group(url: url, sessions: sessions,
-                         name: folderNames[path] ?? url.lastPathComponent)
+               !folder.name.localizedCaseInsensitiveContains(search) { return nil }
+            return Group(folder: folder, sessions: sessions)
         }
-        .sorted { ($0.sessions.first?.updatedAt ?? .distantPast)
-                > ($1.sessions.first?.updatedAt ?? .distantPast) }
+    }
+
+    var looseSessions: [SessionSummary] {
+        let valid = Set(folders.map(\.id))
+        return ordered(filteredSummaries.filter { summary in
+            guard let folderID = membership[summary.id.uuidString] else { return true }
+            return !valid.contains(folderID)
+        })
     }
 
     struct Group: Identifiable {
-        var url: URL
+        var folder: Folder
         var sessions: [SessionSummary]
-        var id: String { url.path }
-
-        var name: String
+        var id: String { folder.id }
+        var name: String { folder.name }
     }
 
     // MARK: - Ações
@@ -131,32 +225,29 @@ final class WorkspaceModel {
         guard let listing = try? await store.list() else { return }
         summaries = listing.sessions
 
+        if !legacyPathToFolder.isEmpty {
+            for summary in summaries where membership[summary.id.uuidString] == nil {
+                if let folderID = legacyPathToFolder[summary.workingDirectory.path] {
+                    membership[summary.id.uuidString] = folderID
+                }
+            }
+            legacyPathToFolder = [:]
+        }
+
         for broken in listing.unreadable {
             print("sessão ilegível em \(broken.location.path): \(broken.reason)")
         }
     }
 
-    func displayName(for url: URL) -> String {
-        folderNames[url.path] ?? url.lastPathComponent
-    }
-
-    var folderForNewSession: URL? {
-        if let id = selectedID,
-           let summary = summaries.first(where: { $0.id == id }) {
-            return summary.workingDirectory
+    func newSession(assignedTo folderID: String? = nil) async {
+        if let selectedID,
+           let summary = summaries.first(where: { $0.id == selectedID }) {
+            workingDirectory = summary.workingDirectory
         }
-        return folders.first
-    }
-
-    func newSession(in folder: URL) async {
-        workingDirectory = folder
-        await newSession()
-    }
-
-    func newSession() async {
         let cockpit = CockpitModel(store: store, workingDirectory: workingDirectory)
         adopt(cockpit)
         await cockpit.persistMetadata()
+        if let folderID { membership[cockpit.sessionID.uuidString] = folderID }
         cockpits[cockpit.sessionID] = cockpit
         selectedID = cockpit.sessionID
         await refresh()

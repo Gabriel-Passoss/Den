@@ -1,10 +1,19 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import HarnessCore
+
+private final class DragTracker: NSItemProvider {
+    var onEnd: (() -> Void)?
+    deinit { onEnd?() }
+}
 
 struct SidebarView: View {
     @Bindable var workspace: WorkspaceModel
 
     @State private var collapsed: Set<String> = []
+    @State private var dropTarget: String?
+    @State private var dragging: UUID?
+    @State private var dragGeneration = 0
 
     var body: some View {
         list
@@ -15,12 +24,12 @@ struct SidebarView: View {
                 ToolbarItem { Spacer() }
                 ToolbarItem {
                     Menu {
-                        Button(newSessionTitle, action: createSession)
-                        Button("Novo grupo…") { addFolder() }
+                        Button("Nova sessão") { Task { await workspace.newSession() } }
+                        Button("Nova pasta") { workspace.addFolder() }
                     } label: {
                         Label("Nova", systemImage: "plus")
                     }
-                    .help("Nova sessão ou novo grupo")
+                    .help("Nova sessão ou nova pasta")
                 }
             }
     }
@@ -30,18 +39,10 @@ struct SidebarView: View {
     @ViewBuilder
     private var list: some View {
         List(selection: selectionBinding) {
-            ForEach(workspace.groups) { group in
+            ForEach(workspace.folderGroups) { group in
                 Section(isExpanded: expansion(group.id)) {
                     ForEach(group.sessions) { summary in
-                        SessionRow(
-                            summary: summary,
-                            indicator: workspace.indicator(for: summary.id),
-                            select: { Task { await workspace.select(summary.id) } },
-                            rename: { name in
-                                Task { await workspace.renameSession(summary.id, to: name) }
-                            }
-                        )
-                        .tag(summary.id)
+                        row(for: summary, in: group.id)
                     }
                     if group.sessions.isEmpty {
                         Text("nenhuma conversa")
@@ -52,22 +53,53 @@ struct SidebarView: View {
                     FolderHeader(
                         name: group.name,
                         count: group.sessions.count,
+                        isOpen: !collapsed.contains(group.id),
+                        isDropTarget: dropTarget == group.id,
                         toggle: { toggleCollapse(group.id) },
                         rename: { workspace.renameFolder(group.id, to: $0) },
-                        newSession: { Task { await workspace.newSession(in: group.url) } },
-                        remove: { workspace.removeFolder(group.url) }
+                        newSession: { Task { await workspace.newSession(assignedTo: group.id) } },
+                        remove: { workspace.removeFolder(group.id) }
                     )
+                    .onDrop(of: [.plainText], isTargeted: dropBinding(group.id)) { providers in
+                        receiveDrop(providers, into: group.id)
+                    }
+                    .onDrag {
+                        dragging = nil
+                        return NSItemProvider(object: ("folder:" + group.id) as NSString)
+                    } preview: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder.fill")
+                            Text(group.name).font(.system(size: 13, weight: .semibold))
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7))
+                        .environment(\.colorScheme, .dark)
+                    }
                 }
+            }
+
+            if !workspace.folderGroups.isEmpty, !workspace.looseSessions.isEmpty {
+                Divider()
+                    .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
+                    .selectionDisabled()
+            }
+
+            ForEach(workspace.looseSessions) { summary in
+                row(for: summary, in: nil)
             }
         }
         .listStyle(.sidebar)
+        .onDrop(of: [.plainText], isTargeted: nil) { providers in
+            receiveDrop(providers, into: nil)
+        }
         .overlay {
-            if workspace.groups.isEmpty {
+            if workspace.folderGroups.isEmpty, workspace.looseSessions.isEmpty {
                 if workspace.search.isEmpty {
                     ContentUnavailableView(
                         "Nenhuma conversa",
                         systemImage: "bubble.left.and.bubble.right",
-                        description: Text("Crie um grupo a partir de uma pasta para começar.")
+                        description: Text("Crie uma sessão nova para começar.")
                     )
                 } else {
                     ContentUnavailableView.search(text: workspace.search)
@@ -98,42 +130,141 @@ struct SidebarView: View {
         )
     }
 
+    private func row(for summary: SessionSummary, in folderID: String?) -> some View {
+        let inFolder = workspace.membership[summary.id.uuidString] != nil
+        return SessionRow(
+            summary: summary,
+            indicator: workspace.indicator(for: summary.id),
+            select: { Task { await workspace.select(summary.id) } },
+            rename: { name in
+                Task { await workspace.renameSession(summary.id, to: name) }
+            },
+            unfile: inFolder ? {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    workspace.moveSession(summary.id, toFolder: nil)
+                }
+            } : nil
+        )
+        .opacity(dragging == summary.id ? 0 : 1)
+        .onDrop(of: [.plainText], delegate: SessionDropDelegate(
+            target: summary.id, areaFolderID: folderID,
+            workspace: workspace, dragging: $dragging))
+        .onDrag {
+            dragging = summary.id
+            dragGeneration += 1
+            let generation = dragGeneration
+            let provider = DragTracker(object: summary.id.uuidString as NSString)
+            provider.onEnd = {
+                Task { @MainActor in
+                    guard dragGeneration == generation else { return }
+                    withAnimation(.easeOut(duration: 0.15)) { dragging = nil }
+                }
+            }
+            return provider
+        } preview: {
+            SessionRow(
+                summary: summary,
+                indicator: workspace.indicator(for: summary.id),
+                select: {}, rename: { _ in }
+            )
+            .padding(.vertical, 5)
+            .padding(.horizontal, 10)
+            .frame(width: 250, alignment: .leading)
+            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7))
+            .environment(\.colorScheme, .dark)
+        }
+        .tag(summary.id)
+    }
+
+    private struct SessionDropDelegate: DropDelegate {
+        let target: UUID
+        let areaFolderID: String?
+        let workspace: WorkspaceModel
+        @Binding var dragging: UUID?
+
+        func dropEntered(info: DropInfo) {
+            guard let dragging, dragging != target else { return }
+            withAnimation(.easeInOut(duration: 0.18)) {
+                workspace.placeSession(dragging, near: target)
+            }
+        }
+
+        func dropUpdated(info: DropInfo) -> DropProposal? {
+            DropProposal(operation: .move)
+        }
+
+        func performDrop(info: DropInfo) -> Bool {
+            defer { dragging = nil }
+            if dragging != nil { return true }
+
+            let providers = info.itemProviders(for: [.plainText])
+            guard !providers.isEmpty else { return false }
+            let workspace = self.workspace
+            let areaFolderID = self.areaFolderID
+            for provider in providers {
+                _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                    guard let string = object as? String,
+                          string.hasPrefix("folder:") else { return }
+                    Task { @MainActor in
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            workspace.moveFolder(String(string.dropFirst(7)),
+                                                 before: areaFolderID)
+                        }
+                    }
+                }
+            }
+            return true
+        }
+    }
+
+    private func dropBinding(_ folderID: String) -> Binding<Bool> {
+        Binding(
+            get: { dropTarget == folderID },
+            set: { targeted in
+                if targeted { dropTarget = folderID }
+                else if dropTarget == folderID { dropTarget = nil }
+            }
+        )
+    }
+
+    private func receiveDrop(_ providers: [NSItemProvider], into folderID: String?) -> Bool {
+        dragging = nil
+        let readable = providers.filter { $0.canLoadObject(ofClass: NSString.self) }
+        guard !readable.isEmpty else { return false }
+        for provider in readable {
+            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                guard let string = object as? String else { return }
+                Task { @MainActor in
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        if string.hasPrefix("folder:") {
+                            workspace.moveFolder(String(string.dropFirst(7)), before: folderID)
+                        } else if let id = UUID(uuidString: string) {
+                            workspace.moveSession(id, toFolder: folderID)
+                        }
+                    }
+                }
+            }
+        }
+        return true
+    }
+
     private func expansion(_ id: String) -> Binding<Bool> {
         Binding(
             get: { !collapsed.contains(id) },
-            set: { open in if open { collapsed.remove(id) } else { collapsed.insert(id) } }
+            set: { open in
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    if open { collapsed.remove(id) } else { collapsed.insert(id) }
+                }
+            }
         )
     }
 
     private func toggleCollapse(_ id: String) {
         Task { @MainActor in
-            if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
+            withAnimation(.easeInOut(duration: 0.22)) {
+                if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
+            }
         }
     }
 
-    // MARK: - Ações
-
-    private var newSessionTitle: String {
-        workspace.folderForNewSession == nil ? "Nova sessão…" : "Nova sessão"
-    }
-
-    @discardableResult
-    private func addFolder() -> URL? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.prompt = "Adicionar"
-        panel.directoryURL = workspace.workingDirectory
-        guard panel.runModal() == .OK, let url = panel.url else { return nil }
-        workspace.addFolder(url)
-        return url
-    }
-
-    private func createSession() {
-        if let folder = workspace.folderForNewSession {
-            Task { await workspace.newSession(in: folder) }
-        } else if let url = addFolder() {
-            Task { await workspace.newSession(in: url) }
-        }
-    }
 }
