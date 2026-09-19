@@ -243,3 +243,30 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
         #expect(Set(texts) == expected)
     }
 }
+
+@Test func deletingASessionRemovesItFromDiskAndListing() async throws {
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = FileTranscriptStore(root: root)
+
+    let session = newSession(segments: [newSegment()])
+    try await store.saveMetadata(session)
+    #expect(try await store.list().sessions.count == 1)
+
+    try await store.delete(session.id)
+
+    #expect(try await store.list().sessions.isEmpty)
+    await #expect(throws: TranscriptStoreError.sessionNotFound(session.id)) {
+        _ = try await store.load(session.id)
+    }
+}
+
+@Test func deletingAnUnknownSessionThrowsSessionNotFound() async throws {
+    let root = try makeRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = FileTranscriptStore(root: root)
+    let ghost = UUID()
+    await #expect(throws: TranscriptStoreError.sessionNotFound(ghost)) {
+        try await store.delete(ghost)
+    }
+}

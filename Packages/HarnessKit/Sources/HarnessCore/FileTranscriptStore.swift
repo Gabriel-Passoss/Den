@@ -99,6 +99,14 @@ public actor FileTranscriptStore: TranscriptStore {
         }
     }
 
+    public func delete(_ sessionID: Session.ID) throws {
+        let directory = directory(for: sessionID)
+        guard FileManager.default.fileExists(atPath: directory.path) else {
+            throw TranscriptStoreError.sessionNotFound(sessionID)
+        }
+        try FileManager.default.removeItem(at: directory)
+    }
+
     public func load(_ sessionID: Session.ID) throws -> Session {
         let metadata = metadataFile(for: sessionID)
         guard FileManager.default.fileExists(atPath: metadata.path) else {

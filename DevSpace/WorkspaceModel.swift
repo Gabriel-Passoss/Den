@@ -181,6 +181,9 @@ final class WorkspaceModel {
         cockpit.isViewed = { [weak self] in
             self?.selectedID == id && NSApplication.shared.isActive
         }
+        cockpit.metadataDidChange = { [weak self] in
+            Task { @MainActor in await self?.refresh() }
+        }
     }
 
     private var filteredSummaries: [SessionSummary] {
@@ -264,6 +267,16 @@ final class WorkspaceModel {
         let cockpit = CockpitModel(store: store, restoring: session)
         adopt(cockpit)
         cockpits[id] = cockpit
+    }
+
+    func deleteSession(_ id: UUID) async {
+        if let cockpit = cockpits[id] { await cockpit.stop() }
+        cockpits[id] = nil
+        membership[id.uuidString] = nil
+        sessionOrder.removeAll { $0 == id.uuidString }
+        if selectedID == id { selectedID = nil }
+        try? await store.delete(id)
+        await refresh()
     }
 
     func stopAll() async {

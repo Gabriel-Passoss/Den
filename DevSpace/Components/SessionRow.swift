@@ -7,6 +7,7 @@ struct SessionRow: View {
     var select: () -> Void
     var rename: (String) -> Void
     var unfile: (() -> Void)? = nil
+    var delete: () -> Void = {}
 
     @State private var isEditing = false
 
@@ -55,6 +56,8 @@ struct SessionRow: View {
             if let unfile {
                 Button("Remover da pasta", action: unfile)
             }
+            Divider()
+            Button("Apagar sessão…", role: .destructive, action: delete)
         }
     }
 

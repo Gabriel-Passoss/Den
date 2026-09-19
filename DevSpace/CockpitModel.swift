@@ -36,6 +36,7 @@ final class CockpitModel {
     var hasUnread = false
     var isRateLimited = false
     var isViewed: (() -> Bool)?
+    var metadataDidChange: (() -> Void)?
 
     struct PendingAttachment: Identifiable, Equatable {
         let id = UUID()
@@ -94,6 +95,7 @@ final class CockpitModel {
     private var session: ClaudeSession?
     private var consumer: Task<Void, Never>?
     private var hasTitle = false
+    private var userRenamed = false
 
     private var harnessSessionID: UUID
 
@@ -109,7 +111,7 @@ final class CockpitModel {
         self.store = store
         self.sessionID = UUID()
         self.segmentID = UUID()
-        self.title = "Nova conversa"
+        self.title = "Nova sessão"
         self.workingDirectory = workingDirectory
         self.harnessSessionID = self.sessionID
         self.isRestored = false
@@ -143,6 +145,7 @@ final class CockpitModel {
 
     func persistMetadata() async {
         try? await store.saveMetadata(domainSession)
+        metadataDidChange?()
     }
 
     func loadBranch() async {
@@ -429,12 +432,37 @@ final class CockpitModel {
     func adoptTitle(_ newTitle: String) {
         title = newTitle
         hasTitle = true
+        userRenamed = true
     }
 
     private func nameFromFirstTurn(_ text: String) async {
         guard !hasTitle else { return }
         hasTitle = true
         title = text.count > 60 ? String(text.prefix(60)) + "…" : text
+        await persistMetadata()
+        generateTitle(from: text)
+    }
+
+    private func generateTitle(from text: String) {
+        Task { [weak self] in
+            guard let installation = try? await ClaudeDiscovery().discover() else { return }
+            let instruction = "Gere um título curto (3 a 5 palavras, sem aspas e sem "
+                + "ponto final) que resuma o pedido a seguir, na mesma língua dele. "
+                + "Responda somente o título.\n\nPedido: \(text.prefix(600))"
+            guard let output = try? await SystemCommandRunner().run(
+                installation.executable, ["-p", instruction, "--model", "haiku"]
+            ) else { return }
+            let cleaned = output
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’"))
+            guard !cleaned.isEmpty, cleaned.count <= 80, !cleaned.contains("\n") else { return }
+            await self?.applyGeneratedTitle(cleaned)
+        }
+    }
+
+    private func applyGeneratedTitle(_ generated: String) async {
+        guard !userRenamed else { return }
+        title = generated
         await persistMetadata()
     }
 

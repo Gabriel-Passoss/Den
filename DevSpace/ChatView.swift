@@ -972,7 +972,7 @@ struct ChatView: View {
     private var modelLabel: String {
         let reported = cockpit.model
         guard let alias = cockpit.preferredModel else {
-            return reported.isEmpty ? "modelo" : CockpitModel.displayName(for: reported)
+            return reported.isEmpty ? "Modelo" : CockpitModel.displayName(for: reported)
         }
         if reported.lowercased().contains(alias.lowercased()) {
             return CockpitModel.displayName(for: reported)

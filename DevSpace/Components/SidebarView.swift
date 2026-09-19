@@ -14,6 +14,7 @@ struct SidebarView: View {
     @State private var dropTarget: String?
     @State private var dragging: UUID?
     @State private var dragGeneration = 0
+    @State private var pendingDelete: SessionSummary?
 
     var body: some View {
         list
@@ -79,11 +80,29 @@ struct SidebarView: View {
                 }
             }
 
-            if !workspace.folderGroups.isEmpty, !workspace.looseSessions.isEmpty {
+            if !workspace.folderGroups.isEmpty {
                 Divider()
                     .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
                     .selectionDisabled()
             }
+
+            Button {
+                Task { await workspace.newSession() }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("Nova sessão")
+                        .font(.system(size: 13))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 3)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .selectionDisabled()
+            .help("Iniciar uma sessão nova")
 
             ForEach(workspace.looseSessions) { summary in
                 row(for: summary, in: nil)
@@ -92,6 +111,24 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .onDrop(of: [.plainText], isTargeted: nil) { providers in
             receiveDrop(providers, into: nil)
+        }
+        .confirmationDialog(
+            "Apagar \"\(pendingDelete?.title ?? "")\"?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Apagar", role: .destructive) {
+                if let summary = pendingDelete {
+                    Task { await workspace.deleteSession(summary.id) }
+                }
+                pendingDelete = nil
+            }
+            Button("Cancelar", role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text("A conversa e o histórico dela serão removidos permanentemente.")
         }
         .overlay {
             if workspace.folderGroups.isEmpty, workspace.looseSessions.isEmpty {
@@ -143,7 +180,8 @@ struct SidebarView: View {
                 withAnimation(.easeInOut(duration: 0.22)) {
                     workspace.moveSession(summary.id, toFolder: nil)
                 }
-            } : nil
+            } : nil,
+            delete: { pendingDelete = summary }
         )
         .opacity(dragging == summary.id ? 0 : 1)
         .onDrop(of: [.plainText], delegate: SessionDropDelegate(
