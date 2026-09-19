@@ -363,6 +363,16 @@ final class CockpitModel {
         await relaunchIfIdle()
     }
 
+    func choose(directory: URL) async {
+        guard directory.path != workingDirectory.path else { return }
+        workingDirectory = directory
+        detectedEffort = ClaudeSettings.effortLevel(forWorkingDirectory: directory)
+        detectedMode = ClaudeSettings.permissionMode(forWorkingDirectory: directory)
+        await persistMetadata()
+        await loadBranch()
+        await relaunchIfIdle()
+    }
+
     private static let preferencesKey = "DevSpace.sessionPreferences"
 
     private func restorePreferences() {

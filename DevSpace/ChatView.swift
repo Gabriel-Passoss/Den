@@ -15,6 +15,16 @@ struct ChatView: View {
     @State private var zoomed: ZoomedImage?
     @State private var nearBottom = true
 
+    struct MentionCandidate: Identifiable {
+        let path: String
+        let isDirectory: Bool
+        var id: String { path }
+    }
+
+    @State private var fileIndex: [MentionCandidate] = []
+    @State private var mentionSelection = 0
+    @State private var mentionDismissed = false
+
     private struct ScrollEdgeState: Equatable {
         var distance: CGFloat
         var contentHeight: CGFloat
@@ -33,6 +43,11 @@ struct ChatView: View {
         .navigationSubtitle(cockpit.locationSummary)
 
         .task(id: cockpit.sessionID) { await cockpit.loadBranch() }
+        .task(id: cockpit.workingDirectory) { await loadFileIndex() }
+        .onChange(of: cockpit.prompt) {
+            mentionSelection = 0
+            mentionDismissed = false
+        }
         .onChange(of: cockpit.sessionID, initial: true) { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
         .onReceive(NotificationCenter.default.publisher(
@@ -74,7 +89,31 @@ struct ChatView: View {
         removeKeyMonitor()
         let cockpit = self.cockpit
         let zoomed = $zoomed
+        let view = self
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let matches = view.currentMentionMatches()
+            if !matches.isEmpty {
+                let selected = min(view.mentionSelection, matches.count - 1)
+                switch event.keyCode {
+                case 125:
+                    view.mentionSelection = min(selected + 1, matches.count - 1)
+                    return nil
+                case 126:
+                    view.mentionSelection = max(selected - 1, 0)
+                    return nil
+                case 36:
+                    view.acceptMention(matches[selected])
+                    return nil
+                case 48 where !event.modifierFlags.contains(.shift):
+                    view.acceptMention(matches[selected])
+                    return nil
+                case 53:
+                    view.mentionDismissed = true
+                    return nil
+                default:
+                    break
+                }
+            }
             if event.keyCode == 53, zoomed.wrappedValue != nil {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                     zoomed.wrappedValue = nil
@@ -451,6 +490,8 @@ struct ChatView: View {
 
     private var composer: some View {
         VStack(spacing: 7) {
+            mentionSuggestions
+
             if !cockpit.pendingImages.isEmpty {
                 pendingImageRow
             }
@@ -463,6 +504,7 @@ struct ChatView: View {
 
             HStack(spacing: 8) {
                 modeBadge
+                folderBadge
                 modelBadge
                 effortBadge
                 if cockpit.isBusy {
@@ -509,6 +551,113 @@ struct ChatView: View {
         .padding(.bottom, 16)
         .frame(maxWidth: 800)
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Menções com @
+
+    private var activeMentionQuery: String? {
+        let text = cockpit.prompt
+        guard let at = text.range(of: "@", options: .backwards) else { return nil }
+        let token = text[at.upperBound...]
+        guard !token.contains(where: { $0.isWhitespace || $0.isNewline }) else { return nil }
+        if at.lowerBound > text.startIndex {
+            let previous = text[text.index(before: at.lowerBound)]
+            guard previous.isWhitespace || previous.isNewline else { return nil }
+        }
+        return String(token)
+    }
+
+    private func currentMentionMatches() -> [MentionCandidate] {
+        guard !mentionDismissed, let query = activeMentionQuery else { return [] }
+        guard !query.isEmpty else { return Array(fileIndex.prefix(8)) }
+        let lowered = query.lowercased()
+        let ranked = fileIndex.compactMap { candidate -> (MentionCandidate, Int)? in
+            let name = (candidate.path as NSString).lastPathComponent.lowercased()
+            if name.hasPrefix(lowered) { return (candidate, 0) }
+            if name.contains(lowered) { return (candidate, 1) }
+            if candidate.path.lowercased().contains(lowered) { return (candidate, 2) }
+            return nil
+        }
+        return ranked.sorted { $0.1 < $1.1 }.prefix(8).map(\.0)
+    }
+
+    @ViewBuilder
+    private var mentionSuggestions: some View {
+        let matches = currentMentionMatches()
+        if !matches.isEmpty {
+            let selected = min(mentionSelection, matches.count - 1)
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(Array(matches.enumerated()), id: \.element.id) { index, candidate in
+                    HStack(spacing: 6) {
+                        Image(systemName: candidate.isDirectory ? "folder" : "doc.text")
+                            .font(.system(size: 10))
+                            .frame(width: 14)
+                            .foregroundStyle(index == selected ? .white : .secondary)
+                        Text(candidate.path)
+                            .font(.system(size: 11))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(index == selected
+                                ? AnyShapeStyle(Color.accentColor)
+                                : AnyShapeStyle(.clear),
+                                in: RoundedRectangle(cornerRadius: 5))
+                    .foregroundStyle(index == selected ? .white : .primary)
+                    .contentShape(Rectangle())
+                    .onTapGesture { acceptMention(candidate) }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func acceptMention(_ candidate: MentionCandidate) {
+        guard let at = cockpit.prompt.range(of: "@", options: .backwards) else { return }
+        let prefix = String(cockpit.prompt[..<at.lowerBound])
+        if candidate.isDirectory {
+            cockpit.prompt = prefix + "@" + candidate.path + "/"
+        } else {
+            cockpit.prompt = prefix + "@" + candidate.path + " "
+        }
+    }
+
+    private func loadFileIndex() async {
+        let root = cockpit.workingDirectory
+        fileIndex = await Task.detached(priority: .utility) {
+            Self.indexFiles(under: root)
+        }.value
+    }
+
+    nonisolated private static func indexFiles(under root: URL) -> [MentionCandidate] {
+        let skip: Set<String> = ["node_modules", ".git", ".build", "DerivedData",
+                                 ".next", "dist", "build", "Pods", ".venv", "vendor"]
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]) else { return [] }
+
+        var results: [MentionCandidate] = []
+        for case let url as URL in enumerator {
+            if results.count >= 4000 { break }
+            let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?
+                .isDirectory ?? false
+            if isDirectory, skip.contains(url.lastPathComponent) {
+                enumerator.skipDescendants()
+                continue
+            }
+            let relative = String(url.path.dropFirst(root.path.count)
+                .drop(while: { $0 == "/" }))
+            guard !relative.isEmpty else { continue }
+            results.append(MentionCandidate(path: relative, isDirectory: isDirectory))
+        }
+        return results.sorted {
+            let a = $0.path.filter { $0 == "/" }.count
+            let b = $1.path.filter { $0 == "/" }.count
+            return a == b ? $0.path < $1.path : a < b
+        }
     }
 
     private func submit() {
@@ -615,6 +764,33 @@ struct ChatView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Modo de permissão — Shift+Tab alterna")
+    }
+
+    private var folderBadge: some View {
+        Button(action: chooseSessionFolder) {
+            HStack(spacing: 4) {
+                Image(systemName: "folder")
+                    .font(.system(size: 8))
+                Text(cockpit.workingDirectory.lastPathComponent)
+            }
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(.quaternary.opacity(0.4), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help(cockpit.workingDirectory.path)
+    }
+
+    private func chooseSessionFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.prompt = "Usar"
+        panel.directoryURL = cockpit.workingDirectory
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await cockpit.choose(directory: url) }
     }
 
     private var modeSelection: Binding<PermissionMode> {
