@@ -14,6 +14,8 @@ struct ChatView: View {
 
     @State private var zoomed: ZoomedImage?
     @State private var nearBottom = true
+    @State private var escArmed = false
+    @State private var escDisarm: Task<Void, Never>?
 
     struct MentionCandidate: Identifiable {
         let path: String
@@ -49,6 +51,12 @@ struct ChatView: View {
             mentionDismissed = false
         }
         .onChange(of: cockpit.sessionID, initial: true) { installKeyMonitor() }
+        .onChange(of: cockpit.isBusy) {
+            if !cockpit.isBusy {
+                escDisarm?.cancel()
+                escArmed = false
+            }
+        }
         .onDisappear { removeKeyMonitor() }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -120,6 +128,16 @@ struct ChatView: View {
                 }
                 return nil
             }
+            if event.keyCode == 53, cockpit.isBusy {
+                if view.escArmed {
+                    view.escDisarm?.cancel()
+                    view.escArmed = false
+                    Task { await cockpit.stop() }
+                } else {
+                    view.armEscInterrupt()
+                }
+                return nil
+            }
             if event.keyCode == 48, event.modifierFlags.contains(.shift) {
                 let modes = Self.modeChoices.map(\.mode)
                 let current = cockpit.preferredMode ?? cockpit.detectedMode ?? .manual
@@ -151,6 +169,16 @@ struct ChatView: View {
                 else { return nil }
                 return bitmap.representation(using: .png, properties: [:])
             }
+    }
+
+    private func armEscInterrupt() {
+        withAnimation(.easeOut(duration: 0.15)) { escArmed = true }
+        escDisarm?.cancel()
+        escDisarm = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) { escArmed = false }
+        }
     }
 
     private func removeKeyMonitor() {
@@ -539,6 +567,14 @@ struct ChatView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Parar o que está rodando")
+                    if escArmed {
+                        Text("Esc duas vezes interrompe")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                            .lineLimit(1)
+                            .fixedSize()
+                            .transition(.opacity)
+                    }
                 } else if cockpit.pending != nil || cockpit.pendingQuestion != nil {
                     Text("Aguardando você").font(.system(size: 10)).foregroundStyle(.orange)
                 } else if let status = visibleStatus {
