@@ -317,7 +317,7 @@ struct ChatView: View {
             Spacer(minLength: 64)
             bubble(text: line.text, moment: line.timestamp,
                    tint: AnyShapeStyle(Color.accentColor.opacity(0.22)),
-                   images: line.images)
+                   images: line.images, files: line.files)
         }
     }
 
@@ -330,10 +330,25 @@ struct ChatView: View {
     }
 
     private func bubble(text: String, moment: Date?, tint: AnyShapeStyle,
-                        markdown: Bool = false, images: [Data] = []) -> some View {
+                        markdown: Bool = false, images: [Data] = [],
+                        files: [String] = []) -> some View {
         let sizes = images.map(Self.displaySize(for:))
         let contentWidth = sizes.map(\.width).max()
         return VStack(alignment: .leading, spacing: 6) {
+            ForEach(files, id: \.self) { name in
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Text(name)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            }
             ForEach(Array(images.enumerated()), id: \.offset) { index, data in
                 if let image = NSImage(data: data) {
                     Image(nsImage: image)
@@ -492,8 +507,8 @@ struct ChatView: View {
         VStack(spacing: 7) {
             mentionSuggestions
 
-            if !cockpit.pendingImages.isEmpty {
-                pendingImageRow
+            if !cockpit.pendingAttachments.isEmpty {
+                pendingAttachmentRow
             }
 
             TextField("Peça uma alteração…", text: $cockpit.prompt, axis: .vertical)
@@ -535,12 +550,19 @@ struct ChatView: View {
                         .lineLimit(1)
                 }
                 Spacer()
+                Button(action: attachFiles) {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Anexar arquivos")
                 Button(action: submit) {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 19))
                 }
                 .buttonStyle(.plain)
                 .disabled(cockpit.prompt.trimmingCharacters(in: .whitespaces).isEmpty
-                          && cockpit.pendingImages.isEmpty)
+                          && cockpit.pendingAttachments.isEmpty)
             }
         }
         .padding(12)
@@ -667,34 +689,56 @@ struct ChatView: View {
         Task { await cockpit.send(text: text) }
     }
 
-    private var pendingImageRow: some View {
+    private var pendingAttachmentRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(cockpit.pendingImages) { pasted in
-                    if let image = NSImage(data: pasted.data) {
+                ForEach(cockpit.pendingAttachments) { pending in
+                    if pending.isImage, let image = NSImage(data: pending.data) {
                         Image(nsImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 56, height: 56)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .overlay(alignment: .topTrailing) {
-                                Button {
-                                    cockpit.removeImage(pasted.id)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(.white, .black.opacity(0.6))
-                                }
-                                .buttonStyle(.plain)
-                                .padding(2)
-                                .help("Remover imagem")
+                                removeAttachmentButton(pending.id, help: "Remover imagem")
                             }
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                            Text(pending.name ?? "arquivo")
+                                .font(.system(size: 11))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: 160, alignment: .leading)
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(height: 56)
+                        .background(.quaternary.opacity(0.4),
+                                    in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(alignment: .topTrailing) {
+                            removeAttachmentButton(pending.id, help: "Remover arquivo")
+                        }
                     }
                 }
             }
             .padding(.top, 2)
         }
         .frame(height: 62)
+    }
+
+    private func removeAttachmentButton(_ id: UUID, help: String) -> some View {
+        Button {
+            cockpit.removeAttachment(id)
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(.white, .black.opacity(0.6))
+        }
+        .buttonStyle(.plain)
+        .padding(2)
+        .help(help)
     }
 
     private var modelBadge: some View {
@@ -781,6 +825,44 @@ struct ChatView: View {
         .buttonStyle(.plain)
         .fixedSize()
         .help(cockpit.workingDirectory.path)
+    }
+
+    private static let imageExtensions: Set<String> =
+        ["png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "bmp"]
+
+    private func attachFiles() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.prompt = "Anexar"
+        panel.directoryURL = cockpit.workingDirectory
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            if Self.imageExtensions.contains(url.pathExtension.lowercased()),
+               let image = NSImage(contentsOf: url),
+               let tiff = image.tiffRepresentation,
+               let bitmap = NSBitmapImageRep(data: tiff),
+               let png = bitmap.representation(using: .png, properties: [:]) {
+                cockpit.attach(imageData: png)
+            } else if url.pathExtension.lowercased() == "pdf",
+                      let data = try? Data(contentsOf: url) {
+                cockpit.attach(fileData: data, name: url.lastPathComponent,
+                               mediaType: "application/pdf")
+            } else {
+                mentionPath(for: url)
+            }
+        }
+    }
+
+    private func mentionPath(for url: URL) {
+        let root = cockpit.workingDirectory.path
+        let path = url.path.hasPrefix(root + "/")
+            ? String(url.path.dropFirst(root.count + 1))
+            : url.path
+        var prompt = cockpit.prompt
+        if !prompt.isEmpty, !prompt.hasSuffix(" ") { prompt += " " }
+        cockpit.prompt = prompt + "@" + path + " "
     }
 
     private func chooseSessionFolder() {

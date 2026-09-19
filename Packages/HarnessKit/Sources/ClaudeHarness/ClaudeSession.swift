@@ -1,7 +1,7 @@
 import Foundation
 import HarnessCore
 
-public struct ImageAttachment: Sendable, Equatable {
+public struct MediaAttachment: Sendable, Equatable {
     public let mediaType: String
     public let data: Data
 
@@ -9,6 +9,8 @@ public struct ImageAttachment: Sendable, Equatable {
         self.mediaType = mediaType
         self.data = data
     }
+
+    public var isImage: Bool { mediaType.hasPrefix("image/") }
 }
 
 public actor ClaudeSession {
@@ -67,24 +69,24 @@ public actor ClaudeSession {
         }
     }
 
-    public func send(_ text: String, images: [ImageAttachment] = []) async throws {
-        var line = try JSONEncoder().encode(Self.userTurn(text: text, images: images))
+    public func send(_ text: String, attachments: [MediaAttachment] = []) async throws {
+        var line = try JSONEncoder().encode(Self.userTurn(text: text, attachments: attachments))
         line.append(0x0A)
         try await channel.writeTurn(line)
     }
 
-    static func userTurn(text: String, images: [ImageAttachment]) -> JSONValue {
+    static func userTurn(text: String, attachments: [MediaAttachment]) -> JSONValue {
         let content: JSONValue
-        if images.isEmpty {
+        if attachments.isEmpty {
             content = .string(text)
         } else {
-            var blocks: [JSONValue] = images.map { image in
+            var blocks: [JSONValue] = attachments.map { attachment in
                 .object([
-                    "type": .string("image"),
+                    "type": .string(attachment.isImage ? "image" : "document"),
                     "source": .object([
                         "type": .string("base64"),
-                        "media_type": .string(image.mediaType),
-                        "data": .string(image.data.base64EncodedString()),
+                        "media_type": .string(attachment.mediaType),
+                        "data": .string(attachment.data.base64EncodedString()),
                     ]),
                 ])
             }

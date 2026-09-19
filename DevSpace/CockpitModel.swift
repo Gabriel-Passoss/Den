@@ -12,6 +12,7 @@ final class CockpitModel {
         let role: Role
         let text: String
         var images: [Data] = []
+        var files: [String] = []
 
         let timestamp: Date
 
@@ -36,12 +37,16 @@ final class CockpitModel {
     var isRateLimited = false
     var isViewed: (() -> Bool)?
 
-    struct PastedImage: Identifiable, Equatable {
+    struct PendingAttachment: Identifiable, Equatable {
         let id = UUID()
         let data: Data
+        let mediaType: String
+        var name: String?
+
+        var isImage: Bool { mediaType.hasPrefix("image/") }
     }
 
-    var pendingImages: [PastedImage] = []
+    var pendingAttachments: [PendingAttachment] = []
 
     struct QuestionPrompt: Identifiable {
         struct Option { let label: String; let detail: String }
@@ -196,49 +201,59 @@ final class CockpitModel {
     }
 
     func attach(imageData: Data) {
-        pendingImages.append(PastedImage(data: imageData))
+        pendingAttachments.append(PendingAttachment(data: imageData, mediaType: "image/png"))
     }
 
-    func removeImage(_ id: UUID) {
-        pendingImages.removeAll { $0.id == id }
+    func attach(fileData: Data, name: String, mediaType: String) {
+        pendingAttachments.append(
+            PendingAttachment(data: fileData, mediaType: mediaType, name: name))
+    }
+
+    func removeAttachment(_ id: UUID) {
+        pendingAttachments.removeAll { $0.id == id }
     }
 
     private static var attachmentsRoot: URL {
         URL.applicationSupportDirectory.appending(path: "DevSpace/attachments")
     }
 
-    private func persistAttachment(_ data: Data) -> Attachment? {
+    private func persistAttachment(_ pending: PendingAttachment) -> Attachment? {
         let root = Self.attachmentsRoot
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let file = root.appending(path: "\(UUID().uuidString).png")
-        guard (try? data.write(to: file)) != nil else { return nil }
-        return Attachment(kind: "image", path: file.path,
-                          raw: .object(["media_type": .string("image/png")]))
+        let ext = pending.isImage
+            ? "png"
+            : ((pending.name as NSString?)?.pathExtension).flatMap { $0.isEmpty ? nil : $0 } ?? "bin"
+        let file = root.appending(path: "\(UUID().uuidString).\(ext)")
+        guard (try? pending.data.write(to: file)) != nil else { return nil }
+        var raw: [String: JSONValue] = ["media_type": .string(pending.mediaType)]
+        if let name = pending.name { raw["name"] = .string(name) }
+        return Attachment(kind: pending.isImage ? "image" : "file",
+                          path: file.path, raw: .object(raw))
     }
 
     func send(text explicit: String? = nil) async {
         let text = (explicit ?? prompt).trimmingCharacters(in: .whitespacesAndNewlines)
-        let images = pendingImages
-        guard !text.isEmpty || !images.isEmpty else { return }
+        let attached = pendingAttachments
+        guard !text.isEmpty || !attached.isEmpty else { return }
         prompt = ""
-        pendingImages = []
+        pendingAttachments = []
         if session == nil { await start() }
         guard let session else { return }
 
-        let attachments = images.compactMap { persistAttachment($0.data) }
+        let stored = attached.compactMap { persistAttachment($0) }
         let entry = TranscriptEntry(
             timestamp: Date(),
-            kind: .userMessage(text: text, attachments: attachments),
+            kind: .userMessage(text: text, attachments: stored),
             raw: .object(["type": .string("user"), "text": .string(text)])
         )
         render(entry, persist: true)
-        await nameFromFirstTurn(text.isEmpty ? "Imagem" : text)
+        await nameFromFirstTurn(text.isEmpty ? "Anexo" : text)
 
         isBusy = true
         turnStartedAt = Date()
         do {
-            try await session.send(text, images: images.map {
-                ImageAttachment(mediaType: "image/png", data: $0.data)
+            try await session.send(text, attachments: attached.map {
+                MediaAttachment(mediaType: $0.mediaType, data: $0.data)
             })
         } catch {
             append(.notice, "não consegui mandar o turno: \(error)")
@@ -488,11 +503,15 @@ final class CockpitModel {
         case .userMessage(let text, let attachments):
             let images = attachments.filter { $0.kind == "image" }
                 .compactMap { try? Data(contentsOf: URL(fileURLWithPath: $0.path)) }
-            if images.isEmpty {
+            let files = attachments.filter { $0.kind == "file" }.map { attachment in
+                attachment.raw["name"]?.stringValue
+                    ?? (attachment.path as NSString).lastPathComponent
+            }
+            if images.isEmpty, files.isEmpty {
                 append(.user, text, at: moment)
             } else {
                 lines.append(Line(id: UUID(), role: .user, text: text,
-                                  images: images, timestamp: moment))
+                                  images: images, files: files, timestamp: moment))
             }
         case .assistantText(let text):
             streaming = ""
