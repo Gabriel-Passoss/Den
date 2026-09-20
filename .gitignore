@@ -1,0 +1,10 @@
+# Build
+.build/
+
+# Tooling de agentes (skills reinstaláveis via skills-lock)
+.agents/
+.claude/
+skills-lock.json
+
+# macOS
+.DS_Store
