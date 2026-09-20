@@ -27,6 +27,9 @@ struct ChatView: View {
     @State private var mentionSelection = 0
     @State private var mentionDismissed = false
 
+    @AppStorage("DevSpace.gitInspector") private var showChanges = false
+    let gitChanges: GitChangesModel
+
     private struct ScrollEdgeState: Equatable {
         var distance: CGFloat
         var contentHeight: CGFloat
@@ -44,6 +47,52 @@ struct ChatView: View {
         .navigationTitle(cockpit.title)
         .navigationSubtitle(cockpit.locationSummary)
 
+        .inspector(isPresented: $showChanges) {
+            GitChangesPanel(model: gitChanges, directory: cockpit.workingDirectory,
+                            close: { showChanges = false })
+                .inspectorColumnWidth(min: 280, ideal: 560, max: 560)
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showChanges.toggle()
+                } label: {
+                    Label {
+                        Text("Alterações")
+                    } icon: {
+                        Image("GitChanges")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 16, height: 16)
+                    }
+                }
+                .keyboardShortcut("0", modifiers: [.option, .command])
+                .help(showChanges ? "Ocultar alterações do Git"
+                                  : "Mostrar alterações do Git")
+            }
+        }
+        .task {
+            #if DEBUG
+            guard let plan = ProcessInfo.processInfo
+                .environment["DEVSPACE_FAKE_TOGGLE_GIT"] else { return }
+            var elapsed = 0.0
+            for moment in plan.split(separator: ",").compactMap({ Double($0) }) {
+                try? await Task.sleep(for: .seconds(moment - elapsed))
+                elapsed = moment
+                showChanges.toggle()
+            }
+            #endif
+        }
+        .task(id: "\(showChanges)|\(cockpit.workingDirectory.path)") {
+            guard showChanges else { return }
+            await gitChanges.load(directory: cockpit.workingDirectory)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled else { return }
+                await gitChanges.load(directory: cockpit.workingDirectory)
+            }
+        }
+
         .task(id: cockpit.sessionID) { await cockpit.loadBranch() }
         .task(id: cockpit.workingDirectory) { await loadFileIndex() }
         .onChange(of: cockpit.prompt) {
@@ -55,6 +104,11 @@ struct ChatView: View {
             if !cockpit.isBusy {
                 escDisarm?.cancel()
                 escArmed = false
+                if showChanges {
+                    let gitChanges = self.gitChanges
+                    let directory = cockpit.workingDirectory
+                    Task { await gitChanges.load(directory: directory) }
+                }
             }
         }
         .onDisappear { removeKeyMonitor() }

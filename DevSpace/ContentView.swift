@@ -6,6 +6,8 @@ struct ContentView: View {
 
     @State private var columns = NavigationSplitViewVisibility.all
 
+    @State private var gitChanges = GitChangesModel()
+
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
 
@@ -13,7 +15,7 @@ struct ContentView: View {
                 .toolbar(removing: .sidebarToggle)
         } detail: {
             if let cockpit = workspace.active {
-                ChatView(cockpit: cockpit)
+                ChatView(cockpit: cockpit, gitChanges: gitChanges)
             } else {
                 empty
             }
@@ -51,6 +53,18 @@ struct ContentView: View {
                 if ProcessInfo.processInfo.environment["DEVSPACE_FAKE_BUSY"] != nil {
                     workspace.active?.isBusy = true
                     workspace.active?.turnStartedAt = Date()
+                }
+                if let interval = env["DEVSPACE_FAKE_SWITCH"].flatMap(Double.init) {
+                    let workspace = self.workspace
+                    Task { @MainActor in
+                        while !Task.isCancelled {
+                            try? await Task.sleep(for: .seconds(interval))
+                            let ids = workspace.summaries.map(\.id)
+                            guard ids.count > 1, let current = workspace.selectedID,
+                                  let index = ids.firstIndex(of: current) else { continue }
+                            await workspace.select(ids[(index + 1) % ids.count])
+                        }
+                    }
                 }
             }
             DebugSnapshot.arm()
