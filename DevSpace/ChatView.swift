@@ -153,6 +153,12 @@ struct ChatView: View {
         let zoomed = $zoomed
         let view = self
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 36, event.modifierFlags.contains(.shift),
+               let editor = NSApp.keyWindow?.firstResponder as? NSTextView,
+               editor.isFieldEditor {
+                editor.insertNewlineIgnoringFieldEditor(nil)
+                return nil
+            }
             let matches = view.currentMentionMatches()
             if !matches.isEmpty {
                 let selected = min(view.mentionSelection, matches.count - 1)
@@ -274,6 +280,7 @@ struct ChatView: View {
                 .frame(maxWidth: 760, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .center)
             }
+            .defaultScrollAnchor(.bottom)
             .safeAreaInset(edge: .bottom, spacing: 0) { transientCards }
             .onScrollGeometryChange(for: ScrollEdgeState.self) { geometry in
                 ScrollEdgeState(
@@ -315,6 +322,7 @@ struct ChatView: View {
             .onChange(of: cockpit.lines.count) { scrollToEnd(proxy) }
             .onChange(of: cockpit.streaming) { scrollToEnd(proxy) }
             .onChange(of: cockpit.pendingQuestion?.id) { scrollToEnd(proxy) }
+            .onChange(of: typingVisible) { scrollToEnd(proxy) }
         }
         .id(cockpit.sessionID)
     }
@@ -347,8 +355,14 @@ struct ChatView: View {
         }
     }
 
+    private var typingVisible: Bool {
+        cockpit.streaming.isEmpty && cockpit.isBusy
+            && cockpit.pending == nil && cockpit.pendingQuestion == nil
+    }
+
     private func jumpToEnd(_ proxy: ScrollViewProxy) {
         if !cockpit.streaming.isEmpty { proxy.scrollTo("streaming", anchor: .bottom) }
+        else if typingVisible { proxy.scrollTo("typing", anchor: .bottom) }
         else if let last = cockpit.lines.last { proxy.scrollTo(last.id, anchor: .bottom) }
     }
 
@@ -356,6 +370,7 @@ struct ChatView: View {
         guard nearBottom else { return }
         withAnimation(.easeOut(duration: 0.15)) {
             if !cockpit.streaming.isEmpty { proxy.scrollTo("streaming", anchor: .bottom) }
+            else if typingVisible { proxy.scrollTo("typing", anchor: .bottom) }
             else if let last = cockpit.lines.last { proxy.scrollTo(last.id, anchor: .bottom) }
         }
     }
