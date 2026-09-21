@@ -58,6 +58,16 @@ struct ContentView: View {
                     workspace.active?.isBusy = true
                     workspace.active?.turnStartedAt = Date()
                 }
+                if env["DEVSPACE_FAKE_STREAM"] != nil, let cockpit = workspace.active {
+                    cockpit.isBusy = true
+                    cockpit.turnStartedAt = Date()
+                    Task { @MainActor in
+                        for i in 0..<400 {
+                            try? await Task.sleep(for: .milliseconds(40))
+                            cockpit.debugStream("token \(i) de resposta simulada. ")
+                        }
+                    }
+                }
                 if let plan = env["DEVSPACE_FAKE_SWITCH"] {
                     // "3" = troca a cada 3s para sempre; "3,4" = só 4 trocas.
                     let parts = plan.split(separator: ",")

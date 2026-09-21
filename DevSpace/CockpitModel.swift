@@ -27,6 +27,36 @@ final class CockpitModel {
     var lines: [Line] = []
 
     var streaming: String = ""
+
+    /// Deltas chegam dezenas de vezes por segundo; publicar cada um invalida a
+    /// transcrição inteira. O buffer agrupa os tokens em ~12 atualizações/s.
+    private var streamBuffer = ""
+    private var streamFlush: Task<Void, Never>?
+
+    private func appendStreaming(_ text: String) {
+        streamBuffer += text
+        guard streamFlush == nil else { return }
+        streamFlush = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(80))
+            guard let self else { return }
+            self.streamFlush = nil
+            guard !self.streamBuffer.isEmpty else { return }
+            self.streaming += self.streamBuffer
+            self.streamBuffer = ""
+        }
+    }
+
+    #if DEBUG
+    /// Só para os hooks DEVSPACE_FAKE_*: simula deltas pelo caminho real.
+    func debugStream(_ text: String) { appendStreaming(text) }
+    #endif
+
+    private func resetStreaming() {
+        streamFlush?.cancel()
+        streamFlush = nil
+        streamBuffer = ""
+        streaming = ""
+    }
     var pending: PermissionRequest?
     var prompt: String = ""
     var status: String = ""
@@ -476,9 +506,9 @@ final class CockpitModel {
                 self.model = model
                 Task { await persistMetadata() }
             case .turnStarted:
-                streaming = ""
+                resetStreaming()
             case .textDelta(_, let text):
-                streaming += text
+                appendStreaming(text)
             case .notice(let subtype, let text):
                 if subtype == "status" { status = text }
             case .thinkingDelta, .toolInputDelta:
@@ -542,7 +572,7 @@ final class CockpitModel {
                                   images: images, files: files, timestamp: moment))
             }
         case .assistantText(let text):
-            streaming = ""
+            resetStreaming()
             append(.assistant, text, at: moment)
             if persist, !(isViewed?() ?? false) { hasUnread = true }
         case .assistantThinking(let text):
@@ -574,7 +604,7 @@ final class CockpitModel {
 
             isBusy = false
             turnStartedAt = nil
-            streaming = ""
+            resetStreaming()
             if !result.isError { isRateLimited = false }
             if result.isError {
                 append(.notice, "o turno falhou no harness"

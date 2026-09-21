@@ -5,7 +5,7 @@ struct MarkdownText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            ForEach(Self.parse(text)) { block in
+            ForEach(Self.blocks(for: text)) { block in
                 render(block)
             }
         }
@@ -84,6 +84,27 @@ struct MarkdownText: View {
             case quote(AttributedString)
             case divider
         }
+    }
+
+    /// Parsear markdown é caro e o body reroda a cada token do streaming:
+    /// sem cache, toda bolha visível é re-parseada dezenas de vezes por segundo.
+    private final class Parsed {
+        let blocks: [Block]
+        init(_ blocks: [Block]) { self.blocks = blocks }
+    }
+
+    private static let cache: NSCache<NSString, Parsed> = {
+        let cache = NSCache<NSString, Parsed>()
+        cache.countLimit = 240
+        return cache
+    }()
+
+    static func blocks(for text: String) -> [Block] {
+        let key = text as NSString
+        if let hit = cache.object(forKey: key) { return hit.blocks }
+        let parsed = parse(text)
+        cache.setObject(Parsed(parsed), forKey: key)
+        return parsed
     }
 
     static func parse(_ text: String) -> [Block] {
