@@ -16,6 +16,8 @@ struct ContentView: View {
         } detail: {
             if let cockpit = workspace.active {
                 ChatView(cockpit: cockpit, gitChanges: gitChanges)
+            } else if workspace.selectedID != nil {
+                sessionLoading
             } else {
                 empty
             }
@@ -82,6 +84,23 @@ struct ContentView: View {
 
     private func startFirstConversation() {
         Task { await workspace.newSession() }
+    }
+
+    @State private var loadingSpinnerVisible = false
+
+    /// Sessão selecionada ainda carregando do disco: superfície quieta, sem
+    /// flash do estado vazio; o spinner só aparece se demorar de verdade.
+    private var sessionLoading: some View {
+        ProgressView()
+            .controlSize(.small)
+            .opacity(loadingSpinnerVisible ? 1 : 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("")
+            .task {
+                loadingSpinnerVisible = false
+                try? await Task.sleep(for: .milliseconds(400))
+                loadingSpinnerVisible = true
+            }
     }
 
     private var empty: some View {
