@@ -6,10 +6,10 @@ nonisolated enum GitFileState: Equatable {
     var badge: String {
         switch self {
         case .modified: "M"
-        case .added: "A"
-        case .deleted: "D"
+        case .added: "+"
+        case .deleted: "−"
         case .renamed: "R"
-        case .untracked: "?"
+        case .untracked: "+"
         case .conflicted: "!"
         }
     }
