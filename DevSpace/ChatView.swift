@@ -262,7 +262,7 @@ struct ChatView: View {
                         case .line(let line):
                             row(line).id(line.id)
                         case .collapsed(let id, let lines):
-                            unrecognized(id: id, lines: lines).id(id)
+                            steps(id: id, lines: lines).id(id)
                         }
                     }
                     if !cockpit.streaming.isEmpty {
@@ -563,34 +563,56 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    private func unrecognized(id: UUID, lines: [CockpitModel.Line]) -> some View {
+    /// Bastidores de um turno (pensamento, ferramentas, avisos) recolhidos em
+    /// uma linha só; o conteúdo continua a um clique de distância.
+    private func steps(id: UUID, lines: [CockpitModel.Line]) -> some View {
         let isOpen = expanded.contains(id)
-        VStack(alignment: .leading, spacing: 5) {
+        return VStack(alignment: .leading, spacing: 6) {
             Button {
-                if isOpen { expanded.remove(id) } else { expanded.insert(id) }
+                withAnimation(.easeOut(duration: 0.15)) {
+                    if isOpen { expanded.remove(id) } else { expanded.insert(id) }
+                }
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: isOpen ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 7, weight: .bold))
-                    Text(lines.count == 1 ? "1 evento não reconhecido"
-                                          : "\(lines.count) eventos não reconhecidos")
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    Image(systemName: "wrench.and.screwdriver")
                         .font(.system(size: 10))
+                    Text(lines.count == 1 ? "1 passo" : "\(lines.count) passos")
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                    Spacer(minLength: 0)
                 }
                 .foregroundStyle(.tertiary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .help(isOpen ? "Recolher os passos" : "Ver o que a IA fez")
+            .accessibilityLabel(isOpen ? "Recolher passos" : "Expandir \(lines.count) passos")
 
             if isOpen {
-                ForEach(lines) { line in
-                    Text(line.text)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(lines) { line in
+                        if line.role == .unknown {
+                            Text(line.text)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            row(line)
+                        }
+                    }
                 }
-                .padding(.leading, 12)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 8)
             }
         }
+        .background(.quaternary.opacity(isOpen ? 0.18 : 0),
+                    in: RoundedRectangle(cornerRadius: 9))
     }
 
     // MARK: - Permissão

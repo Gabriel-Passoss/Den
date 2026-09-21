@@ -7,7 +7,12 @@ import ClaudeHarness
 @Observable
 final class CockpitModel {
     struct Line: Identifiable {
-        enum Role { case user, assistant, thinking, tool, toolResult, notice, unknown }
+        enum Role {
+            case user, assistant, thinking, tool, toolResult, notice, unknown
+
+            /// Bastidores: passos intermediários que o chat mostra recolhidos.
+            var isStep: Bool { self != .user && self != .assistant }
+        }
         let id: UUID
         let role: Role
         let text: String
@@ -665,7 +670,7 @@ final class CockpitModel {
             run = []
         }
         for line in lines {
-            if line.role == .unknown { run.append(line) }
+            if line.role.isStep { run.append(line) }
             else { flush(); result.append(.line(line)) }
         }
         flush()
