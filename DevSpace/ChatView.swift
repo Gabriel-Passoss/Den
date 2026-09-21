@@ -14,6 +14,7 @@ struct ChatView: View {
 
     @State private var zoomed: ZoomedImage?
     @State private var nearBottom = true
+    @State private var scrollPosition = ScrollPosition()
     @State private var escArmed = false
     @State private var escDisarm: Task<Void, Never>?
 
@@ -124,7 +125,7 @@ struct ChatView: View {
 
     @ViewBuilder
     private var lightbox: some View {
-        if let zoomed, let image = NSImage(data: zoomed.data) {
+        if let zoomed, let image = Self.decodedImage(zoomed.data) {
             ZStack {
                 Color.black.opacity(0.65)
                     .ignoresSafeArea()
@@ -249,9 +250,8 @@ struct ChatView: View {
     // MARK: - Transcript
 
     private var transcript: some View {
-        ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: 14) {
                     ForEach(cockpit.blocks) { block in
                         switch block {
                         case .line(let line):
@@ -281,6 +281,7 @@ struct ChatView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
             .defaultScrollAnchor(.bottom)
+            .scrollPosition($scrollPosition)
             .safeAreaInset(edge: .bottom, spacing: 0) { transientCards }
             .onScrollGeometryChange(for: ScrollEdgeState.self) { geometry in
                 ScrollEdgeState(
@@ -289,6 +290,12 @@ struct ChatView: View {
                            - geometry.contentInsets.bottom),
                     contentHeight: geometry.contentSize.height)
             } action: { old, new in
+                #if DEBUG
+                if ProcessInfo.processInfo.environment["DEVSPACE_SCROLL_LOG"] != nil {
+                    print(String(format: "[scroll] content=%.0f distFromBottom=%.0f",
+                                 new.contentHeight, new.distance))
+                }
+                #endif
                 if new.distance <= 100 {
                     nearBottom = true
                 } else if old.contentHeight == new.contentHeight,
@@ -299,7 +306,7 @@ struct ChatView: View {
             .overlay(alignment: .bottom) {
                 if !nearBottom {
                     Button {
-                        withAnimation(.easeOut(duration: 0.2)) { jumpToEnd(proxy) }
+                        withAnimation(.easeOut(duration: 0.2)) { jumpToEnd() }
                     } label: {
                         Image(systemName: "arrow.down")
                             .font(.system(size: 13, weight: .semibold))
@@ -317,13 +324,16 @@ struct ChatView: View {
             .animation(.easeOut(duration: 0.15), value: nearBottom)
             .onAppear {
                 nearBottom = true
-                jumpToEnd(proxy)
+                jumpToEnd()
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(80))
+                    jumpToEnd()
+                }
             }
-            .onChange(of: cockpit.lines.count) { scrollToEnd(proxy) }
-            .onChange(of: cockpit.streaming) { scrollToEnd(proxy) }
-            .onChange(of: cockpit.pendingQuestion?.id) { scrollToEnd(proxy) }
-            .onChange(of: typingVisible) { scrollToEnd(proxy) }
-        }
+            .onChange(of: cockpit.lines.count) { scrollToEnd() }
+            .onChange(of: cockpit.streaming) { scrollToEnd() }
+            .onChange(of: cockpit.pendingQuestion?.id) { scrollToEnd() }
+            .onChange(of: typingVisible) { scrollToEnd() }
         .id(cockpit.sessionID)
     }
 
@@ -360,18 +370,16 @@ struct ChatView: View {
             && cockpit.pending == nil && cockpit.pendingQuestion == nil
     }
 
-    private func jumpToEnd(_ proxy: ScrollViewProxy) {
-        if !cockpit.streaming.isEmpty { proxy.scrollTo("streaming", anchor: .bottom) }
-        else if typingVisible { proxy.scrollTo("typing", anchor: .bottom) }
-        else if let last = cockpit.lines.last { proxy.scrollTo(last.id, anchor: .bottom) }
+    /// Rolar até a BORDA é exato mesmo em LazyVStack; scrollTo(id:) salta por
+    /// alturas estimadas e passa do fim em transcripts grandes.
+    private func jumpToEnd() {
+        scrollPosition.scrollTo(edge: .bottom)
     }
 
-    private func scrollToEnd(_ proxy: ScrollViewProxy) {
+    private func scrollToEnd() {
         guard nearBottom else { return }
         withAnimation(.easeOut(duration: 0.15)) {
-            if !cockpit.streaming.isEmpty { proxy.scrollTo("streaming", anchor: .bottom) }
-            else if typingVisible { proxy.scrollTo("typing", anchor: .bottom) }
-            else if let last = cockpit.lines.last { proxy.scrollTo(last.id, anchor: .bottom) }
+            scrollPosition.scrollTo(edge: .bottom)
         }
     }
 
@@ -387,7 +395,7 @@ struct ChatView: View {
         case .thinking:
             HStack(alignment: .top, spacing: 7) {
                 Image(systemName: "brain").font(.system(size: 10)).foregroundStyle(.tertiary)
-                Text(line.text)
+                Text(Self.clipped(line.text))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .italic()
@@ -447,7 +455,7 @@ struct ChatView: View {
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             }
             ForEach(Array(images.enumerated()), id: \.offset) { index, data in
-                if let image = NSImage(data: data) {
+                if let image = Self.decodedImage(data) {
                     Image(nsImage: image)
                         .resizable()
                         .frame(width: sizes[index].width, height: sizes[index].height)
@@ -462,9 +470,9 @@ struct ChatView: View {
             }
             HStack(alignment: .lastTextBaseline, spacing: 8) {
                 if markdown {
-                    MarkdownText(text: text)
+                    MarkdownText(text: Self.clipped(text, limit: 12_000))
                 } else if !text.isEmpty {
-                    Text(text)
+                    Text(Self.clipped(text, limit: 12_000))
                         .font(.system(size: 13))
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -483,11 +491,32 @@ struct ChatView: View {
         .background(tint, in: RoundedRectangle(cornerRadius: 13))
     }
 
+    /// Decodificar NSImage a cada render é caro; o cache segura o decode único.
+    private static let decodedImages = NSCache<NSData, NSImage>()
+
+    static func decodedImage(_ data: Data) -> NSImage? {
+        let key = data as NSData
+        if let cached = decodedImages.object(forKey: key) { return cached }
+        guard let image = NSImage(data: data) else { return nil }
+        decodedImages.setObject(image, forKey: key)
+        return image
+    }
+
     private static func displaySize(for data: Data) -> CGSize {
-        guard let image = NSImage(data: data),
+        guard let image = decodedImage(data),
               image.size.width > 0, image.size.height > 0 else { return .zero }
         let scale = min(1, min(280 / image.size.width, 220 / image.size.height))
         return CGSize(width: image.size.width * scale, height: image.size.height * scale)
+    }
+
+    /// Exibição limitada: tool outputs e dumps gigantes explodem a altura do
+    /// transcript (milhões de pontos) e quebram o scroll do LazyVStack.
+    /// O conteúdo completo continua no arquivo da sessão.
+    private static func clipped(_ text: String, limit: Int = 1_200) -> String {
+        guard text.utf8.count > limit else { return text }
+        let head = String(text.prefix(limit))
+        let hidden = text.count - head.count
+        return head + "\n⋯ +\(hidden) caracteres não exibidos"
     }
 
     private func chip(icon: String, text: String, mono: Bool, dim: Bool = false) -> some View {
@@ -496,7 +525,7 @@ struct ChatView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(dim ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
                 .frame(width: 13)
-            Text(text)
+            Text(Self.clipped(text))
                 .font(.system(size: 11, design: mono ? .monospaced : .default))
                 .foregroundStyle(dim ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
                 .textSelection(.enabled)
@@ -798,7 +827,7 @@ struct ChatView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(cockpit.pendingAttachments) { pending in
-                    if pending.isImage, let image = NSImage(data: pending.data) {
+                    if pending.isImage, let image = Self.decodedImage(pending.data) {
                         Image(nsImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)

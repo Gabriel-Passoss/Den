@@ -156,7 +156,6 @@ final class GitChangesModel {
         hasRepo = !roots.isEmpty
         if !force, newSignature == cache[directory]?.signature {
             trace("keep #\(id) \(directory.lastPathComponent) (assinatura igual)")
-            repos = cache[directory]?.repos ?? repos
             loadedOnce = true
             return
         }

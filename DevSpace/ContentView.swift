@@ -26,7 +26,9 @@ struct ContentView: View {
             #if DEBUG
             if ProcessInfo.processInfo.environment["DEVSPACE_FAKE"] != nil,
                let first = workspace.summaries.first {
-                await workspace.select(first.id)
+                let wanted = ProcessInfo.processInfo
+                    .environment["DEVSPACE_FAKE_SELECT"].flatMap(UUID.init)
+                await workspace.select(wanted ?? first.id)
                 let delayed = ProcessInfo.processInfo
                     .environment["DEVSPACE_FAKE_DELAY"].flatMap(Double.init)
                 if let delayed {
@@ -54,10 +56,16 @@ struct ContentView: View {
                     workspace.active?.isBusy = true
                     workspace.active?.turnStartedAt = Date()
                 }
-                if let interval = env["DEVSPACE_FAKE_SWITCH"].flatMap(Double.init) {
+                if let plan = env["DEVSPACE_FAKE_SWITCH"] {
+                    // "3" = troca a cada 3s para sempre; "3,4" = só 4 trocas.
+                    let parts = plan.split(separator: ",")
+                    let interval = Double(parts.first ?? "4") ?? 4
+                    let limit = parts.count > 1 ? Int(parts[1]) ?? .max : .max
                     let workspace = self.workspace
                     Task { @MainActor in
-                        while !Task.isCancelled {
+                        var remaining = limit
+                        while !Task.isCancelled, remaining > 0 {
+                            remaining -= 1
                             try? await Task.sleep(for: .seconds(interval))
                             let ids = workspace.summaries.map(\.id)
                             guard ids.count > 1, let current = workspace.selectedID,
