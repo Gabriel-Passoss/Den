@@ -32,8 +32,13 @@ struct ChatView: View {
     let gitChanges: GitChangesModel
 
     private struct ScrollEdgeState: Equatable {
+        var isNearBottom: Bool
         var distance: CGFloat
         var contentHeight: CGFloat
+
+        /// Arredondar mata o ruído sub-pixel: sem isso a ação dispara a cada
+        /// quadro e o SwiftUI acusa "update multiple times per frame".
+        static func bucket(_ value: CGFloat) -> CGFloat { (value / 8).rounded() * 8 }
     }
 
     var body: some View {
@@ -284,11 +289,13 @@ struct ChatView: View {
             .scrollPosition($scrollPosition)
             .safeAreaInset(edge: .bottom, spacing: 0) { transientCards }
             .onScrollGeometryChange(for: ScrollEdgeState.self) { geometry in
-                ScrollEdgeState(
-                    distance: geometry.contentSize.height
-                        - (geometry.contentOffset.y + geometry.containerSize.height
-                           - geometry.contentInsets.bottom),
-                    contentHeight: geometry.contentSize.height)
+                let distance = geometry.contentSize.height
+                    - (geometry.contentOffset.y + geometry.containerSize.height
+                       - geometry.contentInsets.bottom)
+                return ScrollEdgeState(
+                    isNearBottom: distance <= 100,
+                    distance: ScrollEdgeState.bucket(distance),
+                    contentHeight: ScrollEdgeState.bucket(geometry.contentSize.height))
             } action: { old, new in
                 #if DEBUG
                 if ProcessInfo.processInfo.environment["DEVSPACE_SCROLL_LOG"] != nil {
@@ -296,14 +303,19 @@ struct ChatView: View {
                                  new.contentHeight, new.distance))
                 }
                 #endif
-                if new.distance <= 100 {
-                    nearBottom = true
+                let follow: Bool
+                if new.isNearBottom {
+                    follow = true
                 } else if old.contentHeight == new.contentHeight,
                           new.distance > old.distance {
-                    nearBottom = false
+                    follow = false
+                } else {
+                    follow = nearBottom  // conteúdo cresceu: preserva a escolha
                 }
+                if nearBottom != follow { nearBottom = follow }
             }
             .overlay(alignment: .bottom) {
+                Group {
                 if !nearBottom {
                     Button {
                         withAnimation(.easeOut(duration: 0.2)) { jumpToEnd() }
@@ -320,8 +332,9 @@ struct ChatView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     .help("Ir para o final")
                 }
+                }
+                .animation(.easeOut(duration: 0.15), value: nearBottom)
             }
-            .animation(.easeOut(duration: 0.15), value: nearBottom)
             .onAppear {
                 nearBottom = true
                 jumpToEnd()
