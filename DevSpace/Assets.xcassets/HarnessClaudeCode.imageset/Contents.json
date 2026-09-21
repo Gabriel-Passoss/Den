@@ -1,11 +1,12 @@
 {
   "images" : [
     {
-      "filename" : "claude-code.png",
+      "filename" : "claude-code@1x.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "claude-code@2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
