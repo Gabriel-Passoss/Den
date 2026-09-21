@@ -1,4 +1,41 @@
 import SwiftUI
+import UniformTypeIdentifiers
+
+/// Ícones reais de tipo de arquivo, como o Finder mostra, sem asset próprio.
+enum FileTypeIcon {
+    private static var cache: [String: NSImage] = [:]
+
+    /// Extensões cujo UTType do sistema resolve errado ou genérico demais.
+    private static let overrides: [String: String] = [
+        "ts": "com.microsoft.typescript",
+    ]
+
+    /// Extensões que compartilham o mesmo imageset customizado.
+    private static let aliases: [String: String] = [
+        "jsx": "react", "tsx": "react",
+        "mjs": "js", "cjs": "js",
+        "yaml": "yml",
+        "jpeg": "jpg",
+    ]
+
+    static func image(for name: String) -> NSImage {
+        let ext = (name as NSString).pathExtension.lowercased()
+        if let cached = cache[ext] { return cached }
+
+        // Asset próprio primeiro (imageset "filetype-<ext>"), sistema como fallback.
+        let assetName = "filetype-" + (aliases[ext] ?? ext)
+        if let custom = NSImage(named: assetName) {
+            cache[ext] = custom
+            return custom
+        }
+        let type: UTType? = overrides[ext].flatMap { UTType($0) }
+            ?? UTType(filenameExtension: ext)
+            ?? UTType(filenameExtension: ext, conformingTo: .sourceCode)
+        let image = NSWorkspace.shared.icon(for: type ?? .plainText)
+        cache[ext] = image
+        return image
+    }
+}
 
 struct GitChangesPanel: View {
     let model: GitChangesModel
@@ -98,17 +135,23 @@ struct GitChangesPanel: View {
             }
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
+                LazyVStack(alignment: .leading, spacing: 6,
+                           pinnedViews: .sectionHeaders) {
                     ForEach(model.repos) { repo in
                         if model.repos.count > 1 {
                             repoHeader(repo)
                         }
                         if !collapsedRepos.contains(repo.id) {
-                            ForEach(repo.files) { file in
-                                if file.isDirectory {
-                                    folderCard(file, in: repo)
-                                } else {
-                                    fileCard(file, in: repo)
+                            ForEach(repo.items) { item in
+                                switch item {
+                                case .single(let file):
+                                    Section {
+                                        fileBody(file, in: repo)
+                                    } header: {
+                                        fileHeader(file, in: repo)
+                                    }
+                                case .group(let dir, let files):
+                                    groupCard(dir: dir, files: files, in: repo)
                                 }
                             }
                             if repo.truncatedFiles {
@@ -128,6 +171,34 @@ struct GitChangesPanel: View {
     private func placeholder(@ViewBuilder body: () -> some View) -> some View {
         VStack(spacing: 8) { body() }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Caminho relativo à sessão
+
+    private func sessionRelativePath(of path: String,
+                                     in repo: GitChangesModel.Repo) -> String {
+        let full = repo.root.appending(path: path).standardizedFileURL.path
+        let base = directory.standardizedFileURL.path
+        let fullParts = full.split(separator: "/").map(String.init)
+        let baseParts = base.split(separator: "/").map(String.init)
+        var shared = 0
+        while shared < min(fullParts.count, baseParts.count),
+              fullParts[shared] == baseParts[shared] {
+            shared += 1
+        }
+        let ups = Array(repeating: "..", count: baseParts.count - shared)
+        return (ups + fullParts[shared...]).joined(separator: "/")
+    }
+
+    private func pathText(display relative: String) -> Text {
+        let folder = (relative as NSString).deletingLastPathComponent
+        let name = (relative as NSString).lastPathComponent
+        let nameText = Text(name).font(.system(size: 12, weight: .medium))
+        guard !folder.isEmpty else { return nameText }
+        return Text(folder + "/")
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            + nameText
     }
 
     private func repoHeader(_ repo: GitChangesModel.Repo) -> some View {
@@ -179,131 +250,145 @@ struct GitChangesPanel: View {
         .accessibilityLabel(isCollapsed ? "Expandir \(repo.name)" : "Recolher \(repo.name)")
     }
 
-    // MARK: - Pastas não rastreadas
+    // MARK: - Grupos de arquivos novos (pastas 100% não rastreadas)
 
-    private func folderCard(_ file: GitChangesModel.FileChange,
-                            in repo: GitChangesModel.Repo) -> some View {
-        let key = repo.id + "/" + file.path
+    @ViewBuilder
+    private func groupCard(dir: String, files: [GitChangesModel.FileChange],
+                           in repo: GitChangesModel.Repo) -> some View {
+        let key = repo.id + "/" + dir
         let isOpen = openFolders.contains(key)
-        let done = model.isReviewed(file, in: repo)
-        return VStack(alignment: .leading, spacing: 0) {
+        let reviewed = files.count { model.isReviewed($0, in: repo) }
+        let allDone = reviewed == files.count && !files.isEmpty
+        let displayDir = dir.hasSuffix("/") ? String(dir.dropLast()) : dir
+
+        HStack(spacing: 6) {
             HStack(spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isOpen ? 90 : 0))
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(done ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
-                    Text(file.name)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(done ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 4)
-                    badge(for: file.state)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        if isOpen { openFolders.remove(key) } else { openFolders.insert(key) }
-                    }
-                }
-                .help(file.path)
-
-                reviewButton(for: file, in: repo)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isOpen ? 90 : 0))
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(allDone ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
+                pathText(display: sessionRelativePath(of: displayDir, in: repo))
+                    .foregroundStyle(allDone ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Text(reviewed > 0 ? "\(reviewed)/\(files.count)" : "\(files.count)")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(allDone ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(.quaternary.opacity(0.6), in: Capsule())
+                badge(for: .untracked)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-
-            if isOpen {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(file.children, id: \.self) { child in
-                        HStack(spacing: 5) {
-                            Image(systemName: done ? "checkmark.circle.fill" : "doc.text")
-                                .font(.system(size: 9))
-                                .foregroundStyle(done ? AnyShapeStyle(.green)
-                                                      : AnyShapeStyle(.tertiary))
-                            Text(child)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    if file.children.isEmpty {
-                        Text("Pasta vazia")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                    }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    if isOpen { openFolders.remove(key) } else { openFolders.insert(key) }
                 }
-                .padding(.leading, 30)
-                .padding(.trailing, 10)
-                .padding(.bottom, 8)
             }
+            .help(dir)
+
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    for file in files { model.setReviewed(!allDone, for: file, in: repo) }
+                }
+            } label: {
+                Image(systemName: allDone ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(allDone ? AnyShapeStyle(.green) : AnyShapeStyle(.tertiary))
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.plain)
+            .help(allDone ? "Desmarcar todos como revisados" : "Marcar todos como revisados")
+            .accessibilityLabel(allDone ? "Pasta revisada" : "Pasta não revisada")
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(.quaternary, lineWidth: 1))
+
+        if isOpen {
+            ForEach(files) { file in
+                Section {
+                    fileBody(file, in: repo)
+                        .padding(.leading, 14)
+                } header: {
+                    fileHeader(file, in: repo, within: dir)
+                        .padding(.leading, 14)
+                }
+            }
+        }
     }
 
     // MARK: - Arquivos
 
-    private func fileCard(_ file: GitChangesModel.FileChange,
+    private func fileHeader(_ file: GitChangesModel.FileChange,
+                            in repo: GitChangesModel.Repo,
+                            within dir: String? = nil) -> some View {
+        let key = repo.id + "/" + file.path
+        let done = model.isReviewed(file, in: repo)
+        let display = dir.map { String(file.path.dropFirst($0.count)) }
+            ?? sessionRelativePath(of: file.path, in: repo)
+        return HStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Image(nsImage: FileTypeIcon.image(for: file.name))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .opacity(done ? 0.55 : 1)
+                pathText(display: display)
+                    .foregroundStyle(done ? AnyShapeStyle(.secondary)
+                                          : AnyShapeStyle(.primary))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                badge(for: file.state)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    if collapsedFiles.contains(key) {
+                        collapsedFiles.remove(key)
+                    } else {
+                        collapsedFiles.insert(key)
+                    }
+                }
+            }
+            .help(file.path)
+
+            reviewButton(for: file, in: repo)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
+        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(.quaternary, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private func fileBody(_ file: GitChangesModel.FileChange,
                           in repo: GitChangesModel.Repo) -> some View {
         let key = repo.id + "/" + file.path
         let done = model.isReviewed(file, in: repo)
-        let isOpen = !done && !collapsedFiles.contains(key) && !file.lines.isEmpty
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: icon(for: file.name))
-                        .font(.system(size: 11))
-                        .foregroundStyle(done ? AnyShapeStyle(.secondary)
-                                              : iconColor(for: file.name))
-                    Text(file.name)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(done ? AnyShapeStyle(.secondary)
-                                              : AnyShapeStyle(.primary))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 4)
-                    badge(for: file.state)
+        if !done, !collapsedFiles.contains(key), !file.lines.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(file.lines) { line in
+                    diffRow(line)
                 }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        if collapsedFiles.contains(key) {
-                            collapsedFiles.remove(key)
-                        } else {
-                            collapsedFiles.insert(key)
-                        }
-                    }
+                if file.truncated {
+                    Text("Diff longo — mostrando o início")
+                        .font(.system(size: 10))
+                        .italic()
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
                 }
-                .help(file.path)
-
-                reviewButton(for: file, in: repo)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-
-            if isOpen {
-                Divider().opacity(0.5)
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(file.lines) { line in
-                        diffRow(line)
-                    }
-                    if file.truncated {
-                        Text("Diff longo — mostrando o início")
-                            .font(.system(size: 10))
-                            .italic()
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
+            .padding(.vertical, 4)
+            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(.quaternary, lineWidth: 1))
         }
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9).stroke(.quaternary, lineWidth: 1))
     }
 
     private func diffRow(_ line: GitDisplayLine) -> some View {
@@ -365,10 +450,9 @@ struct GitChangesPanel: View {
     private func badgeColor(for state: GitFileState) -> Color {
         switch state {
         case .modified: .blue
-        case .added: .green
+        case .added, .untracked: .green
         case .deleted: .red
         case .renamed: .purple
-        case .untracked: .secondary
         case .conflicted: .orange
         }
     }
@@ -384,23 +468,4 @@ struct GitChangesPanel: View {
         }
     }
 
-    private func icon(for name: String) -> String {
-        switch (name as NSString).pathExtension.lowercased() {
-        case "swift": "swift"
-        case "json", "js", "ts", "jsx", "tsx": "curlybraces"
-        case "md", "txt": "doc.plaintext"
-        case "yml", "yaml", "toml", "plist", "xcconfig": "list.bullet"
-        case "png", "jpg", "jpeg", "gif", "heic", "webp", "svg": "photo"
-        case "sh", "fish", "zsh", "bash": "terminal"
-        default: "doc.text"
-        }
-    }
-
-    private func iconColor(for name: String) -> AnyShapeStyle {
-        switch (name as NSString).pathExtension.lowercased() {
-        case "swift": AnyShapeStyle(.orange)
-        case "json", "js", "ts", "jsx", "tsx": AnyShapeStyle(.yellow)
-        default: AnyShapeStyle(.secondary)
-        }
-    }
 }

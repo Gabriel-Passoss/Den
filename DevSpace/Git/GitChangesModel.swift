@@ -9,14 +9,21 @@ final class GitChangesModel {
         let state: GitFileState
         let lines: [GitDisplayLine]
         let truncated: Bool
-        let children: [String]
         let fingerprint: String
 
         var id: String { path }
-        var isDirectory: Bool { path.hasSuffix("/") }
-        var name: String {
-            (String(path.hasSuffix("/") ? String(path.dropLast()) : path) as NSString)
-                .lastPathComponent
+        var name: String { (path as NSString).lastPathComponent }
+    }
+
+    nonisolated enum RepoItem: Identifiable {
+        case single(FileChange)
+        case group(dir: String, files: [FileChange])
+
+        var id: String {
+            switch self {
+            case .single(let file): file.path
+            case .group(let dir, _): dir
+            }
         }
     }
 
@@ -24,6 +31,7 @@ final class GitChangesModel {
         let root: URL
         let branch: String?
         let files: [FileChange]
+        let items: [RepoItem]
         let truncatedFiles: Bool
 
         var id: String { root.path }
@@ -35,6 +43,7 @@ final class GitChangesModel {
         let branch: String?
         let status: String
         let entries: [GitStatusEntry]
+        let untrackedDirs: [String]
     }
 
     var repos: [Repo] = []
@@ -183,11 +192,17 @@ final class GitChangesModel {
 
     nonisolated private static func survey(_ root: URL) async -> RepoSurvey {
         async let branchOut = GitCommand.run(["rev-parse", "--abbrev-ref", "HEAD"], in: root)
-        async let statusOut = GitCommand.run(["status", "--porcelain=v1", "-z"], in: root)
+        async let statusOut = GitCommand.run(
+            ["status", "--porcelain=v1", "-z", "--untracked-files=all"], in: root)
+        async let collapsedOut = GitCommand.run(["status", "--porcelain=v1", "-z"], in: root)
         let branch = (await branchOut)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let status = await statusOut ?? ""
+        let dirs = GitParsing.statusEntries(fromPorcelain: await collapsedOut ?? "")
+            .filter { $0.isDirectory }
+            .map(\.path)
         return RepoSurvey(root: root, branch: branch, status: status,
-                          entries: GitParsing.statusEntries(fromPorcelain: status))
+                          entries: GitParsing.statusEntries(fromPorcelain: status),
+                          untrackedDirs: dirs)
     }
 
     nonisolated private static func assembleRepo(_ survey: RepoSurvey) async -> Repo {
@@ -205,24 +220,15 @@ final class GitChangesModel {
             diffs = GitParsing.fileDiffs(fromUnified: String((output ?? "").prefix(400_000)))
         }
 
-        let ordered = entries.sorted {
-            ($0.isDirectory ? 0 : 1, $0.path) < ($1.isDirectory ? 0 : 1, $1.path)
-        }
+        let ordered = entries.sorted { $0.path < $1.path }
 
         var files: [FileChange] = []
         for entry in ordered.prefix(maxFilesPerRepo) {
             if Task.isCancelled { break }
             let target = root.appending(path: entry.path)
-            var lines: [GitDiffLine] = []
-            var children: [String] = []
-
-            if entry.isDirectory {
-                children = listChildren(of: target)
-            } else if entry.state == .untracked {
-                lines = untrackedLines(of: target)
-            } else {
-                lines = diffs[entry.path] ?? []
-            }
+            let lines: [GitDiffLine] = entry.state == .untracked
+                ? untrackedLines(of: target)
+                : diffs[entry.path] ?? []
 
             let truncated = lines.count > maxLinesPerFile
             let capped = Array(lines.prefix(maxLinesPerFile))
@@ -232,12 +238,24 @@ final class GitChangesModel {
                 state: entry.state,
                 lines: SyntaxHighlighter.render(capped, language: language),
                 truncated: truncated,
-                children: children,
                 fingerprint: GitParsing.fingerprint(
-                    of: [entry.state.badge] + capped.map(\.text) + children)))
+                    of: [entry.state.badge] + capped.map(\.text))))
         }
 
-        return Repo(root: root, branch: survey.branch, files: files,
+        // Agrupa pelos diretórios que o git colapsaria (100% não rastreados).
+        var grouped: [String: [FileChange]] = [:]
+        var singles: [FileChange] = []
+        for file in files {
+            if let dir = survey.untrackedDirs.first(where: { file.path.hasPrefix($0) }) {
+                grouped[dir, default: []].append(file)
+            } else {
+                singles.append(file)
+            }
+        }
+        let items = grouped.keys.sorted().map { RepoItem.group(dir: $0, files: grouped[$0]!) }
+            + singles.map(RepoItem.single)
+
+        return Repo(root: root, branch: survey.branch, files: files, items: items,
                     truncatedFiles: entries.count > maxFilesPerRepo)
     }
 
@@ -284,12 +302,6 @@ final class GitChangesModel {
 
         var seen: Set<String> = []
         return roots.filter { seen.insert($0.path).inserted }
-    }
-
-    nonisolated static func listChildren(of directory: URL, cap: Int = 30) -> [String] {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path))
-            ?? []
-        return names.sorted().prefix(cap).map { $0 }
     }
 
     nonisolated static func untrackedLines(of file: URL, cap: Int = 200) -> [GitDiffLine] {
