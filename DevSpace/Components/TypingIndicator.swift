@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct TypingIndicator: View {
-    @State private var animating = false
+    @State private var lit = 0
+
+    private static let step: Double = 0.28
 
     var body: some View {
         HStack(spacing: 4) {
@@ -9,16 +11,19 @@ struct TypingIndicator: View {
                 Circle()
                     .fill(.secondary)
                     .frame(width: 6, height: 6)
-                    .opacity(animating ? 1 : 0.25)
-                    .animation(
-                        .easeInOut(duration: 0.45)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(index) * 0.18),
-                        value: animating
-                    )
+                    .opacity(lit == index ? 1 : 0.25)
+                    .scaleEffect(lit == index ? 1.15 : 1)
             }
         }
-        .onAppear { animating = true }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.step))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: Self.step)) {
+                    lit = (lit + 1) % 3
+                }
+            }
+        }
         .accessibilityLabel("Claude está escrevendo")
     }
 }
