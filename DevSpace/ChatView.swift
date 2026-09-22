@@ -36,8 +36,6 @@ struct ChatView: View {
         var distance: CGFloat
         var contentHeight: CGFloat
 
-        /// Arredondar mata o ruído sub-pixel: sem isso a ação dispara a cada
-        /// quadro e o SwiftUI acusa "update multiple times per frame".
         static func bucket(_ value: CGFloat) -> CGFloat { (value / 8).rounded() * 8 }
     }
 
@@ -76,18 +74,6 @@ struct ChatView: View {
                 .help(showChanges ? "Ocultar alterações do Git"
                                   : "Mostrar alterações do Git")
             }
-        }
-        .task {
-            #if DEBUG
-            guard let plan = ProcessInfo.processInfo
-                .environment["DEVSPACE_FAKE_TOGGLE_GIT"] else { return }
-            var elapsed = 0.0
-            for moment in plan.split(separator: ",").compactMap({ Double($0) }) {
-                try? await Task.sleep(for: .seconds(moment - elapsed))
-                elapsed = moment
-                showChanges.toggle()
-            }
-            #endif
         }
         .task(id: "\(showChanges)|\(cockpit.workingDirectory.path)") {
             guard showChanges else { return }
@@ -297,12 +283,6 @@ struct ChatView: View {
                     distance: ScrollEdgeState.bucket(distance),
                     contentHeight: ScrollEdgeState.bucket(geometry.contentSize.height))
             } action: { old, new in
-                #if DEBUG
-                if ProcessInfo.processInfo.environment["DEVSPACE_SCROLL_LOG"] != nil {
-                    print(String(format: "[scroll] content=%.0f distFromBottom=%.0f",
-                                 new.contentHeight, new.distance))
-                }
-                #endif
                 let follow: Bool
                 if new.isNearBottom {
                     follow = true
@@ -383,8 +363,6 @@ struct ChatView: View {
             && cockpit.pending == nil && cockpit.pendingQuestion == nil
     }
 
-    /// Rolar até a BORDA é exato mesmo em LazyVStack; scrollTo(id:) salta por
-    /// alturas estimadas e passa do fim em transcripts grandes.
     private func jumpToEnd() {
         scrollPosition.scrollTo(edge: .bottom)
     }
@@ -452,7 +430,7 @@ struct ChatView: View {
                         files: [String] = []) -> some View {
         let sizes = images.map(Self.displaySize(for:))
         let contentWidth = sizes.map(\.width).max()
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .center, spacing: 6) {
             ForEach(files, id: \.self) { name in
                 HStack(spacing: 6) {
                     Image(systemName: "doc.fill")
@@ -487,24 +465,24 @@ struct ChatView: View {
                 } else if !text.isEmpty {
                     Text(Self.clipped(text, limit: 12_000))
                         .font(.system(size: 13))
+                        .multilineTextAlignment(.leading)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if !images.isEmpty { Spacer(minLength: 12) }
                 if let moment {
                     Text(moment, format: .dateTime.hour().minute())
                         .font(.system(size: 9))
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(width: contentWidth)
+            .frame(minWidth: images.isEmpty ? nil : max(contentWidth ?? 0, 220),
+                   alignment: .leading)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(tint, in: RoundedRectangle(cornerRadius: 13))
     }
 
-    /// Decodificar NSImage a cada render é caro; o cache segura o decode único.
     private static let decodedImages = NSCache<NSData, NSImage>()
 
     static func decodedImage(_ data: Data) -> NSImage? {
@@ -522,9 +500,6 @@ struct ChatView: View {
         return CGSize(width: image.size.width * scale, height: image.size.height * scale)
     }
 
-    /// Exibição limitada: tool outputs e dumps gigantes explodem a altura do
-    /// transcript (milhões de pontos) e quebram o scroll do LazyVStack.
-    /// O conteúdo completo continua no arquivo da sessão.
     private static func clipped(_ text: String, limit: Int = 1_200) -> String {
         guard text.utf8.count > limit else { return text }
         let head = String(text.prefix(limit))
@@ -563,8 +538,6 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    /// Bastidores de um turno (pensamento, ferramentas, avisos) recolhidos em
-    /// uma linha só; o conteúdo continua a um clique de distância.
     private func steps(id: UUID, lines: [CockpitModel.Line]) -> some View {
         let isOpen = expanded.contains(id)
         return VStack(alignment: .leading, spacing: 6) {
@@ -691,15 +664,6 @@ struct ChatView: View {
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
-                    Button {
-                        Task { await cockpit.stop() }
-                    } label: {
-                        Image(systemName: "stop.circle")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Parar o que está rodando")
                     if escArmed {
                         Text("Esc duas vezes interrompe")
                             .font(.system(size: 10))
@@ -726,12 +690,24 @@ struct ChatView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Anexar arquivos")
-                Button(action: submit) {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 19))
+                Button {
+                    if cockpit.isBusy {
+                        Task { await cockpit.stop() }
+                    } else {
+                        submit()
+                    }
+                } label: {
+                    Image(systemName: cockpit.isBusy ? "stop.circle.fill"
+                                                     : "arrow.up.circle.fill")
+                        .font(.system(size: 19))
+                        .contentTransition(.symbolEffect(.replace))
+                        .animation(.easeInOut(duration: 0.2), value: cockpit.isBusy)
                 }
                 .buttonStyle(.plain)
-                .disabled(cockpit.prompt.trimmingCharacters(in: .whitespaces).isEmpty
+                .disabled(!cockpit.isBusy
+                          && cockpit.prompt.trimmingCharacters(in: .whitespaces).isEmpty
                           && cockpit.pendingAttachments.isEmpty)
+                .help(cockpit.isBusy ? "Parar o que está rodando" : "Enviar mensagem")
             }
         }
         .padding(12)
