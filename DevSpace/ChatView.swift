@@ -55,7 +55,7 @@ struct ChatView: View {
         .inspector(isPresented: $showChanges) {
             GitChangesPanel(model: gitChanges, directory: cockpit.workingDirectory,
                             close: { showChanges = false })
-                .inspectorColumnWidth(min: 280, ideal: 560, max: 560)
+                .inspectorColumnWidth(min: 280, ideal: 784, max: 784)
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
