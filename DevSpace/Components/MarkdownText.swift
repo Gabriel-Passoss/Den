@@ -15,6 +15,9 @@ struct MarkdownText: View {
     @ViewBuilder
     private func render(_ block: Block) -> some View {
         switch block.kind {
+        case .table(let table):
+            MarkdownTableView(table: table)
+
         case .paragraph(let content):
             Text(content)
                 .font(.system(size: 13))
@@ -26,13 +29,18 @@ struct MarkdownText: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
 
-        case .code(let code):
-            Text(code)
-                .font(.system(size: 12, design: .monospaced))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+        case .code(let code, let language):
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Self.highlighted(code, language: language)) { line in
+                    Text(line.text)
+                        .font(.system(size: 12, design: .monospaced))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
 
         case .listItem(let marker, let depth, let content):
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -70,6 +78,20 @@ struct MarkdownText: View {
         }
     }
 
+    struct CodeLine: Identifiable {
+        let id: Int
+        let text: AttributedString
+    }
+
+    static func highlighted(_ code: String, language: String?) -> [CodeLine] {
+        let kind = SyntaxHighlighter.language(forHint: language)
+        return code.components(separatedBy: "\n").enumerated().map { index, line in
+            CodeLine(id: index,
+                     text: kind == .plain ? AttributedString(line)
+                                          : SyntaxHighlighter.highlight(line, language: kind))
+        }
+    }
+
     // MARK: - Parsing
 
     struct Block: Identifiable {
@@ -77,13 +99,20 @@ struct MarkdownText: View {
         let kind: Kind
 
         enum Kind {
+            case table(Table)
             case paragraph(AttributedString)
             case heading(Int, AttributedString)
-            case code(String)
+            case code(String, language: String?)
             case listItem(marker: String, depth: Int, AttributedString)
             case quote(AttributedString)
             case divider
         }
+    }
+
+    struct Table {
+        var alignments: [PresentationIntent.TableColumn.Alignment]
+        var header: [AttributedString]
+        var rows: [[AttributedString]]
     }
 
     private final class Parsed {
@@ -119,6 +148,9 @@ struct MarkdownText: View {
             let intent = run.presentationIntent
             var slice = AttributedString(whole[run.range])
             slice.presentationIntent = nil
+            if run.inlinePresentationIntent?.contains(.code) == true {
+                slice.font = .system(size: 12, design: .monospaced)
+            }
             if !groups.isEmpty, groups[groups.count - 1].intent == intent {
                 groups[groups.count - 1].content += slice
             } else {
@@ -128,12 +160,74 @@ struct MarkdownText: View {
 
         var blocks: [Block] = []
         var seenListItems: Set<Int> = []
+        var table: (identity: Int, value: Table)?
+
+        func flushTable(at index: Int) {
+            guard let pending = table else { return }
+            blocks.append(Block(id: -index - 1, kind: .table(pending.value)))
+            table = nil
+        }
+
         for (index, group) in groups.enumerated() {
+            if let cell = tableCell(of: group.intent) {
+                if table?.identity != cell.tableIdentity {
+                    flushTable(at: index)
+                    table = (cell.tableIdentity,
+                             Table(alignments: cell.alignments, header: [], rows: []))
+                }
+                if cell.isHeader {
+                    table?.value.header.append(group.content)
+                } else {
+                    let row = cell.row
+                    while (table?.value.rows.count ?? 0) <= row {
+                        table?.value.rows.append([])
+                    }
+                    table?.value.rows[row].append(group.content)
+                }
+                continue
+            }
+            flushTable(at: index)
             guard let kind = kind(of: group.intent, content: group.content,
                                   seenListItems: &seenListItems) else { continue }
             blocks.append(Block(id: index, kind: kind))
         }
+        flushTable(at: groups.count)
         return blocks
+    }
+
+    private struct TableCell {
+        let tableIdentity: Int
+        let alignments: [PresentationIntent.TableColumn.Alignment]
+        let isHeader: Bool
+        let row: Int
+    }
+
+    private static func tableCell(of intent: PresentationIntent?) -> TableCell? {
+        guard let intent else { return nil }
+        var identity: Int?
+        var alignments: [PresentationIntent.TableColumn.Alignment] = []
+        var isHeader = false
+        var row = 0
+        var isCell = false
+
+        for component in intent.components {
+            switch component.kind {
+            case .table(let columns):
+                identity = component.identity
+                alignments = columns.map(\.alignment)
+            case .tableHeaderRow:
+                isHeader = true
+            case .tableRow(let index):
+                row = index
+            case .tableCell:
+                isCell = true
+            default:
+                break
+            }
+        }
+        guard isCell, let identity else { return nil }
+        return TableCell(tableIdentity: identity, alignments: alignments,
+                         isHeader: isHeader, row: max(0, row - 1))
     }
 
     private static func kind(of intent: PresentationIntent?,
@@ -155,9 +249,9 @@ struct MarkdownText: View {
             switch component.kind {
             case .header(let level):
                 return .heading(level, content)
-            case .codeBlock:
+            case .codeBlock(let languageHint):
                 let trimmed = plain.trimmingCharacters(in: .newlines)
-                return trimmed.isEmpty ? nil : .code(trimmed)
+                return trimmed.isEmpty ? nil : .code(trimmed, language: languageHint)
             case .thematicBreak:
                 return .divider
             case .blockQuote:

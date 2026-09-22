@@ -12,6 +12,22 @@ nonisolated enum SyntaxHighlighter {
         case swift, cFamily, python, shell, json, generic, plain
     }
 
+    static func language(forHint hint: String?) -> Language {
+        guard let hint = hint?.trimmingCharacters(in: .whitespaces).lowercased(),
+              !hint.isEmpty else { return .plain }
+        return switch hint {
+        case "swift": .swift
+        case "js", "jsx", "javascript", "ts", "tsx", "typescript", "java", "kotlin",
+             "kt", "go", "rust", "rs", "c", "cpp", "c++", "objc", "cs", "php",
+             "dart", "scala": .cFamily
+        case "py", "python": .python
+        case "sh", "bash", "zsh", "shell", "fish", "console", "terminal": .shell
+        case "json", "jsonc": .json
+        case "text", "txt", "plain", "md", "markdown", "": .plain
+        default: .generic
+        }
+    }
+
     static func language(forFile name: String) -> Language {
         switch (name as NSString).pathExtension.lowercased() {
         case "swift": .swift

@@ -14,6 +14,7 @@ struct ChatView: View {
     @State private var zoomed: ZoomedImage?
     @State private var nearBottom = true
     @State private var scrollPosition = ScrollPosition()
+    @State private var tableLock = TableScrollLock()
     @State private var escArmed = false
     @State private var escDisarm: Task<Void, Never>?
 
@@ -280,6 +281,8 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollPosition($scrollPosition)
+            .scrollDisabled(tableLock.isLocked)
+            .environment(tableLock)
             .safeAreaInset(edge: .bottom, spacing: 0) { transientCards }
             .onScrollGeometryChange(for: ScrollEdgeState.self) { geometry in
                 let distance = geometry.contentSize.height
