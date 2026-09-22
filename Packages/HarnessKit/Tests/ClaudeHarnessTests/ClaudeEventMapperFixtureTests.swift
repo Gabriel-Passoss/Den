@@ -127,7 +127,7 @@ func everyToolResultPointsAtAToolCallInTheSameTranscript(name: String) throws {
     defer { try? FileManager.default.removeItem(at: root) }
 
     let entries = try mapFixture("permission-denied").entries
-    let segment = Segment(harness: .claudeCode, harnessSessionID: UUID(), model: "claude-opus-5")
+    let segment = Segment(harness: .claudeCode, harnessSessionID: UUID().uuidString, model: "claude-opus-5")
     let session = Session(title: "corpus", workingDirectory: root, segments: [segment])
 
     let store = FileTranscriptStore(root: root)

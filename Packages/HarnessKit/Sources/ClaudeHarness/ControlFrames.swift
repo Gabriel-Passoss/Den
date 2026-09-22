@@ -94,7 +94,8 @@ extension PermissionRequest {
             input: request["input"] ?? .null,
             toolUseID: request["tool_use_id"]?.stringValue,
             suggestions: (request["permission_suggestions"]?.arrayValue ?? [])
-                .map(PermissionSuggestion.init(raw:))
+                .map(PermissionSuggestion.init(raw:)),
+            options: ClaudeOption.all
         )
     }
 }
@@ -117,6 +118,9 @@ public extension PermissionDecision {
     func responseData(requestID: String) throws -> Data {
         let body: JSONValue
         switch self {
+        case .option(let id):
+
+            return try ClaudeOption.decision(for: id).responseData(requestID: requestID)
         case .allow(let updatedInput):
             var members: [String: JSONValue] = ["behavior": .string("allow")]
             if let updatedInput { members["updatedInput"] = updatedInput }
@@ -172,5 +176,21 @@ public enum OutboundControlRequest: Equatable, Sendable {
             "request": .object(request),
         ])
         return try JSONEncoder().encode(envelope)
+    }
+}
+
+enum ClaudeOption {
+    static let allowID = "allow"
+    static let denyID = "deny"
+
+    static let all: [PermissionOption] = [
+        PermissionOption(id: denyID, kind: .rejectOnce, label: "Negar"),
+        PermissionOption(id: allowID, kind: .allowOnce, label: "Permitir"),
+    ]
+
+    static func decision(for id: String) -> PermissionDecision {
+        id == allowID
+            ? .allow(updatedInput: nil)
+            : .deny(message: "o usuário negou", interrupt: false)
     }
 }

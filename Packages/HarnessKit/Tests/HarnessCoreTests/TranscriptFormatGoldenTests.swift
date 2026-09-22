@@ -61,8 +61,9 @@ private let golden: [Golden] = [
             input: .object(["path": .string("/tmp/x")]), toolUseID: "t2",
             suggestions: [PermissionSuggestion(type: "setMode", mode: "acceptEdits",
                                                destination: "session", behavior: "allow",
-                                               raw: .object(["k": .bool(true)]))])),
-        wire: #"{"permissionRequest":{"_0":{"description":"d","displayName":"Escrever","id":"r1","input":{"path":"/tmp/x"},"suggestions":[{"behavior":"allow","destination":"session","mode":"acceptEdits","raw":{"k":true},"type":"setMode"}],"toolName":"Write","toolUseID":"t2"}}}"#
+                                               raw: .object(["k": .bool(true)]))],
+            options: [PermissionOption(id: "allow", kind: .allowOnce, label: "Permitir")])),
+        wire: #"{"permissionRequest":{"_0":{"description":"d","displayName":"Escrever","id":"r1","input":{"path":"/tmp/x"},"options":[{"id":"allow","kind":"allowOnce","label":"Permitir"}],"suggestions":[{"behavior":"allow","destination":"session","mode":"acceptEdits","raw":{"k":true},"type":"setMode"}],"toolName":"Write","toolUseID":"t2"}}}"#
     ),
 
     Golden(
@@ -158,7 +159,7 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
         segments: [Segment(
             id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
             harness: HarnessID(rawValue: "harness-a"),
-            harnessSessionID: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
+            harnessSessionID: "44444444-4444-4444-4444-444444444444",
             model: "m", entries: [], usage: UsageTotals(inputTokens: 5),
             seededBy: .replay(throughEntry: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!))])
 
@@ -222,4 +223,31 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
         #expect(declared == known.count + 1,
                 "\(name) declara \(declared) casos e conhece \(known.count) discriminadores — um caso novo não chegou em Known.CodingKeys")
     }
+}
+
+
+@Test func aPermissionRequestWrittenBeforeOptionsExistedStillDecodes() throws {
+
+    let beforeOptions = #"{"permissionRequest":{"_0":{"id":"r1","input":{"path":"/tmp/x"},"suggestions":[],"toolName":"Write"}}}"#
+
+    let decoded = try decoder.decode(
+        TranscriptEntry.Kind.self, from: Data(beforeOptions.utf8))
+
+    guard case .permissionRequest(let request) = decoded else {
+        Issue.record("caiu no fallback — o transcript antigo virou órfão")
+        return
+    }
+    #expect(request.id == "r1")
+    #expect(request.toolName == "Write")
+
+    #expect(request.options.isEmpty)
+}
+
+@Test func anOptionKindThisVersionDoesNotKnowSurvivesAsOther() throws {
+
+    let fromTheFuture = #"{"id":"x","kind":"allowForTheNextHour","label":"Por uma hora"}"#
+
+    let option = try decoder.decode(PermissionOption.self, from: Data(fromTheFuture.utf8))
+    #expect(option.kind == .other)
+    #expect(option.label == "Por uma hora")
 }

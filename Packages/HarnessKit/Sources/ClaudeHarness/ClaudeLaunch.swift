@@ -1,13 +1,41 @@
 import Foundation
 import HarnessCore
 
-public enum SessionStart: Sendable, Equatable {
+public enum ClaudeSessionStart: Sendable, Equatable {
 
     case fresh(sessionID: UUID)
 
     case resume(harnessSessionID: UUID)
 
     case fork(from: UUID, newSessionID: UUID)
+
+    public init(_ start: SessionStart) {
+        switch start {
+        case .fresh:
+            self = .fresh(sessionID: UUID())
+        case .resume(let harnessSessionID):
+
+            guard let known = UUID(uuidString: harnessSessionID) else {
+                self = .fresh(sessionID: UUID())
+                return
+            }
+            self = .resume(harnessSessionID: known)
+        case .fork(let from):
+            guard let known = UUID(uuidString: from) else {
+                self = .fresh(sessionID: UUID())
+                return
+            }
+            self = .fork(from: known, newSessionID: UUID())
+        }
+    }
+
+    public var harnessSessionID: String {
+        switch self {
+        case .fresh(let id): id.uuidString.lowercased()
+        case .resume(let id): id.uuidString.lowercased()
+        case .fork(_, let id): id.uuidString.lowercased()
+        }
+    }
 }
 
 public enum EffortLevel: String, Sendable, Equatable, CaseIterable {
@@ -18,7 +46,7 @@ public enum ClaudeLaunch {
     public static func make(
         installation: HarnessInstallation,
         workingDirectory: URL,
-        session: SessionStart,
+        session: ClaudeSessionStart,
         model: String? = nil,
         effort: EffortLevel? = nil,
         permissionMode: PermissionMode? = nil,

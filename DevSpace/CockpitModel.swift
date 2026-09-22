@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import HarnessCore
-import ClaudeHarness
 
 @MainActor
 @Observable
@@ -24,7 +23,11 @@ final class CockpitModel {
     }
 
     let sessionID: UUID
-    let segmentID: UUID
+    /// A sessão do DevSpace atravessa harnesses; cada trecho contínuo dentro
+    /// de um deles é um Segment. Trocar de harness fecha um e abre o próximo.
+    private(set) var segments: [Segment]
+
+    var segmentID: UUID { segments.last?.id ?? UUID() }
     var title: String
     var workingDirectory: URL
 
@@ -93,38 +96,33 @@ final class CockpitModel {
 
     var branch: String?
 
-    var preferredModel: String?
+    private(set) var harness: HarnessID
 
-    var preferredEffort: EffortLevel?
+    var knobs: [HarnessKnob] = []
 
-    var preferredMode: PermissionMode?
+    var capabilities = HarnessCapabilities()
 
-    var detectedMode: PermissionMode?
+    private var settings: [String: String] = [:]
 
-    var detectedEffort: EffortLevel?
+    var harnessName: String { HarnessRegistry.displayName(for: harness) }
 
-    static let modelChoices: [(name: String, id: String?)] = [
-        ("Fable", "fable"),
-        ("Opus", "opus"),
-        ("Sonnet", "sonnet"),
-        ("Haiku", "haiku"),
-    ]
-
-    static let effortChoices: [(name: String, id: EffortLevel?)] = [
-        ("Baixo", .low),
-        ("Médio", .medium),
-        ("Alto", .high),
-        ("Muito alto", .xhigh),
-        ("Máximo", .max),
-    ]
+    func knob(_ id: String) -> HarnessKnob? { knobs.first { $0.id == id } }
 
     private let store: FileTranscriptStore
-    private var session: ClaudeSession?
+    private var session: (any HarnessSession)?
     private var consumer: Task<Void, Never>?
     private var hasTitle = false
     private var userRenamed = false
 
-    private var harnessSessionID: UUID
+    private var harnessSessionID: String
+
+    /// O transcript semântico, que é o que atravessa a troca de harness.
+    /// As `lines` são a tradução dele para a tela e não servem à semente.
+    private var entries: [TranscriptEntry] = []
+
+    /// Conversa do segmento anterior, esperando o primeiro pedido do usuário
+    /// no harness novo para viajar junto. Some assim que é entregue.
+    private var pendingSeed: String?
 
     private let isRestored: Bool
 
@@ -134,40 +132,59 @@ final class CockpitModel {
 
     // MARK: - Nascimento
 
-    init(store: FileTranscriptStore, workingDirectory: URL) {
+    /// O harness resolve-se no corpo, não no argumento padrão: expressão de
+    /// argumento padrão roda fora do ator, e `HarnessRegistry` é do main actor.
+    init(store: FileTranscriptStore, workingDirectory: URL,
+         harness: HarnessID? = nil) {
         self.store = store
-        self.sessionID = UUID()
-        self.segmentID = UUID()
+        let harness = harness ?? HarnessRegistry.preferred
+        let id = UUID()
+        self.sessionID = id
         self.title = "Nova sessão"
         self.workingDirectory = workingDirectory
-        self.harnessSessionID = self.sessionID
+        self.harness = harness
+        self.segments = [Segment(harness: harness, harnessSessionID: "", model: "")]
+
+        self.harnessSessionID = ""
         self.isRestored = false
-        self.detectedEffort = ClaudeSettings.effortLevel(forWorkingDirectory: workingDirectory)
-        self.detectedMode = ClaudeSettings.permissionMode(forWorkingDirectory: workingDirectory)
         restorePreferences()
+        loadKnobs()
     }
 
     init(store: FileTranscriptStore, restoring session: Session) {
         self.store = store
         self.sessionID = session.id
-        self.segmentID = session.segments.last?.id ?? UUID()
+        self.segments = session.segments.isEmpty
+            ? [Segment(harness: HarnessRegistry.fallback, harnessSessionID: "", model: "")]
+            : session.segments.map { var bare = $0; bare.entries = []; return bare }
         self.title = session.title
         self.workingDirectory = session.workingDirectory
         self.model = session.segments.last?.model ?? ""
         self.hasTitle = true
-        self.harnessSessionID = session.segments.last?.harnessSessionID ?? session.id
+        self.harnessSessionID = session.segments.last?.harnessSessionID ?? ""
+        self.harness = session.segments.last?.harness ?? HarnessRegistry.fallback
         self.isRestored = true
         self.status = "fria"
-        self.detectedEffort = ClaudeSettings.effortLevel(forWorkingDirectory: session.workingDirectory)
-        self.detectedMode = ClaudeSettings.permissionMode(forWorkingDirectory: session.workingDirectory)
         restorePreferences()
+        loadKnobs()
         for entry in session.allEntries { render(entry, persist: false) }
+
+        /// Trocou de harness e fechou o app antes de escrever: a semente nunca
+        /// chegou a ninguém, então ela volta a esperar o primeiro pedido.
+        if let last = session.segments.last, last.seededBy != nil, last.entries.isEmpty {
+            pendingSeed = HandoffSeed.make(entries)?.text
+        }
     }
 
     private var domainSession: Session {
-        Session(id: sessionID, title: title, workingDirectory: workingDirectory,
-                segments: [Segment(id: segmentID, harness: .claudeCode,
-                                   harnessSessionID: harnessSessionID, model: model)])
+        var current = segments
+        if !current.isEmpty {
+
+            current[current.count - 1].harnessSessionID = harnessSessionID
+            current[current.count - 1].model = model
+        }
+        return Session(id: sessionID, title: title,
+                       workingDirectory: workingDirectory, segments: current)
     }
 
     func persistMetadata() async {
@@ -192,32 +209,32 @@ final class CockpitModel {
 
     func start() async {
         guard session == nil else { return }
-        status = "procurando o claude…"
+        guard let adapter = HarnessRegistry.harness(for: harness) else {
+            status = "falhou: harness desconhecido"
+            append(.notice, "não conheço o harness \(harness.rawValue)")
+            return
+        }
+        status = "procurando o \(adapter.displayName)…"
         do {
-            let installation = try await ClaudeDiscovery().discover()
+            let installation = try await adapter.discover()
+            capabilities = adapter.capabilities(for: installation)
 
-            let start: SessionStart
-            if lines.contains(where: { $0.role == .assistant }) {
-                start = .resume(harnessSessionID: harnessSessionID)
-            } else {
-                if isRestored || hasLaunched {
-                    harnessSessionID = UUID()
-                    await persistMetadata()
-                }
-                start = .fresh(sessionID: harnessSessionID)
-            }
+            let resumable = capabilities.canResumeSession
+                && !harnessSessionID.isEmpty
+                && lines.contains(where: { $0.role == .assistant })
+
+            let start: SessionStart = resumable
+                ? .resume(harnessSessionID: harnessSessionID)
+                : .fresh
             hasLaunched = true
-            let launch = ClaudeLaunch.make(
+
+            let live = adapter.makeSession(
                 installation: installation,
                 workingDirectory: workingDirectory,
-                session: start,
-                model: preferredModel,
-                effort: preferredEffort,
-                permissionMode: preferredMode
-            )
-            let live = ClaudeSession(channel: ControlChannel(transport: ProcessTransport()))
-            let updates = try await live.start(launch)
+                settings: settings)
+            let updates = try await live.start(start)
             session = live
+            knobs = await live.knobs()
             status = "pronta"
 
             consumer = Task { [weak self] in
@@ -279,12 +296,17 @@ final class CockpitModel {
         render(entry, persist: true)
         await nameFromFirstTurn(text.isEmpty ? "Anexo" : text)
 
+        /// O balão e o transcript guardam o que o usuário escreveu; só o que
+        /// sai pelo cabo carrega a conversa herdada da troca de harness.
+        let outgoing = pendingSeed.map { HandoffSeed.message(seed: $0, request: text) } ?? text
+        pendingSeed = nil
+
         isBusy = true
         turnStartedAt = Date()
         do {
-            try await session.send(text, attachments: attached.map {
+            try await session.send(UserTurn(text: outgoing, attachments: attached.map {
                 MediaAttachment(mediaType: $0.mediaType, data: $0.data)
-            })
+            }))
         } catch {
             append(.notice, "não consegui mandar o turno: \(error)")
             isBusy = false
@@ -356,17 +378,23 @@ final class CockpitModel {
         }
     }
 
-    func resolve(allow: Bool) async {
+    func resolve(_ option: PermissionOption) async {
         guard let request = pending, let session else { return }
         pending = nil
-        let decision: PermissionDecision = allow
-            ? .allow(updatedInput: nil)
-            : .deny(message: "o usuário negou", interrupt: false)
         do {
-            try await session.resolve(request.id, decision)
+            try await session.resolve(request.id, .option(id: option.id))
         } catch {
             append(.notice, "não consegui responder a permissão: \(error)")
         }
+    }
+
+    func resolve(allow: Bool) async {
+        guard let request = pending else { return }
+        let fallback = allow
+            ? request.options.first(where: \.isAllow)
+            : request.options.first(where: { !$0.isAllow })
+        guard let fallback else { return }
+        await resolve(fallback)
     }
 
     nonisolated static func displayName(for modelID: String) -> String {
@@ -387,32 +415,58 @@ final class CockpitModel {
         return parts.joined(separator: " ")
     }
 
-    func choose(model id: String?) async {
-        guard preferredModel != id else { return }
-        preferredModel = id
+    /// Alguns harnesses trocam o botão em sessão viva; os que não trocam
+    /// precisam de um relançamento. `HarnessCapabilities` diz qual é qual, em
+    /// vez de a UI supor.
+    func choose(knob id: String, value: String?) async {
+        guard settings[id] != value else { return }
+        settings[id] = value
+        adopt(knob: id, value: value)
         persistPreferences()
-        await relaunchIfIdle()
+
+        let live = knob(id)?.category == .model
+            ? capabilities.canSetModelInSession
+            : capabilities.canSetPermissionMode
+
+        guard let session, live else {
+            await relaunchIfIdle()
+            return
+        }
+        do {
+            try await session.apply(knob: id, value: value)
+            knobs = await session.knobs()
+        } catch {
+            append(.notice, "não consegui trocar \(id): \(error)")
+        }
     }
 
-    func choose(effort level: EffortLevel?) async {
-        guard preferredEffort != level else { return }
-        preferredEffort = level
-        persistPreferences()
-        await relaunchIfIdle()
+    /// Avisos que o transcript guarda mas a tela não mostra. `harness_switch`
+    /// está aqui pelas sessões gravadas antes de a troca virar silenciosa —
+    /// elas seguem no disco, só não falam mais.
+    static let silentNotices: Set<String> = ["init", "rate_limit", "harness_switch"]
+
+    private func adopt(knob id: String, value: String?) {
+        guard let index = knobs.firstIndex(where: { $0.id == id }) else { return }
+        knobs[index].currentValue = value
     }
 
-    func choose(mode: PermissionMode) async {
-        guard preferredMode != mode else { return }
-        preferredMode = mode
-        persistPreferences()
-        await relaunchIfIdle()
+    private func loadKnobs() {
+        guard let adapter = HarnessRegistry.harness(for: harness) else { return }
+
+        var discovered = adapter.knobs(for: HarnessInstallation(executable: "", version: ""),
+                                       workingDirectory: workingDirectory)
+        for index in discovered.indices {
+            if let chosen = settings[discovered[index].id] {
+                discovered[index].currentValue = chosen
+            }
+        }
+        knobs = discovered
     }
 
     func choose(directory: URL) async {
         guard directory.path != workingDirectory.path else { return }
         workingDirectory = directory
-        detectedEffort = ClaudeSettings.effortLevel(forWorkingDirectory: directory)
-        detectedMode = ClaudeSettings.permissionMode(forWorkingDirectory: directory)
+        loadKnobs()
         await persistMetadata()
         await loadBranch()
         await relaunchIfIdle()
@@ -423,19 +477,14 @@ final class CockpitModel {
     private func restorePreferences() {
         let all = UserDefaults.standard.dictionary(forKey: Self.preferencesKey)
             as? [String: [String: String]] ?? [:]
-        guard let mine = all[sessionID.uuidString] else { return }
-        preferredModel = mine["model"]
-        preferredEffort = mine["effort"].flatMap(EffortLevel.init(rawValue:))
-        preferredMode = mine["mode"].flatMap(PermissionMode.init(rawValue:))
+
+        settings = all[sessionID.uuidString] ?? [:]
     }
 
     private func persistPreferences() {
         var all = UserDefaults.standard.dictionary(forKey: Self.preferencesKey)
             as? [String: [String: String]] ?? [:]
-        var mine: [String: String] = [:]
-        mine["model"] = preferredModel
-        mine["effort"] = preferredEffort?.rawValue
-        mine["mode"] = preferredMode?.rawValue
+        let mine = settings.compactMapValues { $0.isEmpty ? nil : $0 }
         all[sessionID.uuidString] = mine.isEmpty ? nil : mine
         UserDefaults.standard.set(all, forKey: Self.preferencesKey)
     }
@@ -443,6 +492,41 @@ final class CockpitModel {
     private func relaunchIfIdle() async {
         guard !isBusy else { return }
         if session != nil { await stop() }
+        await start()
+    }
+
+    var canSwitchHarness: Bool {
+        !isBusy && HarnessRegistry.all.count > 1
+    }
+
+    /// Fecha o segmento atual e abre o próximo noutro harness, semeado com a
+    /// conversa que já aconteceu. Nenhum CLI aceita receber turnos de
+    /// assistente, então o contexto vai como a primeira mensagem de usuário.
+    func switchHarness(to newHarness: HarnessID) async {
+        guard newHarness != harness,
+              HarnessRegistry.harness(for: newHarness) != nil else { return }
+
+        let seed = HandoffSeed.make(entries)
+        await stop()
+
+        segments.append(Segment(harness: newHarness, harnessSessionID: "",
+                                model: "", seededBy: seed?.handoff))
+        harness = newHarness
+        harnessSessionID = ""
+        model = ""
+        hasLaunched = false
+        settings = [:]
+        loadKnobs()
+
+        /// O store recusa um append para segmento que não consta do
+        /// `session.json`, então o metadata vai ao disco antes de qualquer coisa.
+        await persistMetadata()
+
+        /// A troca não escreve no chat nem gasta um turno: a semente espera o
+        /// primeiro pedido e viaja colada a ele. Quem trocou vê só o painel
+        /// mudar e segue digitando; a proveniência ficou no `seededBy`.
+        pendingSeed = seed?.text
+
         await start()
     }
 
@@ -471,13 +555,17 @@ final class CockpitModel {
     }
 
     private func generateTitle(from text: String) {
+        guard let adapter = HarnessRegistry.harness(for: harness) else { return }
+        let instruction = "Gere um título curto (3 a 5 palavras, sem aspas e sem "
+            + "ponto final) que resuma o pedido a seguir, na mesma língua dele. "
+            + "Responda somente o título.\n\nPedido: \(text.prefix(600))"
+
+        guard let arguments = adapter.titleArguments(for: instruction) else { return }
+
         Task { [weak self] in
-            guard let installation = try? await ClaudeDiscovery().discover() else { return }
-            let instruction = "Gere um título curto (3 a 5 palavras, sem aspas e sem "
-                + "ponto final) que resuma o pedido a seguir, na mesma língua dele. "
-                + "Responda somente o título.\n\nPedido: \(text.prefix(600))"
+            guard let installation = try? await adapter.discover() else { return }
             guard let output = try? await SystemCommandRunner().run(
-                installation.executable, ["-p", instruction, "--model", "haiku"]
+                installation.executable, arguments
             ) else { return }
             let cleaned = output
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -495,12 +583,16 @@ final class CockpitModel {
 
     // MARK: - Tradução para a tela
 
-    private func apply(_ update: ClaudeSession.Update) {
+    private func apply(_ update: SessionUpdate) {
         switch update {
         case .event(let event):
             switch event {
-            case .sessionInitialized(let model, _):
+            case .sessionInitialized(let model, let reportedSessionID):
                 self.model = model
+
+                if !reportedSessionID.isEmpty, reportedSessionID != harnessSessionID {
+                    harnessSessionID = reportedSessionID
+                }
                 Task { await persistMetadata() }
             case .turnStarted:
                 resetStreaming()
@@ -547,6 +639,8 @@ final class CockpitModel {
     private var questionCallIDs: Set<String> = []
 
     private func render(_ entry: TranscriptEntry, persist: Bool) {
+
+        entries.append(entry)
         if persist {
             Task { [store, sessionID, segmentID] in
                 try? await store.append(entry, to: segmentID, in: sessionID)
@@ -589,14 +683,15 @@ final class CockpitModel {
         case .permissionDecision(_, let decision):
             if case .deny(let message, _) = decision { append(.notice, message, at: moment) }
         case .systemNotice(let subtype, let text):
-            if subtype == "init", let raw = entry.raw["permissionMode"]?.stringValue {
-                detectedMode = raw == "default" ? .manual : PermissionMode(rawValue: raw)
+            if subtype == "init", let raw = entry.raw["permissionMode"]?.stringValue,
+               let mode = knobs.first(where: { $0.category == .mode }) {
+                adopt(knob: mode.id, value: raw == "default" ? "manual" : raw)
             }
             if subtype == "rate_limit",
                let state = entry.raw["rate_limit_info"]?["status"]?.stringValue {
                 isRateLimited = state != "allowed"
             }
-            if subtype != "init" && subtype != "rate_limit" { append(.notice, text, at: moment) }
+            if !Self.silentNotices.contains(subtype) { append(.notice, text, at: moment) }
         case .turnResult(let result):
 
             isBusy = false

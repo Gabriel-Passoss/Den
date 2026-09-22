@@ -29,7 +29,7 @@ private func texts(of session: Session) -> [String] {
     defer { try? FileManager.default.removeItem(at: root) }
     let store = FileTranscriptStore(root: root)
 
-    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
@@ -56,7 +56,7 @@ private func texts(of session: Session) -> [String] {
     defer { try? FileManager.default.removeItem(at: root) }
     let store = FileTranscriptStore(root: root)
 
-    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
@@ -84,7 +84,7 @@ private func texts(of session: Session) -> [String] {
     defer { try? FileManager.default.removeItem(at: root) }
     let store = FileTranscriptStore(root: root)
 
-    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
@@ -114,7 +114,7 @@ private func texts(of session: Session) -> [String] {
     defer { try? FileManager.default.removeItem(at: root) }
     let store = FileTranscriptStore(root: root)
 
-    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
@@ -143,7 +143,7 @@ private func texts(of session: Session) -> [String] {
     defer { try? FileManager.default.removeItem(at: root) }
     let store = FileTranscriptStore(root: root)
 
-    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
@@ -198,7 +198,7 @@ private func texts(of session: Session) -> [String] {
     defer { try? FileManager.default.removeItem(at: root) }
     let store = FileTranscriptStore(root: root)
 
-    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
@@ -239,7 +239,7 @@ private let futureHandoffJSON = #"{"summarizeWithModel":{"model":"m-9","tokens":
 
 private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) -> Data {
     Data(#"""
-    {"id":"\#(session.id.uuidString)","segments":[{"entries":[],"harness":"harness-a","harnessSessionID":"\#(segment.harnessSessionID.uuidString)","id":"\#(segment.id.uuidString)","model":"m","seededBy":\#(futureHandoffJSON),"usage":{"cacheCreationTokens":0,"cacheReadTokens":0,"costUSD":0,"inputTokens":0,"outputTokens":0}}],"title":"t","workingDirectory":"file:///tmp"}
+    {"id":"\#(session.id.uuidString)","segments":[{"entries":[],"harness":"harness-a","harnessSessionID":"\#(segment.harnessSessionID)","id":"\#(segment.id.uuidString)","model":"m","seededBy":\#(futureHandoffJSON),"usage":{"cacheCreationTokens":0,"cacheReadTokens":0,"costUSD":0,"inputTokens":0,"outputTokens":0}}],"title":"t","workingDirectory":"file:///tmp"}
     """#.utf8)
 }
 
@@ -248,7 +248,7 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
     defer { try? FileManager.default.removeItem(at: root) }
     let store = FileTranscriptStore(root: root)
 
-    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
@@ -281,7 +281,7 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
     defer { try? FileManager.default.removeItem(at: root) }
     let store = FileTranscriptStore(root: root)
 
-    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
@@ -337,7 +337,7 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
     defer { try? FileManager.default.removeItem(at: root) }
     let store = FileTranscriptStore(root: root)
 
-    let segment = Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")
+    let segment = Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
@@ -366,7 +366,7 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
     let store = FileTranscriptStore(root: root)
 
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
-                          segments: [Segment(harness: harnessA, harnessSessionID: UUID(), model: "m")])
+                          segments: [Segment(harness: harnessA, harnessSessionID: UUID().uuidString, model: "m")])
     try await store.saveMetadata(session)
     let created = Date(timeIntervalSince1970: 1_500_000_000)
     try FileManager.default.setAttributes(

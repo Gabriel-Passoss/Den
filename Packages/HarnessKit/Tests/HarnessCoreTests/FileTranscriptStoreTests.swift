@@ -25,7 +25,7 @@ private func newSession(segments: [Segment]) -> Session {
 }
 
 private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
-    Segment(harness: harness, harnessSessionID: UUID(), model: "m")
+    Segment(harness: harness, harnessSessionID: UUID().uuidString, model: "m")
 }
 
 @Test func aSessionRoundTripsThroughDisk() async throws {

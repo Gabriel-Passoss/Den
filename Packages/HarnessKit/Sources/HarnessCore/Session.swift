@@ -55,7 +55,7 @@ public struct Segment: Sendable, Equatable, Codable, Identifiable {
     public let id: UUID
     public let harness: HarnessID
 
-    public let harnessSessionID: UUID
+    public var harnessSessionID: String
     public var model: String
     public var entries: [TranscriptEntry]
 
@@ -63,7 +63,7 @@ public struct Segment: Sendable, Equatable, Codable, Identifiable {
 
     public var seededBy: Handoff?
 
-    public init(id: UUID = UUID(), harness: HarnessID, harnessSessionID: UUID,
+    public init(id: UUID = UUID(), harness: HarnessID, harnessSessionID: String,
                 model: String, entries: [TranscriptEntry] = [],
                 usage: UsageTotals = .zero, seededBy: Handoff? = nil) {
         self.id = id

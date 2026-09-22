@@ -17,7 +17,7 @@ private func segment(
     usage: UsageTotals = .zero,
     seededBy: Handoff? = nil
 ) -> Segment {
-    Segment(id: UUID(), harness: harness, harnessSessionID: UUID(),
+    Segment(id: UUID(), harness: harness, harnessSessionID: UUID().uuidString,
             model: "algum-modelo", entries: entries, usage: usage, seededBy: seededBy)
 }
 

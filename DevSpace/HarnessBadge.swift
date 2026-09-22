@@ -1,6 +1,5 @@
 import SwiftUI
 import HarnessCore
-import ClaudeHarness
 
 struct HarnessBadge: View {
 
@@ -26,17 +25,15 @@ struct HarnessBadge: View {
         .clipShape(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
     }
 
+    /// O nome de exibição sem espaços: "Claude Code" vira `HarnessClaudeCode`,
+    /// "OpenCode" vira `HarnessOpenCode`. Um harness sem arte cai no monograma
+    /// em vez de sumir da lista.
     nonisolated static func asset(for harness: HarnessID) -> String? {
-        switch harness {
-        case .claudeCode: "HarnessClaudeCode"
-        default: nil
-        }
+        let name = "Harness" + name(for: harness).replacingOccurrences(of: " ", with: "")
+        return NSImage(named: name) == nil ? nil : name
     }
 
     nonisolated static func name(for harness: HarnessID) -> String {
-        switch harness {
-        case .claudeCode: "Claude Code"
-        default: harness.rawValue
-        }
+        HarnessRegistry.displayName(for: harness)
     }
 }

@@ -2,7 +2,6 @@ import AppKit
 import Foundation
 import Observation
 import HarnessCore
-import ClaudeHarness
 
 @MainActor
 @Observable
@@ -30,7 +29,12 @@ final class WorkspaceModel {
         didSet { UserDefaults.standard.set(sessionOrder, forKey: Self.orderKey) }
     }
 
-    let defaultHarness: HarnessID = .claudeCode
+    var defaultHarness: HarnessID {
+        get { HarnessRegistry.preferred }
+        set { HarnessRegistry.preferred = newValue }
+    }
+
+    var availableHarnesses: [HarnessID] { HarnessRegistry.all.map(\.id) }
 
     private let store: FileTranscriptStore
     private var cockpits: [UUID: CockpitModel] = [:]
@@ -242,12 +246,14 @@ final class WorkspaceModel {
         }
     }
 
-    func newSession(assignedTo folderID: String? = nil) async {
+    func newSession(assignedTo folderID: String? = nil,
+                    harness: HarnessID? = nil) async {
         if let selectedID,
            let summary = summaries.first(where: { $0.id == selectedID }) {
             workingDirectory = summary.workingDirectory
         }
-        let cockpit = CockpitModel(store: store, workingDirectory: workingDirectory)
+        let cockpit = CockpitModel(store: store, workingDirectory: workingDirectory,
+                                   harness: harness ?? defaultHarness)
         adopt(cockpit)
         await cockpit.persistMetadata()
         if let folderID { membership[cockpit.sessionID.uuidString] = folderID }

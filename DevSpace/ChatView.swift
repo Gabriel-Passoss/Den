@@ -1,6 +1,5 @@
 import SwiftUI
 import HarnessCore
-import ClaudeHarness
 
 struct ChatView: View {
     @Bindable var cockpit: CockpitModel
@@ -51,12 +50,17 @@ struct ChatView: View {
         .navigationTitle(cockpit.title)
         .navigationSubtitle(cockpit.locationSummary)
 
+        .focusedSceneValue(\.cockpit, cockpit)
+
         .inspector(isPresented: $showChanges) {
             GitChangesPanel(model: gitChanges, directory: cockpit.workingDirectory,
                             close: { showChanges = false })
                 .inspectorColumnWidth(min: 280, ideal: 560, max: 560)
         }
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                harnessSwitcher
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showChanges.toggle()
@@ -191,10 +195,13 @@ struct ChatView: View {
                 return nil
             }
             if event.keyCode == 48, event.modifierFlags.contains(.shift) {
-                let modes = Self.modeChoices.map(\.mode)
-                let current = cockpit.preferredMode ?? cockpit.detectedMode ?? .manual
-                let next = modes[((modes.firstIndex(of: current) ?? 0) + 1) % modes.count]
-                Task { await cockpit.choose(mode: next) }
+                if let mode = cockpit.knobs.first(where: { $0.category == .mode }),
+                   !mode.options.isEmpty {
+                    let values = mode.options.map(\.value)
+                    let at = values.firstIndex(of: mode.currentValue ?? "") ?? -1
+                    let next = values[(at + 1) % values.count]
+                    Task { await cockpit.choose(knob: mode.id, value: next) }
+                }
                 return nil
             }
             if event.modifierFlags.contains(.command),
@@ -600,7 +607,7 @@ struct ChatView: View {
                     .font(.system(size: 12, weight: .semibold))
             }
 
-            Text("Claude quer usar \(request.displayName ?? request.toolName).")
+            Text("\(cockpit.harnessName) quer usar \(request.displayName ?? request.toolName).")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
 
@@ -617,9 +624,17 @@ struct ChatView: View {
 
             HStack(spacing: 8) {
                 Spacer()
-                Button("Negar") { Task { await cockpit.resolve(allow: false) } }
-                Button("Permitir") { Task { await cockpit.resolve(allow: true) } }
-                    .keyboardShortcut(.defaultAction)
+                ForEach(request.options, id: \.id) { option in
+                    let button = Button(option.label) {
+                        Task { await cockpit.resolve(option) }
+                    }
+
+                    if option.kind == .allowOnce {
+                        button.keyboardShortcut(.defaultAction)
+                    } else {
+                        button
+                    }
+                }
             }
         }
         .padding(12)
@@ -652,10 +667,9 @@ struct ChatView: View {
                 .onSubmit { submit() }
 
             HStack(spacing: 8) {
-                modeBadge
+                ForEach(cockpit.knobs.filter { $0.category == .mode }) { knobBadge($0) }
                 folderBadge
-                modelBadge
-                effortBadge
+                ForEach(cockpit.knobs.filter { $0.category != .mode }) { knobBadge($0) }
                 if cockpit.isBusy {
                     ProgressView().controlSize(.mini)
                     TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -886,75 +900,6 @@ struct ChatView: View {
         .help(help)
     }
 
-    private var modelBadge: some View {
-        Menu {
-            Picker("Modelo", selection: modelSelection) {
-                ForEach(CockpitModel.modelChoices, id: \.id) { choice in
-                    Text(choice.name).tag(choice.id)
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            HStack(spacing: 3) {
-                Text(modelLabel)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 7))
-            }
-            .font(.system(size: 10))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(.quaternary.opacity(0.4), in: Capsule())
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Escolher o modelo das próximas mensagens")
-    }
-
-    static let modeChoices: [(mode: PermissionMode, name: String, symbol: String, color: Color)] = [
-        (.auto, "Automático", "forward.fill", .yellow),
-        (.plan, "Planejamento", "pause.fill", .blue),
-        (.acceptEdits, "Aceitar edições", "forward.fill", .purple),
-        (.manual, "Manual", "pause.fill", .gray),
-    ]
-
-    private var currentMode: PermissionMode {
-        cockpit.preferredMode ?? cockpit.detectedMode ?? .manual
-    }
-
-    private var modeBadge: some View {
-        let current = currentMode
-        let choice = Self.modeChoices.first { $0.mode == current }
-            ?? (mode: current, name: current.rawValue, symbol: "pause.fill", color: Color.gray)
-        return Menu {
-            Picker("Modo", selection: modeSelection) {
-                ForEach(Self.modeChoices, id: \.mode) { choice in
-                    Label(choice.name, systemImage: choice.symbol).tag(choice.mode)
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: choice.symbol)
-                    .font(.system(size: 8))
-                Text(choice.name)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 7))
-                    .foregroundStyle(.secondary)
-            }
-            .font(.system(size: 10))
-            .foregroundStyle(choice.color)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(.quaternary.opacity(0.4), in: Capsule())
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Modo de permissão — Shift+Tab alterna")
-    }
-
     private var folderBadge: some View {
         Button(action: chooseSessionFolder) {
             HStack(spacing: 4) {
@@ -1020,29 +965,102 @@ struct ChatView: View {
         Task { await cockpit.choose(directory: url) }
     }
 
-    private var modeSelection: Binding<PermissionMode> {
+    /// Pull-down, não pop-up. Pela letra do HIG uma escolha mutuamente
+    /// exclusiva pede pop-up, mas trocar de harness não é selecionar um estado
+    /// barato: fecha o segmento, transfere o contexto e sobe outro processo.
+    /// É um comando — e é por isso que abre para baixo em vez de sobre o botão.
+    ///
+    /// Sem `.buttonStyle`/`.menuStyle` próprios, de propósito: é a chrome de
+    /// sistema que traz o Liquid Glass e a animação de abertura.
+    private var harnessSwitcher: some View {
+        Menu {
+            ForEach(HarnessRegistry.all.map(\.id), id: \.rawValue) { candidate in
+                Button {
+                    Task { await cockpit.switchHarness(to: candidate) }
+                } label: {
+                    Label {
+                        Text(HarnessBadge.name(for: candidate))
+                    } icon: {
+                        HarnessBadge(harness: candidate, size: 14)
+                    }
+                }
+                .disabled(candidate == cockpit.harness)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                HarnessBadge(harness: cockpit.harness, size: 15)
+                Text(cockpit.harnessName)
+            }
+            .padding(.horizontal, 6)
+        }
+        .labelStyle(.titleAndIcon)
+        .disabled(!cockpit.canSwitchHarness)
+        .help(cockpit.isBusy
+              ? "Espere o turno terminar para trocar de harness"
+              : "Trocar de harness levando a conversa junto")
+    }
+
+    static let modeLooks: [String: (symbol: String, color: Color)] = [
+        "auto": ("forward.fill", .yellow),
+        "plan": ("pause.fill", .blue),
+        "acceptEdits": ("forward.fill", .purple),
+        "manual": ("pause.fill", .gray),
+        "dontAsk": ("forward.fill", .orange),
+        "bypassPermissions": ("forward.fill", .red),
+        "build": ("hammer.fill", .green),
+    ]
+
+    private func selection(for knob: HarnessKnob) -> Binding<String?> {
         Binding(
-            get: { currentMode },
-            set: { mode in Task { await cockpit.choose(mode: mode) } }
+            get: { cockpit.knob(knob.id)?.currentValue },
+            set: { value in Task { await cockpit.choose(knob: knob.id, value: value) } }
         )
     }
 
-    private var effortBadge: some View {
+    @ViewBuilder
+    private func knobOption(_ option: HarnessKnob.Option, in knob: HarnessKnob) -> some View {
+        if knob.category == .mode, let icon = Self.modeLooks[option.value] {
+            Label(option.label, systemImage: icon.symbol).tag(Optional(option.value))
+        } else {
+            Text(option.label).tag(Optional(option.value))
+        }
+    }
+
+    /// Um menu por botão que o harness declarou. O Claude Code oferece modelo,
+    /// esforço e permissão; o OpenCode oferece modelo e modo, descobertos em
+    /// runtime. Nenhum dos dois está escrito aqui.
+    @ViewBuilder
+    private func knobBadge(_ knob: HarnessKnob) -> some View {
+        let current = knob.currentValue
+        let look = knob.category == .mode ? Self.modeLooks[current ?? ""] : nil
+
         Menu {
-            Picker("Esforço", selection: effortSelection) {
-                ForEach(CockpitModel.effortChoices, id: \.id) { choice in
-                    Text(choice.name).tag(choice.id)
+            Picker(knob.name, selection: selection(for: knob)) {
+                /// Lista plana vira um grupo sem título, então o `Section` só
+                /// aparece de fato quando o harness nomeou os grupos — os 23
+                /// modelos do OpenCode, separados por provedor.
+                ForEach(Array(knob.groupedOptions.enumerated()), id: \.offset) { _, bucket in
+                    Section {
+                        ForEach(bucket.options, id: \.value) { option in
+                            knobOption(option, in: knob)
+                        }
+                    } header: {
+                        if let group = bucket.group { Text(group) }
+                    }
                 }
             }
             .pickerStyle(.inline)
         } label: {
             HStack(spacing: 3) {
-                Text(effortLabel)
+                if let look {
+                    Image(systemName: look.symbol).font(.system(size: 8))
+                }
+                Text(knob.label(for: current) ?? knob.name)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 7))
             }
             .font(.system(size: 10))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(look.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(.secondary))
             .padding(.horizontal, 7).padding(.vertical, 3)
             .background(.quaternary.opacity(0.4), in: Capsule())
         }
@@ -1050,43 +1068,7 @@ struct ChatView: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Escolher o esforço das próximas mensagens")
-    }
-
-    private var effortSelection: Binding<EffortLevel?> {
-        Binding(
-            get: { cockpit.preferredEffort ?? cockpit.detectedEffort },
-            set: { level in Task { await cockpit.choose(effort: level) } }
-        )
-    }
-
-    private var effortLabel: String {
-        guard let level = cockpit.preferredEffort ?? cockpit.detectedEffort else { return "Esforço" }
-        return CockpitModel.effortChoices.first { $0.id == level }?.name ?? level.rawValue
-    }
-
-    private var modelSelection: Binding<String?> {
-        Binding(
-            get: {
-                if let id = cockpit.preferredModel { return id }
-                let reported = cockpit.model.lowercased()
-                return CockpitModel.modelChoices.first { choice in
-                    choice.id.map { reported.contains($0) } ?? false
-                }?.id
-            },
-            set: { id in Task { await cockpit.choose(model: id) } }
-        )
-    }
-
-    private var modelLabel: String {
-        let reported = cockpit.model
-        guard let alias = cockpit.preferredModel else {
-            return reported.isEmpty ? "Modelo" : CockpitModel.displayName(for: reported)
-        }
-        if reported.lowercased().contains(alias.lowercased()) {
-            return CockpitModel.displayName(for: reported)
-        }
-        return CockpitModel.modelChoices.first { $0.id == alias }?.name ?? alias
+        .help("Escolher \(knob.name.lowercased()) das próximas mensagens")
     }
 
     private var visibleStatus: String? {

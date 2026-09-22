@@ -15,7 +15,9 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            HarnessBadge(harness: summary.harnesses.first, size: 18)
+            /// O último segmento é o harness que está valendo agora; `first` mostrava
+            /// para sempre o harness em que a sessão nasceu.
+            HarnessBadge(harness: summary.harnesses.last, size: 18)
 
             VStack(alignment: .leading, spacing: 1) {
                 if isEditing {
@@ -79,10 +81,11 @@ struct SessionRow: View {
         }
     }
 
+    /// Só o harness que está valendo. A trilha de quem veio antes está no
+    /// `session.json` e não ajuda quem está procurando uma sessão na lista.
     private var subtitle: String {
-        let names = summary.harnesses.map(HarnessBadge.name(for:))
-        let unique = NSOrderedSet(array: names).compactMap { $0 as? String }
         let when = summary.updatedAt.formatted(.relative(presentation: .named))
-        return unique.isEmpty ? when : "\(unique.joined(separator: " → ")) · \(when)"
+        guard let current = summary.harnesses.last else { return when }
+        return "\(HarnessBadge.name(for: current)) · \(when)"
     }
 }

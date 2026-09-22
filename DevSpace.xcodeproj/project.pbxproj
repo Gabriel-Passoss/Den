@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		BE922E2A305C0F5300FFD487 /* ClaudeHarness in Frameworks */ = {isa = PBXBuildFile; productRef = BE922E29305C0F5300FFD487 /* ClaudeHarness */; };
 		BE922E2C305C0F5300FFD487 /* HarnessCore in Frameworks */ = {isa = PBXBuildFile; productRef = BE922E2B305C0F5300FFD487 /* HarnessCore */; };
+		BE922E2E305C0F5300FFD487 /* OpenCodeHarness in Frameworks */ = {isa = PBXBuildFile; productRef = BE922E2D305C0F5300FFD487 /* OpenCodeHarness */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +30,7 @@
 			files = (
 				BE922E2C305C0F5300FFD487 /* HarnessCore in Frameworks */,
 				BE922E2A305C0F5300FFD487 /* ClaudeHarness in Frameworks */,
+				BE922E2E305C0F5300FFD487 /* OpenCodeHarness in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -70,6 +72,7 @@
 			packageProductDependencies = (
 				BE922E29305C0F5300FFD487 /* ClaudeHarness */,
 				BE922E2B305C0F5300FFD487 /* HarnessCore */,
+				BE922E2D305C0F5300FFD487 /* OpenCodeHarness */,
 			);
 			productName = DevSpace;
 			productReference = BE5BD8D5305B606D00035C7F /* DevSpace.app */;
@@ -349,6 +352,10 @@
 		BE922E2B305C0F5300FFD487 /* HarnessCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = HarnessCore;
+		};
+		BE922E2D305C0F5300FFD487 /* OpenCodeHarness */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OpenCodeHarness;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

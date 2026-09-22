@@ -7,6 +7,8 @@ struct DevSpaceApp: App {
             ContentView()
         }
 
+        .commands { HarnessCommands() }
+
         .defaultSize(width: 1180, height: 760)
         .windowResizability(.contentMinSize)
     }

@@ -1,46 +1,47 @@
 import Foundation
 import HarnessCore
 
-public struct MediaAttachment: Sendable, Equatable {
-    public let mediaType: String
-    public let data: Data
+public actor ClaudeSession: HarnessSession {
 
-    public init(mediaType: String, data: Data) {
-        self.mediaType = mediaType
-        self.data = data
-    }
-
-    public var isImage: Bool { mediaType.hasPrefix("image/") }
-}
-
-public actor ClaudeSession {
-
-    public enum Update: Sendable {
-
-        case event(SessionEvent)
-
-        case entry(TranscriptEntry)
-
-        case permission(PermissionRequest)
-
-        case unrecognizedControl(UnrecognizedControl)
-
-        case ended(error: String?)
-    }
+    private let installation: HarnessInstallation
+    private let workingDirectory: URL
+    private var settings: [String: String]
 
     private let channel: ControlChannel
     private let mapper: ClaudeEventMapper
     private var pump: Task<Void, Never>?
 
-    public init(channel: ControlChannel, mapper: ClaudeEventMapper = ClaudeEventMapper()) {
+    public init(installation: HarnessInstallation,
+                workingDirectory: URL,
+                settings: [String: String] = [:],
+                channel: ControlChannel = ControlChannel(transport: ProcessTransport()),
+                mapper: ClaudeEventMapper = ClaudeEventMapper()) {
+        self.installation = installation
+        self.workingDirectory = workingDirectory
+        self.settings = settings
         self.channel = channel
         self.mapper = mapper
     }
 
-    public func start(_ launch: ProcessTransport.Launch) async throws -> AsyncStream<Update> {
+    public func knobs() async -> [HarnessKnob] {
+        ClaudeKnobs.all(settings: settings, detected: (
+            effort: ClaudeSettings.effortLevel(forWorkingDirectory: workingDirectory),
+            mode: ClaudeSettings.permissionMode(forWorkingDirectory: workingDirectory)
+        ))
+    }
+
+    public func start(_ start: SessionStart) async throws -> AsyncStream<SessionUpdate> {
+        let launch = ClaudeLaunch.make(
+            installation: installation,
+            workingDirectory: workingDirectory,
+            session: ClaudeSessionStart(start),
+            model: settings[ClaudeKnobs.model],
+            effort: settings[ClaudeKnobs.effort].flatMap(EffortLevel.init(rawValue:)),
+            permissionMode: settings[ClaudeKnobs.mode].flatMap(PermissionMode.init(rawValue:))
+        )
         let outputs = try await channel.start(launch)
 
-        return AsyncStream<Update> { continuation in
+        return AsyncStream<SessionUpdate> { continuation in
             pump = Task { [mapper] in
                 do {
                     for try await output in outputs {
@@ -69,10 +70,23 @@ public actor ClaudeSession {
         }
     }
 
-    public func send(_ text: String, attachments: [MediaAttachment] = []) async throws {
-        var line = try JSONEncoder().encode(Self.userTurn(text: text, attachments: attachments))
+    public func send(_ turn: UserTurn) async throws {
+        var line = try JSONEncoder().encode(
+            Self.userTurn(text: turn.text, attachments: turn.attachments))
         line.append(0x0A)
         try await channel.writeTurn(line)
+    }
+
+    public func interrupt() async throws {
+        _ = try await channel.send(.interrupt)
+    }
+
+    public func apply(knob id: String, value: String?) async throws {
+        settings[id] = value
+
+        guard id == ClaudeKnobs.mode,
+              let raw = value, let mode = PermissionMode(rawValue: raw) else { return }
+        _ = try await channel.send(.setPermissionMode(mode))
     }
 
     static func userTurn(text: String, attachments: [MediaAttachment]) -> JSONValue {

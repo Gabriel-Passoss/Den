@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "HarnessCore", targets: ["HarnessCore"]),
         .library(name: "ClaudeHarness", targets: ["ClaudeHarness"]),
+        .library(name: "OpenCodeHarness", targets: ["OpenCodeHarness"]),
         .executable(name: "harness-probe", targets: ["harness-probe"]),
     ],
     targets: [
@@ -20,6 +21,14 @@ let package = Package(
         .testTarget(
             name: "ClaudeHarnessTests",
             dependencies: ["ClaudeHarness", "HarnessCore", "HarnessTestSupport"],
+
+            resources: [.copy("Fixtures")]
+        ),
+
+        .target(name: "OpenCodeHarness", dependencies: ["HarnessCore"]),
+        .testTarget(
+            name: "OpenCodeHarnessTests",
+            dependencies: ["OpenCodeHarness", "HarnessCore", "HarnessTestSupport"],
 
             resources: [.copy("Fixtures")]
         ),

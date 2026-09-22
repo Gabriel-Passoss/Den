@@ -1,3 +1,35 @@
+public struct PermissionOption: Equatable, Sendable, Codable {
+
+    public enum Kind: String, Equatable, Sendable, Codable {
+        case allowOnce, allowAlways, rejectOnce, rejectAlways
+
+        case other
+    }
+
+    public let id: String
+    public let kind: Kind
+    public let label: String
+
+    public init(id: String, kind: Kind, label: String) {
+        self.id = id
+        self.kind = kind
+        self.label = label
+    }
+
+    public var isAllow: Bool { kind == .allowOnce || kind == .allowAlways }
+
+    private enum CodingKeys: String, CodingKey { case id, kind, label }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        label = try container.decode(String.self, forKey: .label)
+
+        let raw = try container.decode(String.self, forKey: .kind)
+        kind = Kind(rawValue: raw) ?? .other
+    }
+}
+
 public struct PermissionRequest: Equatable, Sendable, Codable {
     public let id: String
     public let toolName: String
@@ -8,6 +40,8 @@ public struct PermissionRequest: Equatable, Sendable, Codable {
 
     public let suggestions: [PermissionSuggestion]
 
+    public let options: [PermissionOption]
+
     public init(
         id: String,
         toolName: String,
@@ -15,7 +49,8 @@ public struct PermissionRequest: Equatable, Sendable, Codable {
         description: String? = nil,
         input: JSONValue = .null,
         toolUseID: String? = nil,
-        suggestions: [PermissionSuggestion] = []
+        suggestions: [PermissionSuggestion] = [],
+        options: [PermissionOption] = []
     ) {
         self.id = id
         self.toolName = toolName
@@ -24,6 +59,27 @@ public struct PermissionRequest: Equatable, Sendable, Codable {
         self.input = input
         self.toolUseID = toolUseID
         self.suggestions = suggestions
+        self.options = options
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, toolName, displayName, description, input, toolUseID
+        case suggestions, options
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        toolName = try container.decode(String.self, forKey: .toolName)
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        input = try container.decodeIfPresent(JSONValue.self, forKey: .input) ?? .null
+        toolUseID = try container.decodeIfPresent(String.self, forKey: .toolUseID)
+
+        suggestions = try container.decodeIfPresent(
+            [PermissionSuggestion].self, forKey: .suggestions) ?? []
+        options = try container.decodeIfPresent(
+            [PermissionOption].self, forKey: .options) ?? []
     }
 }
 
@@ -53,6 +109,8 @@ public struct PermissionSuggestion: Equatable, Sendable, Codable {
 public enum PermissionDecision: Equatable, Sendable, Codable {
     case allow(updatedInput: JSONValue?)
     case deny(message: String, interrupt: Bool)
+
+    case option(id: String)
 }
 
 public enum PermissionMode: String, Equatable, Sendable, CaseIterable {

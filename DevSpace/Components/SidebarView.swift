@@ -30,6 +30,19 @@ struct SidebarView: View {
                 ToolbarItem {
                     Menu {
                         Button("Nova sessão") { Task { await workspace.newSession() } }
+                        Menu("Nova sessão com") {
+                            ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
+                                Button {
+                                    Task { await workspace.newSession(harness: harness) }
+                                } label: {
+                                    Label {
+                                        Text(HarnessBadge.name(for: harness))
+                                    } icon: {
+                                        HarnessBadge(harness: harness, size: 13)
+                                    }
+                                }
+                            }
+                        }
                         Button("Nova pasta") { workspace.addFolder() }
                     } label: {
                         Label("Nova", systemImage: "plus")
@@ -109,6 +122,13 @@ struct SidebarView: View {
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 3)
                 .contentShape(Rectangle())
+            }
+                        .contextMenu {
+                ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
+                    Button("Nova sessão com \(HarnessBadge.name(for: harness))") {
+                        Task { await workspace.newSession(harness: harness) }
+                    }
+                }
             }
             .buttonStyle(.plain)
             .selectionDisabled()
