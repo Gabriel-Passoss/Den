@@ -1,0 +1,130 @@
+import SwiftUI
+import AppKit
+
+struct PaneTip: Equatable {
+    let title: String
+    let detail: String?
+    let indicator: WorkspaceModel.SessionIndicator?
+    let anchor: CGRect
+}
+
+struct PaneHoverCard: View {
+    let tip: PaneTip
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(tip.title)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(2)
+            if let detail = tip.detail {
+                Text(detail)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            if let indicator = tip.indicator {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(SessionRow.color(for: indicator))
+                        .frame(width: 6, height: 6)
+                    Text(SessionRow.label(for: indicator))
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 1)
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .frame(minWidth: 120, maxWidth: 240, alignment: .leading)
+        .fixedSize()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .stroke(.quaternary, lineWidth: 1))
+        .shadow(color: .black.opacity(0.22), radius: 9, y: 3)
+        .padding(12)
+    }
+}
+
+@MainActor
+final class HoverTipPanel {
+    static let shared = HoverTipPanel()
+
+    private var panel: NSPanel?
+    private(set) var isVisible = false
+
+    func show(_ tip: PaneTip) {
+        guard let window = NSApp.mainWindow ?? NSApp.keyWindow,
+              let content = window.contentView else { return }
+
+        let host = NSHostingView(rootView: PaneHoverCard(tip: tip))
+        host.layoutSubtreeIfNeeded()
+        let size = host.fittingSize
+
+        let panel = self.panel ?? makePanel()
+        panel.contentView = host
+
+        let flippedY = content.bounds.height - tip.anchor.midY
+        let inWindow = NSPoint(x: tip.anchor.maxX - 4, y: flippedY)
+        var origin = window.convertPoint(toScreen: inWindow)
+        origin.y -= size.height / 2
+        if let screen = window.screen {
+            origin.y = max(screen.visibleFrame.minY,
+                           min(origin.y, screen.visibleFrame.maxY - size.height))
+        }
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        panel.alphaValue = 0
+        panel.orderFront(nil)
+        NSAnimationContext.runAnimationGroup { animation in
+            animation.duration = 0.12
+            panel.animator().alphaValue = 1
+        }
+        isVisible = true
+    }
+
+    func hide() {
+        panel?.orderOut(nil)
+        isVisible = false
+    }
+
+    private func makePanel() -> NSPanel {
+        let panel = NSPanel(contentRect: .zero,
+                            styleMask: [.borderless, .nonactivatingPanel],
+                            backing: .buffered, defer: true)
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = false
+        panel.level = .floating
+        panel.ignoresMouseEvents = true
+        panel.collectionBehavior = [.transient, .ignoresCycle]
+        self.panel = panel
+        return panel
+    }
+}
+
+struct HoverTipModifier: ViewModifier {
+    let enabled: Bool
+    let make: (CGRect) -> PaneTip
+    let update: (PaneTip?) -> Void
+
+    @State private var anchor: CGRect = .zero
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { anchor = $0 }
+            .onHover { inside in
+                guard enabled else { return }
+                update(inside ? make(anchor) : nil)
+            }
+    }
+}
+
+extension View {
+    func hoverTip(enabled: Bool = true,
+                  _ make: @escaping (CGRect) -> PaneTip,
+                  update: @escaping (PaneTip?) -> Void) -> some View {
+        modifier(HoverTipModifier(enabled: enabled, make: make, update: update))
+    }
+}

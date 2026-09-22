@@ -61,7 +61,7 @@ struct SessionRow: View {
         }
     }
 
-    private static func color(for indicator: WorkspaceModel.SessionIndicator) -> Color {
+    static func color(for indicator: WorkspaceModel.SessionIndicator) -> Color {
         switch indicator {
         case .unread: .green
         case .working: .yellow
@@ -70,7 +70,7 @@ struct SessionRow: View {
         }
     }
 
-    private static func label(for indicator: WorkspaceModel.SessionIndicator) -> String {
+    static func label(for indicator: WorkspaceModel.SessionIndicator) -> String {
         switch indicator {
         case .unread: "Resposta nova"
         case .working: "Trabalhando"

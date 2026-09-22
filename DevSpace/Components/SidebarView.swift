@@ -16,11 +16,15 @@ struct SidebarView: View {
     @State private var dragGeneration = 0
     @State private var pendingDelete: SessionSummary?
 
+    @State private var tipTask: Task<Void, Never>?
+
     var body: some View {
         list
             .safeAreaInset(edge: .top, spacing: 0) { caption }
             .searchable(text: $workspace.search, placement: .sidebar, prompt: "Buscar sessões")
-            .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 460)
+            .navigationSplitViewColumnWidth(min: 148, ideal: 280, max: 360)
+            .background(SidebarColumnConfigurator())
+
             .toolbar {
                 ToolbarItem { Spacer() }
                 ToolbarItem {
@@ -77,6 +81,12 @@ struct SidebarView: View {
                         .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7))
                         .environment(\.colorScheme, .dark)
                     }
+                    .hoverTip({ anchor in
+                        PaneTip(title: group.name,
+                                detail: group.sessions.count == 1
+                                    ? "1 sessão" : "\(group.sessions.count) sessões",
+                                indicator: nil, anchor: anchor)
+                    }, update: { scheduleTip($0) })
                 }
             }
 
@@ -155,6 +165,20 @@ struct SidebarView: View {
             .padding(.bottom, 4)
     }
 
+    private func scheduleTip(_ next: PaneTip?) {
+        tipTask?.cancel()
+        guard let next else {
+            HoverTipPanel.shared.hide()
+            return
+        }
+        let delay = HoverTipPanel.shared.isVisible ? 60 : 350
+        tipTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(delay))
+            guard !Task.isCancelled else { return }
+            HoverTipPanel.shared.show(next)
+        }
+    }
+
     // MARK: - Seleção
 
     private var selectionBinding: Binding<UUID?> {
@@ -183,6 +207,17 @@ struct SidebarView: View {
             } : nil,
             delete: { pendingDelete = summary }
         )
+        .hoverTip({ anchor in
+            var detail = [String]()
+            if inFolder, let group = workspace.folderGroups.first(where: {
+                $0.id == workspace.membership[summary.id.uuidString]
+            }) { detail.append(group.name) }
+            detail.append(summary.updatedAt.formatted(.relative(presentation: .named)))
+            return PaneTip(title: summary.title,
+                           detail: detail.joined(separator: " · "),
+                           indicator: workspace.indicator(for: summary.id),
+                           anchor: anchor)
+        }, update: { scheduleTip($0) })
         .opacity(dragging == summary.id ? 0 : 1)
         .onDrop(of: [.plainText], delegate: SessionDropDelegate(
             target: summary.id, areaFolderID: folderID,
@@ -211,6 +246,7 @@ struct SidebarView: View {
             .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7))
             .environment(\.colorScheme, .dark)
         }
+        .padding(.leading, folderID != nil ? 10 : 0)
         .tag(summary.id)
     }
 
@@ -305,4 +341,23 @@ struct SidebarView: View {
         }
     }
 
+}
+
+private struct SidebarColumnConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async {
+            var probe: NSView? = view
+            while let current = probe, !(current is NSSplitView) {
+                probe = current.superview
+            }
+            guard let split = probe as? NSSplitView,
+                  let controller = split.delegate as? NSSplitViewController,
+                  let item = controller.splitViewItems.first else { return }
+            item.canCollapse = false
+            item.minimumThickness = 148
+            item.maximumThickness = 360
+        }
+    }
 }
