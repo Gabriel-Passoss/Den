@@ -30,15 +30,16 @@ private func kindName(_ kind: TranscriptEntry.Kind) -> String {
     case .permissionDecision: return "permissionDecision"
     case .systemNotice: return "systemNotice"
     case .turnResult: return "turnResult"
+    case .contextCompacted: return "contextCompacted"
     case .unrecognized(let discriminator, _): return "unrecognized(\(discriminator))"
     }
 }
 
 @Test(arguments: [
-    ("hello", 4, 5),
-    ("tool-use", 6, 42),
-    ("permission-request", 6, 1),
-    ("permission-denied", 27, 220),
+    ("hello", 4, 8),
+    ("tool-use", 6, 47),
+    ("permission-request", 6, 4),
+    ("permission-denied", 27, 240),
 ])
 func everyFixtureMapsToTheMeasuredCounts(
     fixture: (name: String, entries: Int, events: Int)
@@ -51,7 +52,7 @@ func everyFixtureMapsToTheMeasuredCounts(
 @Test func theDeltaStreamNeverReachesTheTranscript() throws {
     let out = try mapFixture("permission-denied")
     #expect(out.entries.count == 27)
-    #expect(out.events.count == 220)
+    #expect(out.events.count == 240)
 
     let texts = out.entries.compactMap { entry -> String? in
         guard case .assistantText(let text) = entry.kind else { return nil }

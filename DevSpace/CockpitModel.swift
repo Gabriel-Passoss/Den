@@ -8,8 +8,14 @@ final class CockpitModel {
     struct Line: Identifiable {
         enum Role {
             case user, assistant, thinking, tool, toolResult, notice, unknown
+            case compaction, digest
 
-            var isStep: Bool { self != .user && self != .assistant }
+            var isStep: Bool {
+                switch self {
+                case .thinking, .tool, .toolResult, .notice, .unknown: true
+                case .user, .assistant, .compaction, .digest: false
+                }
+            }
         }
         let id: UUID
         let role: Role
@@ -20,6 +26,8 @@ final class CockpitModel {
         let timestamp: Date
 
         var verb: CanonicalTool?
+
+        var title: String?
     }
 
     let sessionID: UUID
@@ -57,6 +65,19 @@ final class CockpitModel {
         streamBuffer = ""
         streaming = ""
     }
+
+    /// Compactar leva minutos e não emite nada no meio: o instante de início
+    /// é o que sustenta a barra de progresso na tela.
+    var compactingSince: Date?
+
+    /// O contexto que o harness reportou na última ida ao modelo: é o que
+    /// diz quando vale compactar.
+    private(set) var contextTokens: Int = 0
+
+    var contextLabel: String? {
+        contextTokens > 0 ? "\(Self.tokens(contextTokens)) tokens" : nil
+    }
+
     var pending: PermissionRequest?
     var prompt: String = ""
     var status: String = ""
@@ -96,9 +117,54 @@ final class CockpitModel {
 
     var branch: String?
 
+    var catalog: CommandCatalog = .empty {
+        didSet { Self.remember(catalog, for: workingDirectory, harness: harness) }
+    }
+
+    /// O catálogo é de um harness, não da pasta: guardar os dois juntos faria
+    /// o menu do OpenCode abrir com as skills do Claude.
+    private static func catalogKey(_ directory: URL, _ harness: HarnessID) -> String {
+        "DevSpace.catalog." + harness.rawValue + "." + directory.standardizedFileURL.path
+    }
+
+    /// O catálogo só chega quando a sessão sobe; guardar por pasta deixa o
+    /// menu de comandos pronto já na primeira digitada de uma sessão fria.
+    private static func lastCatalogKey(_ harness: HarnessID) -> String {
+        "DevSpace.catalog.last." + harness.rawValue
+    }
+
+    static func remember(_ catalog: CommandCatalog, for directory: URL,
+                         harness: HarnessID) {
+        guard !catalog.isEmpty,
+              let data = try? JSONEncoder().encode(catalog) else { return }
+        UserDefaults.standard.set(data, forKey: catalogKey(directory, harness))
+        UserDefaults.standard.set(data, forKey: lastCatalogKey(harness))
+    }
+
+    /// Pasta ainda sem catálogo cai no último conhecido: skills e MCP são
+    /// quase sempre do usuário, e o catálogo real chega no primeiro turno.
+    static func rememberedCatalog(for directory: URL,
+                                  harness: HarnessID) -> CommandCatalog {
+        for key in [catalogKey(directory, harness), lastCatalogKey(harness)] {
+            if let data = UserDefaults.standard.data(forKey: key),
+               let catalog = try? JSONDecoder().decode(CommandCatalog.self, from: data) {
+                return catalog
+            }
+        }
+        return .empty
+    }
+
+    /// Comandos são enviados como turno: o CLI os interpreta e responde com
+    /// os eventos de status correspondentes.
+    func run(command: String) async {
+        await send(text: command)
+    }
+
     private(set) var harness: HarnessID
 
-    var knobs: [HarnessKnob] = []
+    var knobs: [HarnessKnob] = [] {
+        didSet { Self.remember(knobs, for: harness) }
+    }
 
     var capabilities = HarnessCapabilities()
 
@@ -149,6 +215,7 @@ final class CockpitModel {
         self.isRestored = false
         restorePreferences()
         loadKnobs()
+        catalog = Self.rememberedCatalog(for: workingDirectory, harness: harness)
     }
 
     init(store: FileTranscriptStore, restoring session: Session) {
@@ -167,6 +234,7 @@ final class CockpitModel {
         self.status = "fria"
         restorePreferences()
         loadKnobs()
+        catalog = Self.rememberedCatalog(for: workingDirectory, harness: harness)
         for entry in session.allEntries { render(entry, persist: false) }
 
         /// Trocou de harness e fechou o app antes de escrever: a semente nunca
@@ -287,14 +355,18 @@ final class CockpitModel {
         if session == nil { await start() }
         guard let session else { return }
 
-        let stored = attached.compactMap { persistAttachment($0) }
-        let entry = TranscriptEntry(
-            timestamp: Date(),
-            kind: .userMessage(text: text, attachments: stored),
-            raw: .object(["type": .string("user"), "text": .string(text)])
-        )
-        render(entry, persist: true)
-        await nameFromFirstTurn(text.isEmpty ? "Anexo" : text)
+        if text == SlashCatalog.compactCommand {
+            compactingSince = Date()
+        } else {
+            let stored = attached.compactMap { persistAttachment($0) }
+            let entry = TranscriptEntry(
+                timestamp: Date(),
+                kind: .userMessage(text: text, attachments: stored),
+                raw: .object(["type": .string("user"), "text": .string(text)])
+            )
+            render(entry, persist: true)
+            await nameFromFirstTurn(text.isEmpty ? "Anexo" : text)
+        }
 
         /// O balão e o transcript guardam o que o usuário escreveu; só o que
         /// sai pelo cabo carrega a conversa herdada da troca de harness.
@@ -450,11 +522,31 @@ final class CockpitModel {
         knobs[index].currentValue = value
     }
 
+    /// Modelo e modo do OpenCode só existem depois do handshake, então numa
+    /// sessão ainda fria a barra ficaria vazia. O último conjunto conhecido
+    /// segura o lugar até a sessão subir e dizer o que vale agora.
+    private static func knobsKey(_ harness: HarnessID) -> String {
+        "DevSpace.knobs." + harness.rawValue
+    }
+
+    static func remember(_ knobs: [HarnessKnob], for harness: HarnessID) {
+        guard !knobs.isEmpty, let data = try? JSONEncoder().encode(knobs) else { return }
+        UserDefaults.standard.set(data, forKey: knobsKey(harness))
+    }
+
+    static func rememberedKnobs(for harness: HarnessID) -> [HarnessKnob] {
+        guard let data = UserDefaults.standard.data(forKey: knobsKey(harness)),
+              let knobs = try? JSONDecoder().decode([HarnessKnob].self, from: data)
+        else { return [] }
+        return knobs
+    }
+
     private func loadKnobs() {
         guard let adapter = HarnessRegistry.harness(for: harness) else { return }
 
         var discovered = adapter.knobs(for: HarnessInstallation(executable: "", version: ""),
                                        workingDirectory: workingDirectory)
+        if discovered.isEmpty { discovered = Self.rememberedKnobs(for: harness) }
         for index in discovered.indices {
             if let chosen = settings[discovered[index].id] {
                 discovered[index].currentValue = chosen
@@ -467,6 +559,7 @@ final class CockpitModel {
         guard directory.path != workingDirectory.path else { return }
         workingDirectory = directory
         loadKnobs()
+        catalog = Self.rememberedCatalog(for: directory, harness: harness)
         await persistMetadata()
         await loadBranch()
         await relaunchIfIdle()
@@ -517,6 +610,7 @@ final class CockpitModel {
         hasLaunched = false
         settings = [:]
         loadKnobs()
+        catalog = Self.rememberedCatalog(for: workingDirectory, harness: newHarness)
 
         /// O store recusa um append para segmento que não consta do
         /// `session.json`, então o metadata vai ao disco antes de qualquer coisa.
@@ -587,8 +681,9 @@ final class CockpitModel {
         switch update {
         case .event(let event):
             switch event {
-            case .sessionInitialized(let model, let reportedSessionID):
+            case .sessionInitialized(let model, let reportedSessionID, let catalog):
                 self.model = model
+                if !catalog.isEmpty { self.catalog = catalog }
 
                 if !reportedSessionID.isEmpty, reportedSessionID != harnessSessionID {
                     harnessSessionID = reportedSessionID
@@ -600,6 +695,22 @@ final class CockpitModel {
                 appendStreaming(text)
             case .notice(let subtype, let text):
                 if subtype == "status" { status = text }
+            case .contextUsage(let tokens):
+                contextTokens = tokens
+            case .catalogUpdated(let updated):
+                if !updated.isEmpty { catalog = updated }
+            case .compaction(let phase):
+                switch phase {
+                case .started:
+                    if compactingSince == nil { compactingSince = Date() }
+                case .finished:
+                    compactingSince = nil
+                case .failed(let reason):
+                    compactingSince = nil
+                    append(.notice, reason.isEmpty
+                           ? "não deu para compactar a conversa"
+                           : "não deu para compactar: \(reason)")
+                }
             case .thinkingDelta, .toolInputDelta:
                 break
             }
@@ -624,6 +735,7 @@ final class CockpitModel {
             let midTurn = isBusy
             isBusy = false
             turnStartedAt = nil
+            compactingSince = nil
             status = error.map { "encerrada: \($0)" } ?? "fria"
             session = nil
             if let error {
@@ -650,6 +762,11 @@ final class CockpitModel {
         let moment = entry.timestamp
         switch entry.kind {
         case .userMessage(let text, let attachments):
+            if text == SlashCatalog.compactCommand { return }
+            if let title = digestTitle(for: text) {
+                append(.digest, Self.unwrapped(text), at: moment, title: title)
+                return
+            }
             let images = attachments.filter { $0.kind == "image" }
                 .compactMap { try? Data(contentsOf: URL(fileURLWithPath: $0.path)) }
             let files = attachments.filter { $0.kind == "file" }.map { attachment in
@@ -664,6 +781,14 @@ final class CockpitModel {
             }
         case .assistantText(let text):
             resetStreaming()
+            /// O Claude devolve o resumo da compactação como mensagem de
+            /// usuário; o OpenCode, como prosa do assistente. Os dois viram a
+            /// mesma linha recolhida embaixo da fronteira.
+            if awaitingCompactionSummary {
+                awaitingCompactionSummary = false
+                append(.digest, text, at: moment, title: Digest.summary)
+                return
+            }
             append(.assistant, text, at: moment)
             if persist, !(isViewed?() ?? false) { hasUnread = true }
         case .assistantThinking(let text):
@@ -696,12 +821,19 @@ final class CockpitModel {
 
             isBusy = false
             turnStartedAt = nil
+            compactingSince = nil
             resetStreaming()
             if !result.isError { isRateLimited = false }
+            if let tokens = result.contextTokens { contextTokens = tokens }
             if result.isError {
                 append(.notice, "o turno falhou no harness"
                        + (result.stopReason.map { " (\($0))" } ?? ""), at: moment)
             }
+        case .contextCompacted(let compaction):
+            compactingSince = nil
+            if compaction.tokensAfter > 0 { contextTokens = compaction.tokensAfter }
+            awaitingCompactionSummary = true
+            append(.compaction, Self.headline(of: compaction), at: moment)
         case .permissionRequest, .unrecognized:
 
             if entry.raw["type"]?.stringValue == "system",
@@ -712,11 +844,67 @@ final class CockpitModel {
     }
 
     private func append(_ role: Line.Role, _ text: String,
-                        at moment: Date = Date(), verb: CanonicalTool? = nil) {
+                        at moment: Date = Date(), verb: CanonicalTool? = nil,
+                        title: String? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         lines.append(Line(id: UUID(), role: role, text: trimmed,
-                          timestamp: moment, verb: verb))
+                          timestamp: moment, verb: verb, title: title))
+    }
+
+    // MARK: - Recados de sistema que chegam como mensagem do usuário
+
+    /// O resumo da compactação vem logo depois da fronteira; sessões antigas,
+    /// gravadas antes de a fronteira existir, caem no texto de abertura.
+    private var awaitingCompactionSummary = false
+
+    enum Digest {
+        static let summary = "Resumo da conversa anterior"
+        static let command = "Saída de comando local"
+    }
+
+    private func digestTitle(for text: String) -> String? {
+        if awaitingCompactionSummary
+            || text.hasPrefix("This session is being continued") {
+            awaitingCompactionSummary = false
+            return Digest.summary
+        }
+        return Self.envelopes.contains(where: { text.contains("<" + $0 + ">") })
+            ? Digest.command
+            : nil
+    }
+
+    private static let envelopes = [
+        "local-command-caveat", "command-name", "command-message",
+        "command-args", "local-command-stdout", "local-command-stderr",
+    ]
+
+    private static func unwrapped(_ text: String) -> String {
+        var out = text
+        for tag in envelopes {
+            out = out.replacingOccurrences(of: "<" + tag + ">", with: "")
+            out = out.replacingOccurrences(of: "</" + tag + ">", with: "")
+        }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func headline(of compaction: ContextCompaction) -> String {
+        var parts = ["Conversa compactada"]
+        if compaction.tokensBefore > 0, compaction.tokensAfter > 0 {
+            parts.append("\(tokens(compaction.tokensBefore)) → "
+                         + "\(tokens(compaction.tokensAfter)) tokens")
+        }
+        if compaction.duration >= 1 { parts.append(elapsed(compaction.duration)) }
+        return parts.joined(separator: " · ")
+    }
+
+    private static func tokens(_ value: Int) -> String {
+        value >= 1_000 ? "\(Int((Double(value) / 1_000).rounded()))k" : String(value)
+    }
+
+    private static func elapsed(_ duration: TimeInterval) -> String {
+        let seconds = Int(duration.rounded())
+        return seconds < 60 ? "\(seconds)s" : "\(seconds / 60)min \(seconds % 60)s"
     }
 
     private func summary(of call: ToolCall) -> String {

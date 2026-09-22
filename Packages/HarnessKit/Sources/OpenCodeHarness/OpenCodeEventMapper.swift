@@ -5,7 +5,6 @@ public struct OpenCodeEventMapper: Sendable {
 
     static let discriminatorPrefix = "opencode:"
 
-    static let ignoredUpdates: Set<String> = ["available_commands_update"]
 
     let now: @Sendable () -> Date
 
@@ -15,9 +14,22 @@ public struct OpenCodeEventMapper: Sendable {
     private var settledToolCalls: Set<String> = []
     private var blockIndex = 0
     private var latestCost: Double = 0
+    private var contextTokens = 0
+    private var compactingSince: Date?
+    private var contextBeforeCompaction = 0
+    private var compactionProse: [String] = []
 
     public init(now: @escaping @Sendable () -> Date = Date.init) {
         self.now = now
+    }
+
+    /// O OpenCode compacta respondendo com um resumo comum: nenhum quadro
+    /// anuncia a fronteira nem conta tokens. Quem sabe que o turno é uma
+    /// compactação é quem mandou o comando, então a sessão avisa antes.
+    public mutating func beginCompaction() {
+        compactingSince = now()
+        contextBeforeCompaction = contextTokens
+        compactionProse = []
     }
 
     // MARK: - Notificações de sessão
@@ -26,7 +38,6 @@ public struct OpenCodeEventMapper: Sendable {
         guard let kind = update["sessionUpdate"]?.stringValue else {
             return MappedOutput(entries: [unrecognized("update", update)])
         }
-        if Self.ignoredUpdates.contains(kind) { return .empty }
 
         switch kind {
         case "agent_message_chunk":
@@ -41,7 +52,18 @@ public struct OpenCodeEventMapper: Sendable {
             return toolCallUpdate(update)
         case "usage_update":
             latestCost = update["cost"]?["amount"]?.doubleValue ?? latestCost
-            return .empty
+            guard let used = update["used"]?.intValue, used > 0 else { return .empty }
+            contextTokens = used
+            return MappedOutput(events: [.contextUsage(tokens: used)])
+
+        /// O ACP não lista servidores MCP; o que ele anuncia são os comandos,
+        /// e o `/compact` fica de fora deles mesmo sendo atendido.
+        case "available_commands_update":
+            let names = update["availableCommands"]?.arrayValue?
+                .compactMap { $0["name"]?.stringValue } ?? []
+            guard !names.isEmpty else { return .empty }
+            return MappedOutput(events: [.catalogUpdated(
+                CommandCatalog(skills: names.sorted(), supportsCompact: true))])
         default:
 
             return MappedOutput(entries: [unrecognized(kind, update)])
@@ -62,6 +84,10 @@ public struct OpenCodeEventMapper: Sendable {
         }
         pending?.text += text
 
+        /// Compactando, o resumo não escorre na tela: quem está desenhando o
+        /// turno é o cartão de progresso.
+        guard compactingSince == nil else { return output }
+
         output.events.append(isThought
             ? .thinkingDelta(blockIndex: blockIndex, text: text)
             : .textDelta(blockIndex: blockIndex, text: text))
@@ -76,7 +102,16 @@ public struct OpenCodeEventMapper: Sendable {
         let trimmed = open.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        return [TranscriptEntry(
+        /// Compactando, tudo que sai é o resumo — e ele costuma sair em mais
+        /// de uma mensagem. As partes se juntam num registro só, para o chat
+        /// não ganhar um cartão por pedaço. O raciocínio do sumarizador é
+        /// sobre a conversa, não faz parte dela.
+        if compactingSince != nil {
+            if !open.isThought { compactionProse.append(trimmed) }
+            return []
+        }
+
+        let entry = TranscriptEntry(
             timestamp: now(),
             kind: open.isThought ? .assistantThinking(open.text) : .assistantText(open.text),
             raw: .object([
@@ -85,7 +120,45 @@ public struct OpenCodeEventMapper: Sendable {
                 "messageId": .string(open.id),
                 "text": .string(open.text),
             ])
-        )]
+        )
+
+        return [entry]
+    }
+
+    /// A primeira prosa do turno de compactação é o resumo: a fronteira
+    /// entra logo antes dele, com o que dá para afirmar — o OpenCode não
+    /// informa quantos tokens havia nem quantos sobraram.
+    private mutating func closeCompaction() -> [TranscriptEntry] {
+        guard let started = compactingSince else { return [] }
+        compactingSince = nil
+
+        let prose = compactionProse.joined(separator: "\n\n")
+        compactionProse = []
+        guard !prose.isEmpty else { return [] }
+
+        /// Os dois números só valem juntos: sem um `usage_update` novo depois
+        /// da compactação, o contexto atual ainda é o de antes e dizer
+        /// "87k → 87k" seria inventar um corte que ninguém confirmou.
+        let moved = contextTokens != contextBeforeCompaction
+        return [
+            TranscriptEntry(
+                timestamp: now(),
+                kind: .contextCompacted(ContextCompaction(
+                    trigger: .manual,
+                    tokensBefore: moved ? contextBeforeCompaction : 0,
+                    tokensAfter: moved ? contextTokens : 0,
+                    duration: now().timeIntervalSince(started))),
+                raw: .object(["inferredFrom": .string(CommandCatalog.compactCommand)])
+            ),
+            TranscriptEntry(
+                timestamp: now(),
+                kind: .assistantText(prose),
+                raw: .object([
+                    "sessionUpdate": .string("agent_message_chunk"),
+                    "text": .string(prose),
+                ])
+            ),
+        ]
     }
 
     public mutating func flush() -> MappedOutput {
@@ -94,6 +167,7 @@ public struct OpenCodeEventMapper: Sendable {
         for id in heldToolCalls.keys.sorted() where !announcedToolCalls.contains(id) {
             entries += announce(id)
         }
+        entries += closeCompaction()
         return MappedOutput(entries: entries)
     }
 
@@ -218,6 +292,16 @@ public struct OpenCodeEventMapper: Sendable {
         let usage = result["usage"]
         let stopReason = result["stopReason"]?.stringValue
 
+        /// O `usage_update` do turno é a fonte melhor — traz o contexto
+        /// inteiro. O result só serve de reserva quando ele não veio.
+        let read = (usage?["inputTokens"]?.intValue ?? 0)
+            + (usage?["cachedReadTokens"]?.intValue ?? 0)
+        if contextTokens == 0, read > 0 {
+            contextTokens = read
+            output.events.append(.contextUsage(tokens: read))
+        }
+        let context = contextTokens > 0 ? contextTokens : nil
+
         output.entries.append(TranscriptEntry(
             timestamp: now(),
             kind: .turnResult(TurnResult(
@@ -230,7 +314,8 @@ public struct OpenCodeEventMapper: Sendable {
                 ),
                 stopReason: stopReason,
 
-                isError: stopReason == "refusal" || stopReason == "error"
+                isError: stopReason == "refusal" || stopReason == "error",
+                contextTokens: context
             )),
             raw: result
         ))

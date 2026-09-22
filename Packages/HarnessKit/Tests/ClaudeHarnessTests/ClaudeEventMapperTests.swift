@@ -462,3 +462,50 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(entry.kind == .permissionDecision(requestID: "req-1", .allow(updatedInput: nil)))
     #expect(entry.timestamp == fixedNow)
 }
+
+// MARK: - Contexto ocupado
+
+@Test func messageStartAlreadyReportsTheContextItRead() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"stream_event","event":{"type":"message_start",
+     "message":{"model":"claude-opus-5","content":[],
+      "usage":{"input_tokens":2,"cache_creation_input_tokens":1697,
+               "cache_read_input_tokens":48461,"output_tokens":1}}}}
+    """#))
+    #expect(out.events == [.turnStarted, .contextUsage(tokens: 50_160)])
+}
+
+@Test func anAssistantLineReportsTheContextAlongsideItsBlocks() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","message":{"content":[{"type":"text","text":"OK"}],
+     "usage":{"input_tokens":2,"cache_creation_input_tokens":500,
+              "cache_read_input_tokens":9000,"output_tokens":4}}}
+    """#))
+    #expect(out.events == [.contextUsage(tokens: 9502)])
+    #expect(out.entries.count == 1)
+}
+
+@Test func theContextOfAResultComesFromItsLastIterationNotTheTotal() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"result","is_error":false,
+     "usage":{"input_tokens":4,"output_tokens":8,
+              "cache_read_input_tokens":200000,"cache_creation_input_tokens":3000,
+              "iterations":[{"input_tokens":2,"cache_read_input_tokens":40000,
+                             "cache_creation_input_tokens":1000},
+                            {"input_tokens":2,"cache_read_input_tokens":41000,
+                             "cache_creation_input_tokens":2000}]}}
+    """#))
+    #expect(out.events == [.contextUsage(tokens: 43_002)])
+    guard case .turnResult(let turn) = try #require(out.entries.first).kind else {
+        Issue.record("esperava .turnResult"); return
+    }
+    #expect(turn.contextTokens == 43_002, "o contexto é o da última ida ao modelo")
+    #expect(turn.usage.cacheReadTokens == 200_000, "o total do turno continua somado")
+}
+
+@Test func anAssistantLineWithoutUsageReportsNoContext() throws {
+    let out = makeMapper().map(try json(#"""
+    {"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}
+    """#))
+    #expect(out.events.isEmpty)
+}

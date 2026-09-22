@@ -1,10 +1,10 @@
-public struct HarnessKnob: Identifiable, Sendable, Equatable {
+public struct HarnessKnob: Identifiable, Sendable, Equatable, Codable {
 
-    public enum Category: String, Sendable, Equatable {
+    public enum Category: String, Sendable, Equatable, Codable {
         case model, effort, mode
     }
 
-    public struct Option: Sendable, Equatable {
+    public struct Option: Sendable, Equatable, Codable {
         public let value: String
         public let label: String
 

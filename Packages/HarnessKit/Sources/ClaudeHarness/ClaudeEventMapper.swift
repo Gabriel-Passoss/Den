@@ -3,6 +3,38 @@ import HarnessCore
 
 public struct ClaudeEventMapper: Sendable {
 
+    /// O CLI anuncia skills, comandos e servidores MCP no evento de init.
+    static func catalog(from line: JSONValue) -> CommandCatalog {
+        let commands = line["slash_commands"]?.arrayValue?
+            .compactMap(\.stringValue) ?? []
+        let skills = line["skills"]?.arrayValue?.compactMap(\.stringValue) ?? []
+
+        let prompts = commands.filter { $0.hasPrefix("mcp__") }
+        let servers = line["mcp_servers"]?.arrayValue?.compactMap { entry -> CommandCatalog.Server? in
+            guard let name = entry["name"]?.stringValue else { return nil }
+            let status = CommandCatalog.ServerStatus(
+                rawValue: entry["status"]?.stringValue ?? "") ?? .pending
+            let slug = String(name.map { $0.isLetter || $0.isNumber ? $0 : "_" })
+            let owned = prompts.filter { $0.hasPrefix("mcp__" + slug + "__") }
+            return CommandCatalog.Server(name: name, status: status, prompts: owned)
+        } ?? []
+
+        return CommandCatalog(skills: skills.sorted(),
+                              servers: servers,
+                              supportsCompact: commands.contains("compact"))
+    }
+
+
+    /// O contexto vivo é tudo que o modelo leu para responder: a entrada
+    /// nova mais o que veio do cache.
+    static func contextTokens(in usage: JSONValue?) -> Int? {
+        guard let usage else { return nil }
+        let total = (usage["input_tokens"]?.intValue ?? 0)
+            + (usage["cache_read_input_tokens"]?.intValue ?? 0)
+            + (usage["cache_creation_input_tokens"]?.intValue ?? 0)
+        return total > 0 ? total : nil
+    }
+
     static let discriminatorPrefix = "claude:"
 
     let now: @Sendable () -> Date
@@ -52,7 +84,11 @@ public struct ClaudeEventMapper: Sendable {
         }
         switch kind {
         case "message_start":
-            return MappedOutput(events: [.turnStarted])
+            var events: [SessionEvent] = [.turnStarted]
+            if let tokens = Self.contextTokens(in: event["message"]?["usage"]) {
+                events.append(.contextUsage(tokens: tokens))
+            }
+            return MappedOutput(events: events)
         case "content_block_delta":
             return MappedOutput(events: delta(event).map { [$0] } ?? [])
         default:
@@ -105,7 +141,9 @@ private extension ClaudeEventMapper {
         guard let blocks = line["message"]?["content"]?.arrayValue else {
             return MappedOutput(entries: [unrecognized("assistant", line, at: moment)])
         }
-        return MappedOutput(entries: blocks.map { assistantBlock($0, at: moment) })
+        let usage = ClaudeEventMapper.contextTokens(in: line["message"]?["usage"])
+        return MappedOutput(events: usage.map { [.contextUsage(tokens: $0)] } ?? [],
+                            entries: blocks.map { assistantBlock($0, at: moment) })
     }
 
     func assistantBlock(_ block: JSONValue, at moment: Date) -> TranscriptEntry {
@@ -175,14 +213,20 @@ private extension ClaudeEventMapper {
             cacheCreationTokens: usage?["cache_creation_input_tokens"]?.intValue ?? 0,
             costUSD: line["total_cost_usd"]?.doubleValue ?? 0
         )
+        /// O total do result soma o turno inteiro; o contexto é o da última
+        /// ida ao modelo.
+        let context = ClaudeEventMapper.contextTokens(in: usage?["iterations"]?.arrayValue?.last)
         let turn = TurnResult(
             usage: totals,
             stopReason: line["stop_reason"]?.stringValue,
-            isError: line["is_error"]?.boolValue ?? false
+            isError: line["is_error"]?.boolValue ?? false,
+            contextTokens: context
         )
-        return MappedOutput(entries: [
-            TranscriptEntry(timestamp: timestamp(of: line), kind: .turnResult(turn), raw: line)
-        ])
+        return MappedOutput(
+            events: context.map { [.contextUsage(tokens: $0)] } ?? [],
+            entries: [
+                TranscriptEntry(timestamp: timestamp(of: line), kind: .turnResult(turn), raw: line)
+            ])
     }
 
     func unrecognizedBlock(_ block: JSONValue, at moment: Date) -> TranscriptEntry {
@@ -211,7 +255,8 @@ private extension ClaudeEventMapper {
             return MappedOutput(
                 events: [.sessionInitialized(
                     model: model,
-                    harnessSessionID: line["session_id"]?.stringValue ?? ""
+                    harnessSessionID: line["session_id"]?.stringValue ?? "",
+                    catalog: Self.catalog(from: line)
                 )],
                 entries: [TranscriptEntry(
                     timestamp: moment,
@@ -221,9 +266,31 @@ private extension ClaudeEventMapper {
             )
 
         case "status":
-            return MappedOutput(events: [
-                .notice(subtype: subtype, text: line["status"]?.stringValue ?? "")
-            ])
+            if let outcome = line["compact_result"]?.stringValue {
+                return MappedOutput(events: [
+                    outcome == "failed"
+                        ? .compaction(.failed(
+                            reason: line["compact_error"]?.stringValue ?? ""))
+                        : .compaction(.finished)
+                ])
+            }
+            let status = line["status"]?.stringValue ?? ""
+            if status == "compacting" {
+                return MappedOutput(events: [.compaction(.started)])
+            }
+            return MappedOutput(events: [.notice(subtype: subtype, text: status)])
+
+        case "compact_boundary":
+            let meta = line["compact_metadata"]
+            return MappedOutput(entries: [TranscriptEntry(
+                timestamp: moment,
+                kind: .contextCompacted(ContextCompaction(
+                    trigger: meta?["trigger"]?.stringValue == "auto" ? .automatic : .manual,
+                    tokensBefore: meta?["pre_tokens"]?.intValue ?? 0,
+                    tokensAfter: meta?["post_tokens"]?.intValue ?? 0,
+                    duration: Double(meta?["duration_ms"]?.intValue ?? 0) / 1000)),
+                raw: line
+            )])
 
         case "thinking_tokens":
             return MappedOutput(events: [

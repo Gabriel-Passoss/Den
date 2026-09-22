@@ -89,9 +89,15 @@ private let golden: [Golden] = [
             stopReason: "end_turn", isError: false)),
         wire: #"{"turnResult":{"_0":{"isError":false,"stopReason":"end_turn","usage":{"cacheCreationTokens":2,"cacheReadTokens":1,"costUSD":0.01,"inputTokens":10,"outputTokens":20}}}}"#
     ),
+    Golden(
+        discriminator: "contextCompacted",
+        kind: .contextCompacted(ContextCompaction(
+            trigger: .manual, tokensBefore: 875_602, tokensAfter: 14_144, duration: 132.5)),
+        wire: #"{"contextCompacted":{"_0":{"duration":132.5,"tokensAfter":14144,"tokensBefore":875602,"trigger":"manual"}}}"#
+    ),
 ]
 
-@Test func theNineKnownKindsDecodeFromTheirGoldenJSON() throws {
+@Test func theKnownKindsDecodeFromTheirGoldenJSON() throws {
     for item in golden {
         let decoded = try decoder.decode(TranscriptEntry.Kind.self, from: Data(item.wire.utf8))
         #expect(decoded == item.kind, "o decoder mudou de forma para \(item.discriminator)")
@@ -101,7 +107,7 @@ private let golden: [Golden] = [
     }
 }
 
-@Test func theNineKnownKindsEncodeToTheirGoldenJSON() throws {
+@Test func theKnownKindsEncodeToTheirGoldenJSON() throws {
     for item in golden {
         let written = try json(String(decoding: try encoder.encode(item.kind), as: UTF8.self))
         #expect(written == (try json(item.wire)),

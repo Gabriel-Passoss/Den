@@ -67,8 +67,8 @@ inflando o núcleo; `run` não tem canal de permissão nem interrupção.
 | `user_message_chunk` | idem (só no replay do `session/load`) | `.userMessage` |
 | `tool_call` | `{toolCallId, title, kind, status, locations, rawInput}` | `.toolCall(ToolCall)` |
 | `tool_call_update` | idem + `content`, `rawOutput`, `status` | `.toolResult` quando `status` for terminal |
-| `usage_update` | `{used, size, cost: {amount, currency}}` | `UsageTotals` do segmento |
-| `available_commands_update` | lista de comandos/skills | ignorado (ruído de inicialização) |
+| `usage_update` | `{used, size, cost: {amount, currency}}` | custo no `UsageTotals`; `used` vira `.contextUsage` |
+| `available_commands_update` | lista de comandos/skills | `.catalogUpdated(CommandCatalog)` → menu de `/` |
 
 ### 2.4 Opções de permissão observadas
 

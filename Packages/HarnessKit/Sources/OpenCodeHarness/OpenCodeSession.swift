@@ -17,6 +17,8 @@ public actor OpenCodeSession: HarnessSession {
     private var harnessSessionID: String?
     private var currentKnobs: [HarnessKnob] = []
 
+    private var isReplaying = false
+
     private var inboundIDs: [String: JSONValue] = [:]
     private var offeredOptions: [String: [PermissionOption]] = [:]
     private var nextPermissionNumber = 0
@@ -86,6 +88,8 @@ public actor OpenCodeSession: HarnessSession {
         let opened: JSONValue
         switch start {
         case .resume(let id), .fork(let id):
+            isReplaying = true
+            defer { isReplaying = false; _ = mapper.flush() }
 
             opened = try await channel.send("session/load", .object([
                 "sessionId": .string(id),
@@ -107,9 +111,12 @@ public actor OpenCodeSession: HarnessSession {
             try? await applyRemotely(knob: id, value: value)
         }
 
+        /// O ACP não lista os comandos embutidos do CLI, então o catálogo diz
+        /// só o que dá para afirmar: o OpenCode atende `/compact`.
         continuation?.yield(.event(.sessionInitialized(
             model: OpenCodeKnobs.model(in: currentKnobs),
-            harnessSessionID: harnessSessionID ?? "")))
+            harnessSessionID: harnessSessionID ?? "",
+            catalog: CommandCatalog(supportsCompact: true))))
     }
 
     // MARK: - Entrada do CLI
@@ -118,7 +125,8 @@ public actor OpenCodeSession: HarnessSession {
         switch output {
         case .notification(let method, let params):
             guard method == "session/update", let update = params["update"] else { return }
-            emit(mapper.map(update: update))
+            let output = mapper.map(update: update)
+            isReplaying ? replay(output) : emit(output)
 
         case .request(let id, let method, let params):
             guard method == "session/request_permission" else {
@@ -149,6 +157,23 @@ public actor OpenCodeSession: HarnessSession {
             automaticReply: replied ? Self.refusalMessage : nil)))
     }
 
+    /// `session/load` devolve a sessão inteira antes de responder, e ela já
+    /// está gravada deste lado: aceitá-la como entrada nova duplicaria a
+    /// conversa a cada abertura — e o chat pularia enquanto a cópia desce.
+    /// Do replay interessa só o estado: catálogo, contexto, configuração.
+    static func replayable(_ output: MappedOutput) -> [SessionEvent] {
+        output.events.filter { event in
+            switch event {
+            case .turnStarted, .textDelta, .thinkingDelta, .toolInputDelta: false
+            default: true
+            }
+        }
+    }
+
+    private func replay(_ output: MappedOutput) {
+        for event in Self.replayable(output) { continuation?.yield(.event(event)) }
+    }
+
     private func emit(_ output: MappedOutput) {
         for event in output.events { continuation?.yield(.event(event)) }
         for entry in output.entries { continuation?.yield(.entry(entry)) }
@@ -176,6 +201,11 @@ public actor OpenCodeSession: HarnessSession {
             blocks.append(.object(["type": .string("text"), "text": .string(turn.text)]))
         }
 
+        if turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            == CommandCatalog.compactCommand {
+            mapper.beginCompaction()
+            continuation?.yield(.event(.compaction(.started)))
+        }
         continuation?.yield(.event(.turnStarted))
 
         /// `session/prompt` só responde quando o turno inteiro acaba, então ele

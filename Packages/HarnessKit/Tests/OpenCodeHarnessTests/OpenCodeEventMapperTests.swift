@@ -18,6 +18,7 @@ private func kindName(_ kind: TranscriptEntry.Kind) -> String {
     case .permissionDecision: "permissionDecision"
     case .systemNotice: "systemNotice"
     case .turnResult: "turnResult"
+    case .contextCompacted: "contextCompacted"
     case .unrecognized(let discriminator, _): "unrecognized(\(discriminator))"
     }
 }
@@ -75,12 +76,12 @@ private func runFixture(_ name: String) throws -> MappedOutput {
 @Test func theDeltaStreamNeverReachesTheTranscript() throws {
     let output = try runFixture("turn-with-permission")
 
-    #expect(output.events.count == 4)
-    for event in output.events {
-        guard case .textDelta = event else {
-            Issue.record("um delta virou outra coisa: \(event)"); return
-        }
+    let deltas = output.events.filter { event in
+        if case .textDelta = event { true } else { false }
     }
+    #expect(deltas.count == 4)
+    #expect(output.events.count == deltas.count + 1,
+            "além dos deltas, só o contexto reportado no fim do turno")
 }
 
 @Test func theToolCallKeepsItsNameAndTheResultItsOutput() throws {
@@ -123,11 +124,43 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     #expect(result.usage.cacheReadTokens == 19784)
 }
 
-@Test func theCommandListIsNoiseAndStaysOutOfTheTranscript() throws {
+@Test func theCommandListFeedsTheMenuAndStaysOutOfTheTranscript() throws {
     let output = try runFixture("available-commands")
 
-    #expect(output.entries.isEmpty)
-    #expect(output.events.isEmpty)
+    #expect(output.entries.isEmpty, "catálogo não é conversa")
+    guard case .catalogUpdated(let catalog) = try #require(output.events.first) else {
+        Issue.record("esperava .catalogUpdated"); return
+    }
+    #expect(catalog.skills.count == 45)
+    #expect(catalog.skills == catalog.skills.sorted())
+    #expect(catalog.servers.isEmpty, "o ACP não lista servidores MCP")
+    #expect(catalog.supportsCompact, "o /compact é atendido sem ser anunciado")
+}
+
+@Test func theContextOfTheTurnComesFromTheUsageUpdate() throws {
+    var subject = mapper()
+    let out = subject.map(update: update(
+        #"{"sessionUpdate":"usage_update","used":19818,"size":200000,"cost":{"amount":0.12}}"#))
+
+    #expect(out.events == [.contextUsage(tokens: 19818)])
+    #expect(out.entries.isEmpty)
+}
+
+@Test func theBoundaryCarriesTheContextWhenAFreshUsageArrives() throws {
+    var subject = mapper()
+    _ = subject.map(update: update(
+        #"{"sessionUpdate":"usage_update","used":87000,"size":200000}"#))
+    subject.beginCompaction()
+    _ = subject.map(update: update(
+        #"{"sessionUpdate":"usage_update","used":7000,"size":200000}"#))
+    _ = subject.map(update: update(summaryChunk))
+
+    let closed = subject.turnResult(update(#"{"stopReason":"end_turn"}"#))
+    guard case .contextCompacted(let compaction) = try #require(closed.entries.first).kind else {
+        Issue.record("esperava contextCompacted"); return
+    }
+    #expect(compaction.tokensBefore == 87_000)
+    #expect(compaction.tokensAfter == 7_000)
 }
 
 // MARK: - Variantes que a fixture não cobre
@@ -254,4 +287,115 @@ private func runFixture(_ name: String) throws -> MappedOutput {
 
     #expect(result.stopReason == "cancelled")
     #expect(result.isError == false)
+}
+
+// MARK: - Compactação
+
+private let summaryChunk = #"""
+{"sessionUpdate":"agent_message_chunk","messageId":"m1",
+ "content":{"type":"text","text":"## Objective\n- fechar o commit"}}
+"""#
+
+private let secondSummaryChunk = #"""
+{"sessionUpdate":"agent_message_chunk","messageId":"m2",
+ "content":{"type":"text","text":"## Next Move\n- gerar a build"}}
+"""#
+
+private let thoughtChunk = #"""
+{"sessionUpdate":"agent_thought_chunk","messageId":"t1",
+ "content":{"type":"text","text":"**Organizing files**"}}
+"""#
+
+@Test func theSummaryOfACompactionComesPrecededByItsBoundary() throws {
+    var subject = mapper()
+    subject.beginCompaction()
+
+    _ = subject.map(update: update(summaryChunk))
+    let closed = subject.turnResult(update(#"{"stopReason":"end_turn"}"#))
+
+    #expect(closed.entries.map { kindName($0.kind) }
+            == ["contextCompacted", "assistantText", "turnResult"],
+            "a fronteira entra imediatamente antes do resumo")
+}
+
+@Test func theBoundaryAdmitsItDoesNotKnowTheTokens() throws {
+    var subject = mapper()
+    subject.beginCompaction()
+
+    _ = subject.map(update: update(summaryChunk))
+    let closed = subject.turnResult(update(#"{"stopReason":"end_turn"}"#))
+
+    guard case .contextCompacted(let compaction) = try #require(closed.entries.first).kind else {
+        Issue.record("esperava contextCompacted"); return
+    }
+    #expect(compaction.trigger == .manual)
+    #expect(compaction.tokensBefore == 0, "o ACP não informa o contexto anterior")
+    #expect(compaction.tokensAfter == 0, "nem o que sobrou")
+}
+
+@Test func theSummaryDoesNotStreamWhileCompacting() throws {
+    var subject = mapper()
+    subject.beginCompaction()
+
+    #expect(subject.map(update: update(summaryChunk)).events.isEmpty,
+            "quem desenha o turno é o cartão de progresso")
+}
+
+@Test func aTurnThatIsNotACompactionKeepsItsProseAndItsDeltas() throws {
+    var subject = mapper()
+
+    let open = subject.map(update: update(summaryChunk))
+    let closed = subject.turnResult(update(#"{"stopReason":"end_turn"}"#))
+
+    #expect(open.events.count == 1)
+    #expect(closed.entries.map { kindName($0.kind) } == ["assistantText", "turnResult"])
+}
+
+@Test func theWholeCompactionTurnCollapsesIntoOneSummary() throws {
+    var subject = mapper()
+    subject.beginCompaction()
+
+    _ = subject.map(update: update(summaryChunk))
+    _ = subject.map(update: update(thoughtChunk))
+    _ = subject.map(update: update(secondSummaryChunk))
+    let closed = subject.turnResult(update(#"{"stopReason":"end_turn"}"#))
+
+    #expect(closed.entries.map { kindName($0.kind) }
+            == ["contextCompacted", "assistantText", "turnResult"],
+            "o resumo sai em partes e vira um registro só")
+
+    guard case .assistantText(let summary) = closed.entries[1].kind else {
+        Issue.record("esperava o resumo"); return
+    }
+    #expect(summary.contains("fechar o commit"))
+    #expect(summary.contains("gerar a build"), "a segunda parte não se perde")
+    #expect(!summary.contains("Organizing"), "o raciocínio do sumarizador não é conversa")
+}
+
+@Test func theReplayOfASessionOnlyCarriesState() throws {
+    let replayed = OpenCodeSession.replayable(MappedOutput(events: [
+        .turnStarted,
+        .textDelta(blockIndex: 0, text: "velho"),
+        .thinkingDelta(blockIndex: 0, text: "velho"),
+        .contextUsage(tokens: 19_818),
+        .catalogUpdated(CommandCatalog(skills: ["tdd"], supportsCompact: true)),
+    ]))
+
+    #expect(replayed == [.contextUsage(tokens: 19_818),
+                         .catalogUpdated(CommandCatalog(skills: ["tdd"],
+                                                        supportsCompact: true))],
+            "o histórico reproduzido não volta como conversa nova")
+}
+
+@Test func aCompactionThatEndsWithoutProseLeavesNoBoundary() throws {
+    var subject = mapper()
+    subject.beginCompaction()
+
+    let closed = subject.turnResult(update(#"{"stopReason":"cancelled"}"#))
+    #expect(closed.entries.map { kindName($0.kind) } == ["turnResult"])
+
+    _ = subject.map(update: update(summaryChunk))
+    let next = subject.turnResult(update(#"{"stopReason":"end_turn"}"#))
+    #expect(next.entries.map { kindName($0.kind) } == ["assistantText", "turnResult"],
+            "a compactação cancelada não contamina o turno seguinte")
 }

@@ -27,6 +27,9 @@ struct ChatView: View {
     @State private var fileIndex: [MentionCandidate] = []
     @State private var mentionSelection = 0
     @State private var mentionDismissed = false
+    @State private var slashSelection = 0
+    @State private var slashDismissed = false
+    @State private var slashGroup: SlashGroup?
 
     @AppStorage("DevSpace.gitInspector") private var showChanges = false
     let gitChanges: GitChangesModel
@@ -95,6 +98,9 @@ struct ChatView: View {
         .onChange(of: cockpit.prompt) {
             mentionSelection = 0
             mentionDismissed = false
+            slashSelection = 0
+            slashDismissed = false
+            if SlashCatalog.query(in: cockpit.prompt) == nil { slashGroup = nil }
         }
         .onChange(of: cockpit.sessionID, initial: true) { installKeyMonitor() }
         .onChange(of: cockpit.isBusy) {
@@ -155,6 +161,33 @@ struct ChatView: View {
                editor.isFieldEditor {
                 editor.insertNewlineIgnoringFieldEditor(nil)
                 return nil
+            }
+            let slash = view.currentSlashMatches()
+            if !slash.isEmpty {
+                let selected = min(view.slashSelection, slash.count - 1)
+                switch event.keyCode {
+                case 125:
+                    view.slashSelection = min(selected + 1, slash.count - 1)
+                    return nil
+                case 126:
+                    view.slashSelection = max(selected - 1, 0)
+                    return nil
+                case 36, 48:
+                    view.run(slash[selected])
+                    return nil
+                case 53:
+                    if view.slashGroup != nil {
+                        view.leaveSlashGroup()
+                    } else {
+                        view.slashDismissed = true
+                    }
+                    return nil
+                case 51 where view.slashGroup != nil && cockpit.prompt == "/":
+                    view.leaveSlashGroup()
+                    return nil
+                default:
+                    break
+                }
             }
             let matches = view.currentMentionMatches()
             if !matches.isEmpty {
@@ -259,7 +292,9 @@ struct ChatView: View {
                             steps(id: id, lines: lines).id(id)
                         }
                     }
-                    if !cockpit.streaming.isEmpty {
+                    if let since = cockpit.compactingSince {
+                        CompactionProgressCard(since: since).id("compacting")
+                    } else if !cockpit.streaming.isEmpty {
                         assistantBubble(cockpit.streaming, at: nil).id("streaming")
                     } else if cockpit.isBusy, cockpit.pending == nil,
                               cockpit.pendingQuestion == nil {
@@ -337,6 +372,7 @@ struct ChatView: View {
             .onChange(of: cockpit.streaming) { scrollToEnd() }
             .onChange(of: cockpit.pendingQuestion?.id) { scrollToEnd() }
             .onChange(of: typingVisible) { scrollToEnd() }
+            .onChange(of: cockpit.compactingSince) { scrollToEnd() }
         .id(cockpit.sessionID)
     }
 
@@ -369,7 +405,7 @@ struct ChatView: View {
     }
 
     private var typingVisible: Bool {
-        cockpit.streaming.isEmpty && cockpit.isBusy
+        cockpit.streaming.isEmpty && cockpit.isBusy && cockpit.compactingSince == nil
             && cockpit.pending == nil && cockpit.pendingQuestion == nil
     }
 
@@ -412,6 +448,23 @@ struct ChatView: View {
 
         case .notice:
             chip(icon: "info.circle", text: line.text, mono: false, dim: true)
+
+        case .compaction:
+            CompactionMark(text: line.text)
+
+        case .digest:
+            DigestRow(title: line.title ?? CockpitModel.Digest.summary,
+                      text: line.text,
+                      mono: line.title == CockpitModel.Digest.command,
+                      isOpen: expanded.contains(line.id)) {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    if expanded.contains(line.id) {
+                        expanded.remove(line.id)
+                    } else {
+                        expanded.insert(line.id)
+                    }
+                }
+            }
 
         case .unknown:
             EmptyView()
@@ -657,6 +710,7 @@ struct ChatView: View {
 
     private var composer: some View {
         VStack(spacing: 7) {
+            slashSuggestions
             mentionSuggestions
 
             if !cockpit.pendingAttachments.isEmpty {
@@ -700,6 +754,15 @@ struct ChatView: View {
                         .lineLimit(1)
                 }
                 Spacer()
+                if let context = cockpit.contextLabel {
+                    Text(context)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .fixedSize()
+                        .help("Tokens no contexto agora")
+                }
                 Button(action: attachFiles) {
                     Image(systemName: "paperclip")
                         .font(.system(size: 13))
@@ -735,6 +798,47 @@ struct ChatView: View {
         .padding(.bottom, 16)
         .frame(maxWidth: 800)
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Comandos com /
+
+    private func currentSlashMatches() -> [SlashCommand] {
+        guard !slashDismissed, !cockpit.catalog.isEmpty,
+              let query = SlashCatalog.query(in: cockpit.prompt) else { return [] }
+        return SlashCatalog.matches(query, in: cockpit.catalog, group: slashGroup)
+    }
+
+    @ViewBuilder
+    private var slashSuggestions: some View {
+        let matches = currentSlashMatches()
+        if !matches.isEmpty {
+            SlashCommandList(commands: matches,
+                             selection: min(slashSelection, matches.count - 1),
+                             group: slashGroup,
+                             choose: { run($0) },
+                             back: { leaveSlashGroup() })
+        }
+    }
+
+    private func run(_ command: SlashCommand) {
+        if let group = command.group {
+            slashGroup = group
+            slashSelection = 0
+            cockpit.prompt = "/"
+            return
+        }
+        guard let text = command.command else { return }
+        cockpit.prompt = ""
+        slashGroup = nil
+        slashDismissed = true
+        nearBottom = true
+        Task { await cockpit.run(command: text) }
+    }
+
+    private func leaveSlashGroup() {
+        slashGroup = nil
+        slashSelection = 0
+        cockpit.prompt = "/"
     }
 
     // MARK: - Menções com @
@@ -1081,10 +1185,11 @@ struct ChatView: View {
     }
 
     private func busyLabel(at now: Date) -> String {
-        guard let start = cockpit.turnStartedAt else { return "Pensando" }
+        let verb = cockpit.compactingSince == nil ? "Pensando" : "Compactando"
+        guard let start = cockpit.compactingSince ?? cockpit.turnStartedAt else { return verb }
         let seconds = max(0, Int(now.timeIntervalSince(start)))
         return seconds < 60
-            ? "Pensando · \(seconds)s"
-            : "Pensando · \(seconds / 60)m \(seconds % 60)s"
+            ? "\(verb) · \(seconds)s"
+            : "\(verb) · \(seconds / 60)m \(seconds % 60)s"
     }
 }

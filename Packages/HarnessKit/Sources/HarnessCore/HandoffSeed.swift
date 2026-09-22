@@ -92,7 +92,8 @@ public enum HandoffSeed: Sendable {
         /// O raciocínio é do modelo que saiu, e o resultado de ferramenta o
         /// modelo novo pode reobter. Nenhum dos dois entra na semente.
         case .assistantThinking, .toolResult, .permissionRequest,
-             .permissionDecision, .systemNotice, .turnResult, .unrecognized:
+             .permissionDecision, .systemNotice, .turnResult,
+             .contextCompacted, .unrecognized:
             return nil
         }
     }

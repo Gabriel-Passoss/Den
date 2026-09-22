@@ -47,10 +47,36 @@ public struct TurnResult: Sendable, Equatable, Codable {
     public let stopReason: String?
     public let isError: Bool
 
-    public init(usage: UsageTotals, stopReason: String?, isError: Bool) {
+    /// O contexto ocupado ao fechar o turno. Opcional porque transcritos
+    /// gravados antes deste campo continuam decodificando.
+    public let contextTokens: Int?
+
+    public init(usage: UsageTotals, stopReason: String?, isError: Bool,
+                contextTokens: Int? = nil) {
         self.usage = usage
         self.stopReason = stopReason
         self.isError = isError
+        self.contextTokens = contextTokens
+    }
+}
+
+public struct ContextCompaction: Sendable, Equatable, Codable {
+
+    public enum Trigger: String, Sendable, Equatable, Codable {
+        case manual, automatic
+    }
+
+    public let trigger: Trigger
+    public let tokensBefore: Int
+    public let tokensAfter: Int
+    public let duration: TimeInterval
+
+    public init(trigger: Trigger, tokensBefore: Int, tokensAfter: Int,
+                duration: TimeInterval) {
+        self.trigger = trigger
+        self.tokensBefore = tokensBefore
+        self.tokensAfter = tokensAfter
+        self.duration = duration
     }
 }
 
@@ -78,6 +104,7 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
         case permissionDecision(requestID: String, PermissionDecision)
         case systemNotice(subtype: String, text: String)
         case turnResult(TurnResult)
+        case contextCompacted(ContextCompaction)
 
         case unrecognized(discriminator: String, payload: JSONValue)
 
@@ -91,11 +118,12 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
             case permissionDecision(requestID: String, PermissionDecision)
             case systemNotice(subtype: String, text: String)
             case turnResult(TurnResult)
+            case contextCompacted(ContextCompaction)
 
             enum CodingKeys: String, CodingKey, CaseIterable {
                 case userMessage, assistantText, assistantThinking, toolCall
                 case toolResult, permissionRequest, permissionDecision
-                case systemNotice, turnResult
+                case systemNotice, turnResult, contextCompacted
             }
         }
 
@@ -129,6 +157,7 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
             case .systemNotice(let subtype, let text):
                 self = .systemNotice(subtype: subtype, text: text)
             case .turnResult(let result): self = .turnResult(result)
+            case .contextCompacted(let compaction): self = .contextCompacted(compaction)
             }
         }
 
@@ -146,6 +175,8 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
             case .systemNotice(let subtype, let text):
                 try Known.systemNotice(subtype: subtype, text: text).encode(to: encoder)
             case .turnResult(let result): try Known.turnResult(result).encode(to: encoder)
+            case .contextCompacted(let compaction):
+                try Known.contextCompacted(compaction).encode(to: encoder)
             case .unrecognized(let discriminator, let payload):
 
                 var container = encoder.container(keyedBy: DiscriminatorKey.self)
