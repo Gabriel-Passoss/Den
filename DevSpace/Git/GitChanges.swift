@@ -144,7 +144,6 @@ nonisolated enum GitParsing {
         return line[range.upperBound...].trimmingCharacters(in: .whitespaces)
     }
 
-    /// FNV-1a determinístico — estável entre recargas, ao contrário de Hasher.
     static func fingerprint(of texts: [String]) -> String {
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         for text in texts {

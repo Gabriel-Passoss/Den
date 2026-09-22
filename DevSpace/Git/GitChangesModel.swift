@@ -95,45 +95,29 @@ final class GitChangesModel {
         }
     }
 
-    #if DEBUG
-    nonisolated private static let logStart = Date()
-    private func trace(_ message: String) {
-        guard ProcessInfo.processInfo.environment["DEVSPACE_GIT_LOG"] != nil else { return }
-        let t = String(format: "%6.2f", Date().timeIntervalSince(Self.logStart))
-        print("[git \(t)] \(message)")
-    }
-    #else
-    private func trace(_: String) {}
-    #endif
-
     func load(directory: URL, force: Bool = false) async {
         loadID += 1
         let id = loadID
         isLoading = true
         defer { if id == loadID { isLoading = false } }
-        trace("start #\(id) \(directory.lastPathComponent) force=\(force)")
 
         if lastDirectory != directory {
             lastDirectory = directory
             if let cached = cache[directory] {
-                trace("restore #\(id) \(directory.lastPathComponent) do cache")
                 repos = cached.repos
                 hasRepo = cached.hasRepo
                 loadedOnce = true
             } else {
-                trace("wipe #\(id) -> \(directory.lastPathComponent) (sem cache)")
                 repos = []
                 loadedOnce = false
             }
         }
 
-        let began = Date()
         let roots = await Task.detached(priority: .userInitiated) {
             Self.discoverRepoRoots(under: directory)
         }.value
-        guard id == loadID, !Task.isCancelled else { trace("abort #\(id)"); return }
+        guard id == loadID, !Task.isCancelled else { return }
 
-        // Fase 1 — status de todos os repos em paralelo.
         var surveys = [RepoSurvey?](repeating: nil, count: roots.count)
         await withTaskGroup(of: (Int, RepoSurvey).self) { group in
             for (index, root) in roots.enumerated() {
@@ -145,22 +129,19 @@ final class GitChangesModel {
             }
             for await (index, survey) in group { surveys[index] = survey }
         }
-        guard id == loadID, !Task.isCancelled else { trace("abort #\(id)"); return }
+        guard id == loadID, !Task.isCancelled else { return }
 
         let statuses = surveys.compactMap { $0 }
         let newSignature = statuses
             .map { "\($0.root.path)@\($0.branch ?? "")\n\($0.status)\n" }
             .joined()
-        trace("status #\(id) \(directory.lastPathComponent): \(roots.count) repos em \(String(format: "%.2f", Date().timeIntervalSince(began)))s")
 
         hasRepo = !roots.isEmpty
         if !force, newSignature == cache[directory]?.signature {
-            trace("keep #\(id) \(directory.lastPathComponent) (assinatura igual)")
             loadedOnce = true
             return
         }
 
-        // Fase 2 — diff + realce de cada repo em paralelo, fora da main thread.
         var built = [Repo?](repeating: nil, count: statuses.count)
         await withTaskGroup(of: (Int, Repo).self) { group in
             for (index, survey) in statuses.enumerated() {
@@ -172,10 +153,9 @@ final class GitChangesModel {
             }
             for await (index, repo) in group { built[index] = repo }
         }
-        guard id == loadID, !Task.isCancelled else { trace("abort #\(id)"); return }
+        guard id == loadID, !Task.isCancelled else { return }
         let newRepos = built.compactMap { $0 }
 
-        trace("commit #\(id) \(directory.lastPathComponent): \(newRepos.count) repos, \(newRepos.reduce(0) { $0 + $1.files.count }) arquivos em \(String(format: "%.2f", Date().timeIntervalSince(began)))s")
         repos = newRepos
         cache[directory] = Snapshot(repos: newRepos, signature: newSignature,
                                     hasRepo: !roots.isEmpty)
@@ -241,7 +221,6 @@ final class GitChangesModel {
                     of: [entry.state.badge] + capped.map(\.text))))
         }
 
-        // Agrupa pelos diretórios que o git colapsaria (100% não rastreados).
         var grouped: [String: [FileChange]] = [:]
         var singles: [FileChange] = []
         for file in files {

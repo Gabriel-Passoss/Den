@@ -1,8 +1,5 @@
 import Foundation
 
-/// Roda git sem segurar thread do pool cooperativo: a espera do processo
-/// e a drenagem dos pipes acontecem em GCD, então várias execuções podem
-/// correr em paralelo sem estrangular a concorrência do app.
 nonisolated enum GitCommand {
     static func run(_ arguments: [String], in directory: URL) async -> String? {
         let process = Process()

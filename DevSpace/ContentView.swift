@@ -10,85 +10,26 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
-
             SidebarView(workspace: workspace)
                 .toolbar(removing: .sidebarToggle)
         } detail: {
-            if let cockpit = workspace.active {
-                ChatView(cockpit: cockpit, gitChanges: gitChanges)
-            } else if workspace.selectedID != nil {
-                sessionLoading
-            } else {
-                empty
-            }
+            detail
         }
         .frame(minWidth: 860, minHeight: 560)
-        .task {
-            await workspace.refresh()
-            #if DEBUG
-            if ProcessInfo.processInfo.environment["DEVSPACE_FAKE"] != nil,
-               let first = workspace.summaries.first {
-                let wanted = ProcessInfo.processInfo
-                    .environment["DEVSPACE_FAKE_SELECT"].flatMap(UUID.init)
-                await workspace.select(wanted ?? first.id)
-                let delayed = ProcessInfo.processInfo
-                    .environment["DEVSPACE_FAKE_DELAY"].flatMap(Double.init)
-                if let delayed {
-                    try? await Task.sleep(for: .seconds(delayed))
-                }
-                let env = ProcessInfo.processInfo.environment
-                if env["DEVSPACE_FAKE_UNREAD"] != nil {
-                    workspace.active?.hasUnread = true
-                }
-                if env["DEVSPACE_FAKE_QUESTION"] != nil {
-                workspace.active?.pendingQuestion = CockpitModel.QuestionPrompt(
-                    id: "fake",
-                    questions: [.init(
-                        text: "Qual você prefere?",
-                        header: "Escolha",
-                        multiSelect: false,
-                        options: [
-                            .init(label: "Gato", detail: "Independente, dorme bastante"),
-                            .init(label: "Cachorro", detail: "Leal, gosta de passear"),
-                        ])],
-                    request: PermissionRequest(id: "fake", toolName: "AskUserQuestion")
-                )
-                }
-                if ProcessInfo.processInfo.environment["DEVSPACE_FAKE_BUSY"] != nil {
-                    workspace.active?.isBusy = true
-                    workspace.active?.turnStartedAt = Date()
-                }
-                if env["DEVSPACE_FAKE_STREAM"] != nil, let cockpit = workspace.active {
-                    cockpit.isBusy = true
-                    cockpit.turnStartedAt = Date()
-                    Task { @MainActor in
-                        for i in 0..<400 {
-                            try? await Task.sleep(for: .milliseconds(40))
-                            cockpit.debugStream("token \(i) de resposta simulada. ")
-                        }
-                    }
-                }
-                if let plan = env["DEVSPACE_FAKE_SWITCH"] {
-                    // "3" = troca a cada 3s para sempre; "3,4" = só 4 trocas.
-                    let parts = plan.split(separator: ",")
-                    let interval = Double(parts.first ?? "4") ?? 4
-                    let limit = parts.count > 1 ? Int(parts[1]) ?? .max : .max
-                    let workspace = self.workspace
-                    Task { @MainActor in
-                        var remaining = limit
-                        while !Task.isCancelled, remaining > 0 {
-                            remaining -= 1
-                            try? await Task.sleep(for: .seconds(interval))
-                            let ids = workspace.summaries.map(\.id)
-                            guard ids.count > 1, let current = workspace.selectedID,
-                                  let index = ids.firstIndex(of: current) else { continue }
-                            await workspace.select(ids[(index + 1) % ids.count])
-                        }
-                    }
-                }
-            }
-            DebugSnapshot.arm()
-            #endif
+        .onChange(of: columns) {
+            if columns != .all { columns = .all }
+        }
+        .task { await workspace.refresh() }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        if let cockpit = workspace.active {
+            ChatView(cockpit: cockpit, gitChanges: gitChanges)
+        } else if workspace.selectedID != nil {
+            sessionLoading
+        } else {
+            empty
         }
     }
 
@@ -98,8 +39,6 @@ struct ContentView: View {
 
     @State private var loadingSpinnerVisible = false
 
-    /// Sessão selecionada ainda carregando do disco: superfície quieta, sem
-    /// flash do estado vazio; o spinner só aparece se demorar de verdade.
     private var sessionLoading: some View {
         ProgressView()
             .controlSize(.small)

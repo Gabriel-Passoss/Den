@@ -10,7 +10,6 @@ final class CockpitModel {
         enum Role {
             case user, assistant, thinking, tool, toolResult, notice, unknown
 
-            /// Bastidores: passos intermediários que o chat mostra recolhidos.
             var isStep: Bool { self != .user && self != .assistant }
         }
         let id: UUID
@@ -33,8 +32,6 @@ final class CockpitModel {
 
     var streaming: String = ""
 
-    /// Deltas chegam dezenas de vezes por segundo; publicar cada um invalida a
-    /// transcrição inteira. O buffer agrupa os tokens em ~12 atualizações/s.
     private var streamBuffer = ""
     private var streamFlush: Task<Void, Never>?
 
@@ -50,11 +47,6 @@ final class CockpitModel {
             self.streamBuffer = ""
         }
     }
-
-    #if DEBUG
-    /// Só para os hooks DEVSPACE_FAKE_*: simula deltas pelo caminho real.
-    func debugStream(_ text: String) { appendStreaming(text) }
-    #endif
 
     private func resetStreaming() {
         streamFlush?.cancel()

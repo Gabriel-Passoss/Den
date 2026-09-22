@@ -1,16 +1,13 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Ícones reais de tipo de arquivo, como o Finder mostra, sem asset próprio.
 enum FileTypeIcon {
     private static var cache: [String: NSImage] = [:]
 
-    /// Extensões cujo UTType do sistema resolve errado ou genérico demais.
     private static let overrides: [String: String] = [
         "ts": "com.microsoft.typescript",
     ]
 
-    /// Extensões que compartilham o mesmo imageset customizado.
     private static let aliases: [String: String] = [
         "jsx": "react", "tsx": "react",
         "mjs": "js", "cjs": "js",
@@ -22,7 +19,6 @@ enum FileTypeIcon {
         let ext = (name as NSString).pathExtension.lowercased()
         if let cached = cache[ext] { return cached }
 
-        // Asset próprio primeiro (imageset "filetype-<ext>"), sistema como fallback.
         let assetName = "filetype-" + (aliases[ext] ?? ext)
         if let custom = NSImage(named: assetName) {
             cache[ext] = custom

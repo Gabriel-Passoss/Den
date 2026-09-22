@@ -86,8 +86,6 @@ struct MarkdownText: View {
         }
     }
 
-    /// Parsear markdown é caro e o body reroda a cada token do streaming:
-    /// sem cache, toda bolha visível é re-parseada dezenas de vezes por segundo.
     private final class Parsed {
         let blocks: [Block]
         init(_ blocks: [Block]) { self.blocks = blocks }
