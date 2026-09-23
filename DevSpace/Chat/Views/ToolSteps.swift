@@ -3,7 +3,7 @@ import HarnessCore
 
 struct ToolSteps: View {
     let id: UUID
-    let lines: [CockpitModel.Line]
+    let lines: [ChatLine]
     @Binding var expanded: Set<UUID>
     var onZoom: (Data) -> Void
 

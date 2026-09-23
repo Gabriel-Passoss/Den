@@ -8,8 +8,6 @@ struct SlashCommandList: View {
     var choose: (SlashCommand) -> Void
     var back: () -> Void
 
-    /// A lista tem altura fixa por linha para caber num número exato de itens:
-    /// o resto rola, em vez de ser cortado sem aviso.
     private static let rowHeight: CGFloat = 22
     private static let rowSpacing: CGFloat = 1
     private static let visibleRows = 8

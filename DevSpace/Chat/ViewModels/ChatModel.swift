@@ -4,18 +4,16 @@ import HarnessCore
 
 @MainActor
 @Observable
-final class CockpitModel {
+final class ChatModel {
 
     let sessionID: UUID
-    /// A sessão do DevSpace atravessa harnesses; cada trecho contínuo dentro
-    /// de um deles é um Segment. Trocar de harness fecha um e abre o próximo.
     private(set) var segments: [Segment]
 
     var segmentID: UUID { segments.last?.id ?? UUID() }
     var title: String
     var workingDirectory: URL
 
-    var lines: [Line] = []
+    var lines: [ChatLine] = []
 
     var streaming: String = ""
 
@@ -42,12 +40,8 @@ final class CockpitModel {
         streaming = ""
     }
 
-    /// Compactar leva minutos e não emite nada no meio: o instante de início
-    /// é o que sustenta a barra de progresso na tela.
     var compactingSince: Date?
 
-    /// O contexto que o harness reportou na última ida ao modelo: é o que
-    /// diz quando vale compactar.
     private(set) var contextTokens: Int = 0
 
     var contextLabel: String? {
@@ -75,8 +69,6 @@ final class CockpitModel {
         didSet { SessionCache.remember(catalog, for: workingDirectory, harness: harness) }
     }
 
-    /// Comandos são enviados como turno: o CLI os interpreta e responde com
-    /// os eventos de status correspondentes.
     func run(command: String) async {
         await send(text: command)
     }
@@ -103,12 +95,8 @@ final class CockpitModel {
 
     private var harnessSessionID: String
 
-    /// O transcript semântico, que é o que atravessa a troca de harness.
-    /// As `lines` são a tradução dele para a tela e não servem à semente.
     private var entries: [TranscriptEntry] = []
 
-    /// Conversa do segmento anterior, esperando o primeiro pedido do usuário
-    /// no harness novo para viajar junto. Some assim que é entregue.
     private var pendingSeed: String?
 
     private let isRestored: Bool
@@ -119,8 +107,6 @@ final class CockpitModel {
 
     // MARK: - Nascimento
 
-    /// O harness resolve-se no corpo, não no argumento padrão: expressão de
-    /// argumento padrão roda fora do ator, e `HarnessRegistry` é do main actor.
     init(store: FileTranscriptStore, workingDirectory: URL,
          harness: HarnessID? = nil) {
         self.store = store
@@ -158,8 +144,6 @@ final class CockpitModel {
         catalog = SessionCache.rememberedCatalog(for: workingDirectory, harness: harness)
         for entry in session.allEntries { render(entry, persist: false) }
 
-        /// Trocou de harness e fechou o app antes de escrever: a semente nunca
-        /// chegou a ninguém, então ela volta a esperar o primeiro pedido.
         if let last = session.segments.last, last.seededBy != nil, last.entries.isEmpty {
             pendingSeed = HandoffSeed.make(entries)?.text
         }
@@ -289,8 +273,6 @@ final class CockpitModel {
             await nameFromFirstTurn(text.isEmpty ? "Anexo" : text)
         }
 
-        /// O balão e o transcript guardam o que o usuário escreveu; só o que
-        /// sai pelo cabo carrega a conversa herdada da troca de harness.
         let outgoing = pendingSeed.map { HandoffSeed.message(seed: $0, request: text) } ?? text
         pendingSeed = nil
 
@@ -369,9 +351,6 @@ final class CockpitModel {
         await resolve(fallback)
     }
 
-    /// Alguns harnesses trocam o botão em sessão viva; os que não trocam
-    /// precisam de um relançamento. `HarnessCapabilities` diz qual é qual, em
-    /// vez de a UI supor.
     func choose(knob id: String, value: String?) async {
         guard settings[id] != value else { return }
         settings[id] = value
@@ -394,9 +373,6 @@ final class CockpitModel {
         }
     }
 
-    /// Avisos que o transcript guarda mas a tela não mostra. `harness_switch`
-    /// está aqui pelas sessões gravadas antes de a troca virar silenciosa —
-    /// elas seguem no disco, só não falam mais.
     static let silentNotices: Set<String> = ["init", "rate_limit", "harness_switch"]
 
     private func adopt(knob id: String, value: String?) {
@@ -447,9 +423,6 @@ final class CockpitModel {
         !isBusy && HarnessRegistry.all.count > 1
     }
 
-    /// Fecha o segmento atual e abre o próximo noutro harness, semeado com a
-    /// conversa que já aconteceu. Nenhum CLI aceita receber turnos de
-    /// assistente, então o contexto vai como a primeira mensagem de usuário.
     func switchHarness(to newHarness: HarnessID) async {
         guard newHarness != harness,
               HarnessRegistry.harness(for: newHarness) != nil else { return }
@@ -467,13 +440,8 @@ final class CockpitModel {
         loadKnobs()
         catalog = SessionCache.rememberedCatalog(for: workingDirectory, harness: newHarness)
 
-        /// O store recusa um append para segmento que não consta do
-        /// `session.json`, então o metadata vai ao disco antes de qualquer coisa.
         await persistMetadata()
 
-        /// A troca não escreve no chat nem gasta um turno: a semente espera o
-        /// primeiro pedido e viaja colada a ele. Quem trocou vê só o painel
-        /// mudar e segue digitando; a proveniência ficou no `seededBy`.
         pendingSeed = seed?.text
 
         await start()
@@ -575,7 +543,7 @@ final class CockpitModel {
 
         case .permission(let request):
             if request.toolName == "AskUserQuestion",
-               let prompt = Self.questionPrompt(from: request) {
+               let prompt = QuestionPrompt(from: request) {
                 pendingQuestion = prompt
             } else {
                 pending = request
@@ -631,14 +599,11 @@ final class CockpitModel {
             if images.isEmpty, files.isEmpty {
                 append(.user, text, at: moment)
             } else {
-                lines.append(Line(id: UUID(), role: .user, text: text,
+                lines.append(ChatLine(id: UUID(), role: .user, text: text,
                                   images: images, files: files, timestamp: moment))
             }
         case .assistantText(let text):
             resetStreaming()
-            /// O Claude devolve o resumo da compactação como mensagem de
-            /// usuário; o OpenCode, como prosa do assistente. Os dois viram a
-            /// mesma linha recolhida embaixo da fronteira.
             if awaitingCompactionSummary {
                 awaitingCompactionSummary = false
                 append(.digest, text, at: moment, title: Digest.summary)
@@ -698,19 +663,17 @@ final class CockpitModel {
         }
     }
 
-    private func append(_ role: Line.Role, _ text: String,
+    private func append(_ role: ChatLine.Role, _ text: String,
                         at moment: Date = Date(), verb: CanonicalTool? = nil,
                         title: String? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        lines.append(Line(id: UUID(), role: role, text: trimmed,
+        lines.append(ChatLine(id: UUID(), role: role, text: trimmed,
                           timestamp: moment, verb: verb, title: title))
     }
 
     // MARK: - Recados de sistema que chegam como mensagem do usuário
 
-    /// O resumo da compactação vem logo depois da fronteira; sessões antigas,
-    /// gravadas antes de a fronteira existir, caem no texto de abertura.
     private var awaitingCompactionSummary = false
 
     private func digestTitle(for text: String) -> String? {

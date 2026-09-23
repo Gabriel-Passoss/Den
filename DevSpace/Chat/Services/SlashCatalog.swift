@@ -2,8 +2,6 @@ import SwiftUI
 import HarnessCore
 
 enum SlashCatalog {
-    /// Compactar é ação de interface: o que fica na conversa é a fronteira
-    /// devolvida pelo harness, não o eco do comando.
     static let compactCommand = CommandCatalog.compactCommand
 
     static func compact() -> SlashCommand {
@@ -38,7 +36,6 @@ enum SlashCatalog {
         }
     }
 
-    /// Raiz: compactar e as duas gavetas. O conteúdo delas só aparece ao entrar.
     static func root(from catalog: CommandCatalog) -> [SlashCommand] {
         var items: [SlashCommand] = []
         if catalog.supportsCompact { items.append(compact()) }
@@ -79,7 +76,6 @@ enum SlashCatalog {
         return String(token)
     }
 
-    /// Sem grupo aberto e sem busca, mostra a raiz; com busca, procura em tudo.
     static func matches(_ query: String, in catalog: CommandCatalog,
                         group: SlashGroup?) -> [SlashCommand] {
         let pool: [SlashCommand] = switch group {

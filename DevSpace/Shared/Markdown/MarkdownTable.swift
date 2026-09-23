@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Enquanto o ponteiro está sobre uma tabela que pode rolar, o histórico
-/// para de responder à roda — é o que evita rolar os dois ao mesmo tempo.
 @MainActor
 @Observable
 final class TableScrollLock {

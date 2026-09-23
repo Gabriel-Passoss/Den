@@ -3,7 +3,7 @@ import HarnessCore
 
 struct KnobBadge: View {
     let knob: HarnessKnob
-    let cockpit: CockpitModel
+    let chat: ChatModel
 
     static let modeLooks: [String: (symbol: String, color: Color)] = [
         "auto": ("forward.fill", .yellow),
@@ -17,8 +17,8 @@ struct KnobBadge: View {
 
     private func selection(for knob: HarnessKnob) -> Binding<String?> {
         Binding(
-            get: { cockpit.knob(knob.id)?.currentValue },
-            set: { value in Task { await cockpit.choose(knob: knob.id, value: value) } }
+            get: { chat.knob(knob.id)?.currentValue },
+            set: { value in Task { await chat.choose(knob: knob.id, value: value) } }
         )
     }
 
@@ -37,9 +37,6 @@ struct KnobBadge: View {
 
         Menu {
             Picker(knob.name, selection: selection(for: knob)) {
-                /// Lista plana vira um grupo sem título, então o `Section` só
-                /// aparece de fato quando o harness nomeou os grupos — os 23
-                /// modelos do OpenCode, separados por provedor.
                 ForEach(Array(knob.groupedOptions.enumerated()), id: \.offset) { _, bucket in
                     Section {
                         ForEach(bucket.options, id: \.value) { option in

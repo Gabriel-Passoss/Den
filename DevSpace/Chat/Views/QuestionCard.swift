@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct QuestionCard: View {
-    let prompt: CockpitModel.QuestionPrompt
+    let prompt: QuestionPrompt
     var answer: ([String: [String]]) -> Void
     var dismiss: () -> Void
 
@@ -47,8 +47,8 @@ struct QuestionCard: View {
             .stroke(Color.accentColor.opacity(0.3), lineWidth: 1))
     }
 
-    private func optionButton(_ question: CockpitModel.QuestionPrompt.Question,
-                              _ option: CockpitModel.QuestionPrompt.Option) -> some View {
+    private func optionButton(_ question: QuestionPrompt.Question,
+                              _ option: QuestionPrompt.Option) -> some View {
         let selected = selections[question.text]?.contains(option.label) ?? false
         return Button {
             select(question, option)
@@ -81,8 +81,8 @@ struct QuestionCard: View {
         .buttonStyle(.plain)
     }
 
-    private func select(_ question: CockpitModel.QuestionPrompt.Question,
-                        _ option: CockpitModel.QuestionPrompt.Option) {
+    private func select(_ question: QuestionPrompt.Question,
+                        _ option: QuestionPrompt.Option) {
         var chosen = selections[question.text] ?? []
         if question.multiSelect {
             if chosen.contains(option.label) { chosen.remove(option.label) }

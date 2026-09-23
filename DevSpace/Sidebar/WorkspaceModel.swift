@@ -37,7 +37,7 @@ final class WorkspaceModel {
     var availableHarnesses: [HarnessID] { HarnessRegistry.all.map(\.id) }
 
     private let store: FileTranscriptStore
-    private var cockpits: [UUID: CockpitModel] = [:]
+    private var chats: [UUID: ChatModel] = [:]
     private var legacyPathToFolder: [String: String] = [:]
 
     private static let foldersKey = "DevSpace.folders.v2"
@@ -85,7 +85,7 @@ final class WorkspaceModel {
         guard !trimmed.isEmpty, var session = try? await store.load(id) else { return }
         session.title = trimmed
         try? await store.saveMetadata(session)
-        cockpits[id]?.adoptTitle(trimmed)
+        chats[id]?.adoptTitle(trimmed)
         await refresh()
     }
 
@@ -158,13 +158,13 @@ final class WorkspaceModel {
         membership = membership.filter { $0.value != id }
     }
 
-    var active: CockpitModel? {
+    var active: ChatModel? {
         guard let selectedID else { return nil }
-        return cockpits[selectedID]
+        return chats[selectedID]
     }
 
     func isLive(_ id: UUID) -> Bool {
-        cockpits[id]?.isLive ?? false
+        chats[id]?.isLive ?? false
     }
 
     enum SessionIndicator {
@@ -172,20 +172,20 @@ final class WorkspaceModel {
     }
 
     func indicator(for id: UUID) -> SessionIndicator? {
-        guard let cockpit = cockpits[id] else { return nil }
-        if cockpit.isRateLimited { return .rateLimited }
-        if cockpit.pending != nil || cockpit.pendingQuestion != nil { return .waiting }
-        if cockpit.isBusy { return .working }
-        if cockpit.hasUnread { return .unread }
+        guard let chat = chats[id] else { return nil }
+        if chat.isRateLimited { return .rateLimited }
+        if chat.pending != nil || chat.pendingQuestion != nil { return .waiting }
+        if chat.isBusy { return .working }
+        if chat.hasUnread { return .unread }
         return nil
     }
 
-    private func adopt(_ cockpit: CockpitModel) {
-        let id = cockpit.sessionID
-        cockpit.isViewed = { [weak self] in
+    private func adopt(_ chat: ChatModel) {
+        let id = chat.sessionID
+        chat.isViewed = { [weak self] in
             self?.selectedID == id && NSApplication.shared.isActive
         }
-        cockpit.metadataDidChange = { [weak self] in
+        chat.metadataDidChange = { [weak self] in
             Task { @MainActor in await self?.refresh() }
         }
     }
@@ -252,32 +252,32 @@ final class WorkspaceModel {
            let summary = summaries.first(where: { $0.id == selectedID }) {
             workingDirectory = summary.workingDirectory
         }
-        let cockpit = CockpitModel(store: store, workingDirectory: workingDirectory,
+        let chat = ChatModel(store: store, workingDirectory: workingDirectory,
                                    harness: harness ?? defaultHarness)
-        adopt(cockpit)
-        await cockpit.persistMetadata()
-        if let folderID { membership[cockpit.sessionID.uuidString] = folderID }
-        cockpits[cockpit.sessionID] = cockpit
-        selectedID = cockpit.sessionID
+        adopt(chat)
+        await chat.persistMetadata()
+        if let folderID { membership[chat.sessionID.uuidString] = folderID }
+        chats[chat.sessionID] = chat
+        selectedID = chat.sessionID
         await refresh()
-        await cockpit.start()
+        await chat.start()
     }
 
     func select(_ id: UUID) async {
         selectedID = id
-        if let cockpit = cockpits[id] {
-            if cockpit.hasUnread { cockpit.hasUnread = false }
+        if let chat = chats[id] {
+            if chat.hasUnread { chat.hasUnread = false }
             return
         }
         guard let session = try? await store.load(id) else { return }
-        let cockpit = CockpitModel(store: store, restoring: session)
-        adopt(cockpit)
-        cockpits[id] = cockpit
+        let chat = ChatModel(store: store, restoring: session)
+        adopt(chat)
+        chats[id] = chat
     }
 
     func deleteSession(_ id: UUID) async {
-        if let cockpit = cockpits[id] { await cockpit.stop() }
-        cockpits[id] = nil
+        if let chat = chats[id] { await chat.stop() }
+        chats[id] = nil
         membership[id.uuidString] = nil
         sessionOrder.removeAll { $0 == id.uuidString }
         if selectedID == id { selectedID = nil }
@@ -286,6 +286,6 @@ final class WorkspaceModel {
     }
 
     func stopAll() async {
-        for cockpit in cockpits.values { await cockpit.stop() }
+        for chat in chats.values { await chat.stop() }
     }
 }

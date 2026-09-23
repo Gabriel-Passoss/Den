@@ -24,8 +24,8 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if let cockpit = workspace.active {
-            ChatView(cockpit: cockpit, gitChanges: gitChanges)
+        if let chat = workspace.active {
+            ChatView(chat: chat, gitChanges: gitChanges)
         } else if workspace.selectedID != nil {
             sessionLoading
         } else {

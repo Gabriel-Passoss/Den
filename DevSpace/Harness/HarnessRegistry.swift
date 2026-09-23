@@ -3,8 +3,6 @@ import HarnessCore
 import ClaudeHarness
 import OpenCodeHarness
 
-/// O único lugar acima do HarnessKit que conhece os adaptadores concretos.
-/// Tudo o mais no app fala `HarnessID` e o protocolo `Harness`.
 nonisolated enum HarnessRegistry {
 
     static let all: [any Harness] = [ClaudeCodeHarness(), OpenCodeHarness()]

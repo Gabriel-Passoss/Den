@@ -2,14 +2,14 @@ import SwiftUI
 import HarnessCore
 
 struct TranscriptRow: View {
-    let line: CockpitModel.Line
+    let line: ChatLine
     @Binding var expanded: Set<UUID>
     var onZoom: (Data) -> Void
 
     var body: some View { row(line) }
 
     @ViewBuilder
-    private func row(_ line: CockpitModel.Line) -> some View {
+    private func row(_ line: ChatLine) -> some View {
         switch line.role {
         case .user:
             userBubble(line)
@@ -41,9 +41,9 @@ struct TranscriptRow: View {
             CompactionMark(text: line.text)
 
         case .digest:
-            DigestRow(title: line.title ?? CockpitModel.Digest.summary,
+            DigestRow(title: line.title ?? Digest.summary,
                       text: line.text,
-                      mono: line.title == CockpitModel.Digest.command,
+                      mono: line.title == Digest.command,
                       isOpen: expanded.contains(line.id)) {
                 withAnimation(.easeOut(duration: 0.15)) {
                     if expanded.contains(line.id) {
@@ -59,7 +59,7 @@ struct TranscriptRow: View {
         }
     }
 
-    private func userBubble(_ line: CockpitModel.Line) -> some View {
+    private func userBubble(_ line: ChatLine) -> some View {
         HStack(spacing: 0) {
             Spacer(minLength: 64)
             MessageBubble(text: line.text, moment: line.timestamp,

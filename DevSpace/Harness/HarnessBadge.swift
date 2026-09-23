@@ -25,9 +25,6 @@ struct HarnessBadge: View {
         .clipShape(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
     }
 
-    /// O nome de exibição sem espaços: "Claude Code" vira `HarnessClaudeCode`,
-    /// "OpenCode" vira `HarnessOpenCode`. Um harness sem arte cai no monograma
-    /// em vez de sumir da lista.
     nonisolated static func asset(for harness: HarnessID) -> String? {
         let name = "Harness" + name(for: harness).replacingOccurrences(of: " ", with: "")
         return NSImage(named: name) == nil ? nil : name
