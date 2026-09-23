@@ -51,8 +51,9 @@ import Observation
     nonisolated static func indexFiles(under root: URL) -> [MentionCandidate] {
         let skip: Set<String> = ["node_modules", ".git", ".build", "DerivedData",
                                  ".next", "dist", "build", "Pods", ".venv", "vendor"]
+        let base = canonical(root)
         guard let enumerator = FileManager.default.enumerator(
-            at: root,
+            at: base,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]) else { return [] }
 
@@ -65,9 +66,7 @@ import Observation
                 enumerator.skipDescendants()
                 continue
             }
-            let relative = String(url.path.dropFirst(root.path.count)
-                .drop(while: { $0 == "/" }))
-            guard !relative.isEmpty else { continue }
+            guard let relative = relativePath(of: url, under: base) else { continue }
             results.append(MentionCandidate(path: relative, isDirectory: isDirectory))
         }
         return results.sorted {
@@ -75,5 +74,18 @@ import Observation
             let b = $1.path.filter { $0 == "/" }.count
             return a == b ? $0.path < $1.path : a < b
         }
+    }
+
+    nonisolated private static func canonical(_ root: URL) -> URL {
+        let resolved = root.resolvingSymlinksInPath()
+        guard let path = try? resolved.resourceValues(forKeys: [.canonicalPathKey])
+            .canonicalPath else { return resolved }
+        return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    nonisolated private static func relativePath(of url: URL, under root: URL) -> String? {
+        guard url.path.hasPrefix(root.path) else { return nil }
+        let relative = url.path.dropFirst(root.path.count).drop(while: { $0 == "/" })
+        return relative.isEmpty ? nil : String(relative)
     }
 }

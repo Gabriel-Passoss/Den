@@ -38,13 +38,8 @@ import Foundation
 }
 
 @Test func indexFilesSkipsVendoredAndHiddenEntries() throws {
-    let scratch = FileManager.default.temporaryDirectory
+    let root = FileManager.default.temporaryDirectory
         .appending(path: "DevSpaceTests-" + UUID().uuidString)
-    try FileManager.default.createDirectory(at: scratch,
-                                            withIntermediateDirectories: true)
-    let canonical = try #require(
-        try scratch.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath)
-    let root = URL(fileURLWithPath: canonical, isDirectory: true)
     defer { try? FileManager.default.removeItem(at: root) }
 
     let files = FileManager.default
@@ -73,4 +68,25 @@ import Foundation
     chat.prompt = "abra @D"
     controller.accept(MentionCandidate(path: "Docs", isDirectory: true), in: chat)
     #expect(chat.prompt == "abra @Docs/")
+}
+
+@Test func indexFilesResolveSymlinkedRoots() throws {
+    let scratch = FileManager.default.temporaryDirectory
+        .appending(path: "DevSpaceTests-" + UUID().uuidString)
+    try FileManager.default.createDirectory(at: scratch,
+                                            withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: scratch) }
+
+    let files = FileManager.default
+    let destino = scratch.appending(path: "destino")
+    try files.createDirectory(at: destino.appending(path: "Sub"),
+                              withIntermediateDirectories: true)
+    try Data().write(to: destino.appending(path: "a.swift"))
+    try Data().write(to: destino.appending(path: "Sub/b.swift"))
+
+    let atalho = scratch.appending(path: "atalho")
+    try files.createSymbolicLink(at: atalho, withDestinationURL: destino)
+
+    let candidates = MentionController.indexFiles(under: atalho)
+    #expect(candidates.map(\.path) == ["Sub", "a.swift", "Sub/b.swift"])
 }
