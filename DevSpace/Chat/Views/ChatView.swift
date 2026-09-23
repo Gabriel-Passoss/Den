@@ -63,7 +63,7 @@ struct ChatView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                harnessSwitcher
+                HarnessSwitcher(cockpit: cockpit)
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -127,7 +127,7 @@ struct ChatView: View {
 
     @ViewBuilder
     private var lightbox: some View {
-        if let zoomed, let image = Self.decodedImage(zoomed.data) {
+        if let zoomed, let image = ImageCache.decodedImage(zoomed.data) {
             ZStack {
                 Color.black.opacity(0.65)
                     .ignoresSafeArea()
@@ -143,6 +143,12 @@ struct ChatView: View {
             .contentShape(Rectangle())
             .onTapGesture { closeLightbox() }
             .help("Clique ou Esc para fechar")
+        }
+    }
+
+    private func zoom(_ data: Data) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            zoomed = ZoomedImage(data: data)
         }
     }
 
@@ -287,15 +293,23 @@ struct ChatView: View {
                     ForEach(cockpit.blocks) { block in
                         switch block {
                         case .line(let line):
-                            row(line).id(line.id)
+                            TranscriptRow(line: line, expanded: $expanded,
+                                          onZoom: zoom).id(line.id)
                         case .collapsed(let id, let lines):
-                            steps(id: id, lines: lines).id(id)
+                            ToolSteps(id: id, lines: lines, expanded: $expanded,
+                                      onZoom: zoom).id(id)
                         }
                     }
                     if let since = cockpit.compactingSince {
                         CompactionProgressCard(since: since).id("compacting")
                     } else if !cockpit.streaming.isEmpty {
-                        assistantBubble(cockpit.streaming, at: nil).id("streaming")
+                        HStack(spacing: 0) {
+                            MessageBubble(text: cockpit.streaming, moment: nil,
+                                          tint: AnyShapeStyle(.quaternary.opacity(0.4)),
+                                          markdown: true)
+                            Spacer(minLength: 64)
+                        }
+                        .id("streaming")
                     } else if cockpit.isBusy, cockpit.pending == nil,
                               cockpit.pendingQuestion == nil {
                         HStack(spacing: 0) {
@@ -381,7 +395,10 @@ struct ChatView: View {
         if cockpit.pending != nil || cockpit.pendingQuestion != nil {
             VStack(spacing: 6) {
                 if let pending = cockpit.pending {
-                    permissionCard(pending)
+                    PermissionCard(request: pending,
+                                   harnessName: cockpit.harnessName) { option in
+                        Task { await cockpit.resolve(option) }
+                    }
                 }
                 if let question = cockpit.pendingQuestion {
                     QuestionCard(
@@ -420,290 +437,7 @@ struct ChatView: View {
         }
     }
 
-    @ViewBuilder
-    private func row(_ line: CockpitModel.Line) -> some View {
-        switch line.role {
-        case .user:
-            userBubble(line)
-
-        case .assistant:
-            assistantBubble(line.text, at: line.timestamp)
-
-        case .thinking:
-            HStack(alignment: .top, spacing: 7) {
-                Image(systemName: "brain").font(.system(size: 10)).foregroundStyle(.tertiary)
-                Text(Self.clipped(line.text))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .italic()
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-        case .tool:
-            chip(icon: icon(for: line.verb), text: line.text, mono: true)
-
-        case .toolResult:
-            chip(icon: "arrow.turn.down.right", text: line.text, mono: true, dim: true)
-
-        case .notice:
-            chip(icon: "info.circle", text: line.text, mono: false, dim: true)
-
-        case .compaction:
-            CompactionMark(text: line.text)
-
-        case .digest:
-            DigestRow(title: line.title ?? CockpitModel.Digest.summary,
-                      text: line.text,
-                      mono: line.title == CockpitModel.Digest.command,
-                      isOpen: expanded.contains(line.id)) {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    if expanded.contains(line.id) {
-                        expanded.remove(line.id)
-                    } else {
-                        expanded.insert(line.id)
-                    }
-                }
-            }
-
-        case .unknown:
-            EmptyView()
-        }
-    }
-
-    private func userBubble(_ line: CockpitModel.Line) -> some View {
-        HStack(spacing: 0) {
-            Spacer(minLength: 64)
-            bubble(text: line.text, moment: line.timestamp,
-                   tint: AnyShapeStyle(Color.accentColor.opacity(0.22)),
-                   images: line.images, files: line.files)
-        }
-    }
-
-    private func assistantBubble(_ text: String, at moment: Date?) -> some View {
-        HStack(spacing: 0) {
-            bubble(text: text, moment: moment, tint: AnyShapeStyle(.quaternary.opacity(0.4)),
-                   markdown: true)
-            Spacer(minLength: 64)
-        }
-    }
-
-    private func bubble(text: String, moment: Date?, tint: AnyShapeStyle,
-                        markdown: Bool = false, images: [Data] = [],
-                        files: [String] = []) -> some View {
-        let sizes = images.map { Self.displaySize(for: $0) }
-        let contentWidth = sizes.map(\.width).max()
-        return VStack(alignment: .center, spacing: 6) {
-            ForEach(files, id: \.self) { name in
-                HStack(spacing: 6) {
-                    Image(systemName: "doc.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                    Text(name)
-                        .font(.system(size: 12))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
-            }
-            ForEach(Array(images.enumerated()), id: \.offset) { index, data in
-                if let image = Self.decodedImage(data) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .frame(width: sizes[index].width, height: sizes[index].height)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                zoomed = ZoomedImage(data: data)
-                            }
-                        }
-                        .help("Clique para ampliar")
-                }
-            }
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                if markdown {
-                    MarkdownText(text: Self.clipped(text, limit: 12_000))
-                } else if !text.isEmpty {
-                    Text(Self.clipped(text, limit: 12_000))
-                        .font(.system(size: 13))
-                        .multilineTextAlignment(.leading)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let moment {
-                    Text(moment, format: .dateTime.hour().minute())
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(minWidth: images.isEmpty ? nil : max(contentWidth ?? 0, 220),
-                   alignment: .leading)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(tint, in: RoundedRectangle(cornerRadius: 13))
-    }
-
-    private static let decodedImages = NSCache<NSData, NSImage>()
-
-    static func decodedImage(_ data: Data) -> NSImage? {
-        let key = data as NSData
-        if let cached = decodedImages.object(forKey: key) { return cached }
-        guard let image = NSImage(data: data) else { return nil }
-        decodedImages.setObject(image, forKey: key)
-        return image
-    }
-
-    private static func displaySize(for data: Data) -> CGSize {
-        guard let image = decodedImage(data),
-              image.size.width > 0, image.size.height > 0 else { return .zero }
-        let scale = min(1, min(280 / image.size.width, 220 / image.size.height))
-        return CGSize(width: image.size.width * scale, height: image.size.height * scale)
-    }
-
-    private static func clipped(_ text: String, limit: Int = 1_200) -> String {
-        guard text.utf8.count > limit else { return text }
-        let head = String(text.prefix(limit))
-        let hidden = text.count - head.count
-        return head + "\n⋯ +\(hidden) caracteres não exibidos"
-    }
-
-    private func chip(icon: String, text: String, mono: Bool, dim: Bool = false) -> some View {
-        HStack(alignment: .top, spacing: 7) {
-            Image(systemName: icon)
-                .font(.system(size: 10))
-                .foregroundStyle(dim ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
-                .frame(width: 13)
-            Text(Self.clipped(text))
-                .font(.system(size: 11, design: mono ? .monospaced : .default))
-                .foregroundStyle(dim ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-    }
-
-    private func icon(for verb: CanonicalTool?) -> String {
-        switch verb {
-        case .read: "doc.text"
-        case .write: "square.and.pencil"
-        case .edit: "pencil"
-        case .execute: "terminal"
-        case .search: "magnifyingglass"
-        case .fetch: "globe"
-        case nil: "wrench.and.screwdriver"
-        }
-    }
-
-    private func steps(id: UUID, lines: [CockpitModel.Line]) -> some View {
-        let isOpen = expanded.contains(id)
-        return VStack(alignment: .leading, spacing: 6) {
-            Button {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    if isOpen { expanded.remove(id) } else { expanded.insert(id) }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .rotationEffect(.degrees(isOpen ? 90 : 0))
-                    Image(systemName: "wrench.and.screwdriver")
-                        .font(.system(size: 10))
-                    Text(lines.count == 1 ? "1 passo" : "\(lines.count) passos")
-                        .font(.system(size: 11))
-                        .monospacedDigit()
-                    Spacer(minLength: 0)
-                }
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(isOpen ? "Recolher os passos" : "Ver o que a IA fez")
-            .accessibilityLabel(isOpen ? "Recolher passos" : "Expandir \(lines.count) passos")
-
-            if isOpen {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(lines) { line in
-                        if line.role == .unknown {
-                            Text(line.text)
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                                .textSelection(.enabled)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else {
-                            row(line)
-                        }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 8)
-            }
-        }
-        .background(.quaternary.opacity(isOpen ? 0.18 : 0),
-                    in: RoundedRectangle(cornerRadius: 9))
-    }
-
     // MARK: - Permissão
-
-    private func permissionCard(_ request: PermissionRequest) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.orange)
-                Text("Permissão necessária")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-
-            Text("\(cockpit.harnessName) quer usar \(request.displayName ?? request.toolName).")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-
-            if let detail = detail(of: request) {
-                Text(detail)
-                    .font(.system(size: 11, design: .monospaced))
-                    .textSelection(.enabled)
-                    .lineLimit(4)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
-            }
-
-            HStack(spacing: 8) {
-                Spacer()
-                ForEach(request.options, id: \.id) { option in
-                    let button = Button(option.label) {
-                        Task { await cockpit.resolve(option) }
-                    }
-
-                    if option.kind == .allowOnce {
-                        button.keyboardShortcut(.defaultAction)
-                    } else {
-                        button
-                    }
-                }
-            }
-        }
-        .padding(12)
-        .background(Color.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.35), lineWidth: 1)
-        )
-    }
-
-    private func detail(of request: PermissionRequest) -> String? {
-        request.input["command"]?.stringValue
-        ?? request.input["file_path"]?.stringValue
-        ?? request.description
-    }
 
     // MARK: - Composer
 
@@ -723,9 +457,9 @@ struct ChatView: View {
                 .onSubmit { submit() }
 
             HStack(spacing: 8) {
-                ForEach(cockpit.knobs.filter { $0.category == .mode }) { knobBadge($0) }
+                ForEach(cockpit.knobs.filter { $0.category == .mode }) { KnobBadge(knob: $0, cockpit: cockpit) }
                 folderBadge
-                ForEach(cockpit.knobs.filter { $0.category != .mode }) { knobBadge($0) }
+                ForEach(cockpit.knobs.filter { $0.category != .mode }) { KnobBadge(knob: $0, cockpit: cockpit) }
                 if cockpit.isBusy {
                     ProgressView().controlSize(.mini)
                     TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -958,7 +692,7 @@ struct ChatView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(cockpit.pendingAttachments) { pending in
-                    if pending.isImage, let image = Self.decodedImage(pending.data) {
+                    if pending.isImage, let image = ImageCache.decodedImage(pending.data) {
                         Image(nsImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
@@ -1078,104 +812,10 @@ struct ChatView: View {
     ///
     /// Sem `.buttonStyle`/`.menuStyle` próprios, de propósito: é a chrome de
     /// sistema que traz o Liquid Glass e a animação de abertura.
-    private var harnessSwitcher: some View {
-        Menu {
-            ForEach(HarnessRegistry.all.map(\.id), id: \.rawValue) { candidate in
-                Button {
-                    Task { await cockpit.switchHarness(to: candidate) }
-                } label: {
-                    Label {
-                        Text(HarnessBadge.name(for: candidate))
-                    } icon: {
-                        HarnessBadge(harness: candidate, size: 14)
-                    }
-                }
-                .disabled(candidate == cockpit.harness)
-            }
-        } label: {
-            HStack(spacing: 6) {
-                HarnessBadge(harness: cockpit.harness, size: 15)
-                Text(cockpit.harnessName)
-            }
-            .padding(.horizontal, 6)
-        }
-        .labelStyle(.titleAndIcon)
-        .disabled(!cockpit.canSwitchHarness)
-        .help(cockpit.isBusy
-              ? "Espere o turno terminar para trocar de harness"
-              : "Trocar de harness levando a conversa junto")
-    }
-
-    static let modeLooks: [String: (symbol: String, color: Color)] = [
-        "auto": ("forward.fill", .yellow),
-        "plan": ("pause.fill", .blue),
-        "acceptEdits": ("forward.fill", .purple),
-        "manual": ("pause.fill", .gray),
-        "dontAsk": ("forward.fill", .orange),
-        "bypassPermissions": ("forward.fill", .red),
-        "build": ("hammer.fill", .green),
-    ]
-
-    private func selection(for knob: HarnessKnob) -> Binding<String?> {
-        Binding(
-            get: { cockpit.knob(knob.id)?.currentValue },
-            set: { value in Task { await cockpit.choose(knob: knob.id, value: value) } }
-        )
-    }
-
-    @ViewBuilder
-    private func knobOption(_ option: HarnessKnob.Option, in knob: HarnessKnob) -> some View {
-        if knob.category == .mode, let icon = Self.modeLooks[option.value] {
-            Label(option.label, systemImage: icon.symbol).tag(Optional(option.value))
-        } else {
-            Text(option.label).tag(Optional(option.value))
-        }
-    }
 
     /// Um menu por botão que o harness declarou. O Claude Code oferece modelo,
     /// esforço e permissão; o OpenCode oferece modelo e modo, descobertos em
     /// runtime. Nenhum dos dois está escrito aqui.
-    @ViewBuilder
-    private func knobBadge(_ knob: HarnessKnob) -> some View {
-        let current = knob.currentValue
-        let look = knob.category == .mode ? Self.modeLooks[current ?? ""] : nil
-
-        Menu {
-            Picker(knob.name, selection: selection(for: knob)) {
-                /// Lista plana vira um grupo sem título, então o `Section` só
-                /// aparece de fato quando o harness nomeou os grupos — os 23
-                /// modelos do OpenCode, separados por provedor.
-                ForEach(Array(knob.groupedOptions.enumerated()), id: \.offset) { _, bucket in
-                    Section {
-                        ForEach(bucket.options, id: \.value) { option in
-                            knobOption(option, in: knob)
-                        }
-                    } header: {
-                        if let group = bucket.group { Text(group) }
-                    }
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            HStack(spacing: 3) {
-                if let look {
-                    Image(systemName: look.symbol).font(.system(size: 8))
-                }
-                Text(knob.label(for: current) ?? knob.name)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 7))
-            }
-            .font(.system(size: 10))
-            .foregroundStyle(look.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(.secondary))
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(.quaternary.opacity(0.4), in: Capsule())
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Escolher \(knob.name.lowercased()) das próximas mensagens")
-    }
 
     private var visibleStatus: String? {
         let status = cockpit.status
