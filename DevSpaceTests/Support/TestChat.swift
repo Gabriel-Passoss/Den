@@ -7,5 +7,6 @@ func inertChat() -> ChatModel {
         .appending(path: "DevSpaceTests-" + UUID().uuidString)
     return ChatModel(store: FileTranscriptStore(root: root),
                      workingDirectory: root,
-                     harness: HarnessID(rawValue: "test-" + UUID().uuidString))
+                     harness: HarnessID(rawValue: "test-" + UUID().uuidString),
+                     cache: scratchCache)
 }

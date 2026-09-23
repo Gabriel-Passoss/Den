@@ -3,75 +3,74 @@ import Foundation
 import HarnessCore
 @testable import DevSpace
 
-private func uniqueHarness() -> HarnessID {
-    HarnessID(rawValue: "test-" + UUID().uuidString)
-}
-
-private func forget(_ directories: [URL], _ harness: HarnessID) {
-    let defaults = UserDefaults.standard
-    for directory in directories {
-        defaults.removeObject(forKey: "DevSpace.catalog." + harness.rawValue + "."
-                              + directory.standardizedFileURL.path)
-    }
-    defaults.removeObject(forKey: "DevSpace.catalog.last." + harness.rawValue)
-    defaults.removeObject(forKey: "DevSpace.knobs." + harness.rawValue)
-}
+private let harness = HarnessID(rawValue: "test-harness")
+private let outro = HarnessID(rawValue: "outro-harness")
 
 @Test func catalogRoundTripsPerDirectory() {
-    let harness = uniqueHarness()
-    let directory = URL(fileURLWithPath: "/tmp/devspace-tests/projeto")
-    defer { forget([directory], harness) }
-
-    let catalog = CommandCatalog(skills: ["review"], supportsCompact: true)
-    SessionCache.remember(catalog, for: directory, harness: harness)
-    #expect(SessionCache.rememberedCatalog(for: directory, harness: harness) == catalog)
+    withTemporaryCache { cache in
+        let directory = URL(fileURLWithPath: "/tmp/devspace-tests/projeto")
+        let catalog = CommandCatalog(skills: ["review"], supportsCompact: true)
+        cache.remember(catalog, for: directory, harness: harness)
+        #expect(cache.rememberedCatalog(for: directory, harness: harness) == catalog)
+    }
 }
 
 @Test func catalogFallsBackToTheLastOneForNewDirectories() {
-    let harness = uniqueHarness()
-    let known = URL(fileURLWithPath: "/tmp/devspace-tests/conhecido")
-    let fresh = URL(fileURLWithPath: "/tmp/devspace-tests/novo")
-    defer { forget([known, fresh], harness) }
-
-    let catalog = CommandCatalog(skills: ["review"], supportsCompact: true)
-    SessionCache.remember(catalog, for: known, harness: harness)
-    #expect(SessionCache.rememberedCatalog(for: fresh, harness: harness) == catalog)
-    #expect(SessionCache.rememberedCatalog(for: fresh, harness: uniqueHarness()) == .empty)
+    withTemporaryCache { cache in
+        let known = URL(fileURLWithPath: "/tmp/devspace-tests/conhecido")
+        let fresh = URL(fileURLWithPath: "/tmp/devspace-tests/novo")
+        let catalog = CommandCatalog(skills: ["review"], supportsCompact: true)
+        cache.remember(catalog, for: known, harness: harness)
+        #expect(cache.rememberedCatalog(for: fresh, harness: harness) == catalog)
+        #expect(cache.rememberedCatalog(for: fresh, harness: outro) == .empty)
+    }
 }
 
 @Test func emptyCatalogNeverOverwritesARememberedOne() {
-    let harness = uniqueHarness()
-    let directory = URL(fileURLWithPath: "/tmp/devspace-tests/projeto")
-    defer { forget([directory], harness) }
-
-    let catalog = CommandCatalog(skills: ["review"], supportsCompact: true)
-    SessionCache.remember(catalog, for: directory, harness: harness)
-    SessionCache.remember(.empty, for: directory, harness: harness)
-    #expect(SessionCache.rememberedCatalog(for: directory, harness: harness) == catalog)
+    withTemporaryCache { cache in
+        let directory = URL(fileURLWithPath: "/tmp/devspace-tests/projeto")
+        let catalog = CommandCatalog(skills: ["review"], supportsCompact: true)
+        cache.remember(catalog, for: directory, harness: harness)
+        cache.remember(.empty, for: directory, harness: harness)
+        #expect(cache.rememberedCatalog(for: directory, harness: harness) == catalog)
+    }
 }
 
 @Test func knobsRoundTripPerHarness() {
-    let harness = uniqueHarness()
-    defer { forget([], harness) }
+    withTemporaryCache { cache in
+        let knobs = [HarnessKnob(id: "model", category: .model, name: "Modelo",
+                                 currentValue: "opus",
+                                 options: [.init(value: "opus", label: "Opus")])]
+        cache.remember(knobs, for: harness)
+        #expect(cache.rememberedKnobs(for: harness) == knobs)
+        #expect(cache.rememberedKnobs(for: outro) == [])
 
-    let knobs = [HarnessKnob(id: "model", category: .model, name: "Modelo",
-                             currentValue: "opus",
-                             options: [.init(value: "opus", label: "Opus")])]
-    SessionCache.remember(knobs, for: harness)
-    #expect(SessionCache.rememberedKnobs(for: harness) == knobs)
-    #expect(SessionCache.rememberedKnobs(for: uniqueHarness()) == [])
-
-    SessionCache.remember([], for: harness)
-    #expect(SessionCache.rememberedKnobs(for: harness) == knobs)
+        cache.remember([], for: harness)
+        #expect(cache.rememberedKnobs(for: harness) == knobs)
+    }
 }
 
 @Test func preferencesRoundTripPerSession() {
-    let session = UUID()
-    #expect(SessionCache.preferences(for: session) == [:])
+    withTemporaryCache { cache in
+        let session = UUID()
+        #expect(cache.preferences(for: session) == [:])
 
-    SessionCache.setPreferences(["tema": "escuro"], for: session)
-    #expect(SessionCache.preferences(for: session) == ["tema": "escuro"])
+        cache.setPreferences(["tema": "escuro"], for: session)
+        #expect(cache.preferences(for: session) == ["tema": "escuro"])
 
-    SessionCache.setPreferences([:], for: session)
-    #expect(SessionCache.preferences(for: session) == [:])
+        cache.setPreferences([:], for: session)
+        #expect(cache.preferences(for: session) == [:])
+    }
+}
+
+@Test func separateCachesNeverSeeEachOther() {
+    let directory = URL(fileURLWithPath: "/tmp/devspace-tests/projeto")
+    let catalog = CommandCatalog(skills: ["review"], supportsCompact: true)
+    withTemporaryCache { first in
+        first.remember(catalog, for: directory, harness: harness)
+        withTemporaryCache { second in
+            #expect(second.rememberedCatalog(for: directory, harness: harness) == .empty)
+        }
+        #expect(first.rememberedCatalog(for: directory, harness: harness) == catalog)
+    }
 }

@@ -1,27 +1,35 @@
 import Foundation
 import HarnessCore
 
-nonisolated enum SessionCache {
-    private static func catalogKey(_ directory: URL, _ harness: HarnessID) -> String {
+nonisolated struct SessionCache {
+    let defaults: UserDefaults
+
+    init(defaults: UserDefaults) {
+        self.defaults = defaults
+    }
+
+    static let standard = SessionCache(defaults: .standard)
+
+    private func catalogKey(_ directory: URL, _ harness: HarnessID) -> String {
         "DevSpace.catalog." + harness.rawValue + "." + directory.standardizedFileURL.path
     }
 
-    private static func lastCatalogKey(_ harness: HarnessID) -> String {
+    private func lastCatalogKey(_ harness: HarnessID) -> String {
         "DevSpace.catalog.last." + harness.rawValue
     }
 
-    static func remember(_ catalog: CommandCatalog, for directory: URL,
-                         harness: HarnessID) {
+    func remember(_ catalog: CommandCatalog, for directory: URL,
+                  harness: HarnessID) {
         guard !catalog.isEmpty,
               let data = try? JSONEncoder().encode(catalog) else { return }
-        UserDefaults.standard.set(data, forKey: catalogKey(directory, harness))
-        UserDefaults.standard.set(data, forKey: lastCatalogKey(harness))
+        defaults.set(data, forKey: catalogKey(directory, harness))
+        defaults.set(data, forKey: lastCatalogKey(harness))
     }
 
-    static func rememberedCatalog(for directory: URL,
-                                  harness: HarnessID) -> CommandCatalog {
+    func rememberedCatalog(for directory: URL,
+                           harness: HarnessID) -> CommandCatalog {
         for key in [catalogKey(directory, harness), lastCatalogKey(harness)] {
-            if let data = UserDefaults.standard.data(forKey: key),
+            if let data = defaults.data(forKey: key),
                let catalog = try? JSONDecoder().decode(CommandCatalog.self, from: data) {
                 return catalog
             }
@@ -29,34 +37,34 @@ nonisolated enum SessionCache {
         return .empty
     }
 
-    private static func knobsKey(_ harness: HarnessID) -> String {
+    private func knobsKey(_ harness: HarnessID) -> String {
         "DevSpace.knobs." + harness.rawValue
     }
 
-    static func remember(_ knobs: [HarnessKnob], for harness: HarnessID) {
+    func remember(_ knobs: [HarnessKnob], for harness: HarnessID) {
         guard !knobs.isEmpty, let data = try? JSONEncoder().encode(knobs) else { return }
-        UserDefaults.standard.set(data, forKey: knobsKey(harness))
+        defaults.set(data, forKey: knobsKey(harness))
     }
 
-    static func rememberedKnobs(for harness: HarnessID) -> [HarnessKnob] {
-        guard let data = UserDefaults.standard.data(forKey: knobsKey(harness)),
+    func rememberedKnobs(for harness: HarnessID) -> [HarnessKnob] {
+        guard let data = defaults.data(forKey: knobsKey(harness)),
               let knobs = try? JSONDecoder().decode([HarnessKnob].self, from: data)
         else { return [] }
         return knobs
     }
 
-    private static let preferencesKey = "DevSpace.sessionPreferences"
+    private let preferencesKey = "DevSpace.sessionPreferences"
 
-    static func preferences(for sessionID: UUID) -> [String: String] {
-        let all = UserDefaults.standard.dictionary(forKey: preferencesKey)
+    func preferences(for sessionID: UUID) -> [String: String] {
+        let all = defaults.dictionary(forKey: preferencesKey)
             as? [String: [String: String]] ?? [:]
         return all[sessionID.uuidString] ?? [:]
     }
 
-    static func setPreferences(_ values: [String: String], for sessionID: UUID) {
-        var all = UserDefaults.standard.dictionary(forKey: preferencesKey)
+    func setPreferences(_ values: [String: String], for sessionID: UUID) {
+        var all = defaults.dictionary(forKey: preferencesKey)
             as? [String: [String: String]] ?? [:]
         all[sessionID.uuidString] = values.isEmpty ? nil : values
-        UserDefaults.standard.set(all, forKey: preferencesKey)
+        defaults.set(all, forKey: preferencesKey)
     }
 }

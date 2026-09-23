@@ -66,7 +66,7 @@ final class ChatModel {
     var branch: String?
 
     var catalog: CommandCatalog = .empty {
-        didSet { SessionCache.remember(catalog, for: workingDirectory, harness: harness) }
+        didSet { cache.remember(catalog, for: workingDirectory, harness: harness) }
     }
 
     func run(command: String) async {
@@ -76,7 +76,7 @@ final class ChatModel {
     private(set) var harness: HarnessID
 
     var knobs: [HarnessKnob] = [] {
-        didSet { SessionCache.remember(knobs, for: harness) }
+        didSet { cache.remember(knobs, for: harness) }
     }
 
     var capabilities = HarnessCapabilities()
@@ -88,6 +88,7 @@ final class ChatModel {
     func knob(_ id: String) -> HarnessKnob? { knobs.first { $0.id == id } }
 
     private let store: FileTranscriptStore
+    private let cache: SessionCache
     private var session: (any HarnessSession)?
     private var consumer: Task<Void, Never>?
     private var hasTitle = false
@@ -108,8 +109,9 @@ final class ChatModel {
     // MARK: - Nascimento
 
     init(store: FileTranscriptStore, workingDirectory: URL,
-         harness: HarnessID? = nil) {
+         harness: HarnessID? = nil, cache: SessionCache = .standard) {
         self.store = store
+        self.cache = cache
         let harness = harness ?? HarnessRegistry.preferred
         let id = UUID()
         self.sessionID = id
@@ -122,11 +124,13 @@ final class ChatModel {
         self.isRestored = false
         restorePreferences()
         loadKnobs()
-        catalog = SessionCache.rememberedCatalog(for: workingDirectory, harness: harness)
+        catalog = cache.rememberedCatalog(for: workingDirectory, harness: harness)
     }
 
-    init(store: FileTranscriptStore, restoring session: Session) {
+    init(store: FileTranscriptStore, restoring session: Session,
+         cache: SessionCache = .standard) {
         self.store = store
+        self.cache = cache
         self.sessionID = session.id
         self.segments = session.segments.isEmpty
             ? [Segment(harness: HarnessRegistry.fallback, harnessSessionID: "", model: "")]
@@ -141,7 +145,7 @@ final class ChatModel {
         self.status = "fria"
         restorePreferences()
         loadKnobs()
-        catalog = SessionCache.rememberedCatalog(for: workingDirectory, harness: harness)
+        catalog = cache.rememberedCatalog(for: workingDirectory, harness: harness)
         for entry in session.allEntries { render(entry, persist: false) }
 
         if let last = session.segments.last, last.seededBy != nil, last.entries.isEmpty {
@@ -385,7 +389,7 @@ final class ChatModel {
 
         var discovered = adapter.knobs(for: HarnessInstallation(executable: "", version: ""),
                                        workingDirectory: workingDirectory)
-        if discovered.isEmpty { discovered = SessionCache.rememberedKnobs(for: harness) }
+        if discovered.isEmpty { discovered = cache.rememberedKnobs(for: harness) }
         for index in discovered.indices {
             if let chosen = settings[discovered[index].id] {
                 discovered[index].currentValue = chosen
@@ -398,18 +402,18 @@ final class ChatModel {
         guard directory.path != workingDirectory.path else { return }
         workingDirectory = directory
         loadKnobs()
-        catalog = SessionCache.rememberedCatalog(for: directory, harness: harness)
+        catalog = cache.rememberedCatalog(for: directory, harness: harness)
         await persistMetadata()
         await loadBranch()
         await relaunchIfIdle()
     }
 
     private func restorePreferences() {
-        settings = SessionCache.preferences(for: sessionID)
+        settings = cache.preferences(for: sessionID)
     }
 
     private func persistPreferences() {
-        SessionCache.setPreferences(
+        cache.setPreferences(
             settings.compactMapValues { $0.isEmpty ? nil : $0 }, for: sessionID)
     }
 
@@ -438,7 +442,7 @@ final class ChatModel {
         hasLaunched = false
         settings = [:]
         loadKnobs()
-        catalog = SessionCache.rememberedCatalog(for: workingDirectory, harness: newHarness)
+        catalog = cache.rememberedCatalog(for: workingDirectory, harness: newHarness)
 
         await persistMetadata()
 
