@@ -5,7 +5,6 @@ public struct OpenCodeEventMapper: Sendable {
 
     static let discriminatorPrefix = "opencode:"
 
-
     let now: @Sendable () -> Date
 
     private var pending: (id: String, text: String, isThought: Bool)?
@@ -23,9 +22,6 @@ public struct OpenCodeEventMapper: Sendable {
         self.now = now
     }
 
-    /// O OpenCode compacta respondendo com um resumo comum: nenhum quadro
-    /// anuncia a fronteira nem conta tokens. Quem sabe que o turno é uma
-    /// compactação é quem mandou o comando, então a sessão avisa antes.
     public mutating func beginCompaction() {
         compactingSince = now()
         contextBeforeCompaction = contextTokens
@@ -56,8 +52,6 @@ public struct OpenCodeEventMapper: Sendable {
             contextTokens = used
             return MappedOutput(events: [.contextUsage(tokens: used)])
 
-        /// O ACP não lista servidores MCP; o que ele anuncia são os comandos,
-        /// e o `/compact` fica de fora deles mesmo sendo atendido.
         case "available_commands_update":
             let names = update["availableCommands"]?.arrayValue?
                 .compactMap { $0["name"]?.stringValue } ?? []
@@ -84,8 +78,6 @@ public struct OpenCodeEventMapper: Sendable {
         }
         pending?.text += text
 
-        /// Compactando, o resumo não escorre na tela: quem está desenhando o
-        /// turno é o cartão de progresso.
         guard compactingSince == nil else { return output }
 
         output.events.append(isThought
@@ -102,10 +94,6 @@ public struct OpenCodeEventMapper: Sendable {
         let trimmed = open.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        /// Compactando, tudo que sai é o resumo — e ele costuma sair em mais
-        /// de uma mensagem. As partes se juntam num registro só, para o chat
-        /// não ganhar um cartão por pedaço. O raciocínio do sumarizador é
-        /// sobre a conversa, não faz parte dela.
         if compactingSince != nil {
             if !open.isThought { compactionProse.append(trimmed) }
             return []
@@ -125,9 +113,6 @@ public struct OpenCodeEventMapper: Sendable {
         return [entry]
     }
 
-    /// A primeira prosa do turno de compactação é o resumo: a fronteira
-    /// entra logo antes dele, com o que dá para afirmar — o OpenCode não
-    /// informa quantos tokens havia nem quantos sobraram.
     private mutating func closeCompaction() -> [TranscriptEntry] {
         guard let started = compactingSince else { return [] }
         compactingSince = nil
@@ -136,9 +121,6 @@ public struct OpenCodeEventMapper: Sendable {
         compactionProse = []
         guard !prose.isEmpty else { return [] }
 
-        /// Os dois números só valem juntos: sem um `usage_update` novo depois
-        /// da compactação, o contexto atual ainda é o de antes e dizer
-        /// "87k → 87k" seria inventar um corte que ninguém confirmou.
         let moved = contextTokens != contextBeforeCompaction
         return [
             TranscriptEntry(
@@ -189,8 +171,6 @@ public struct OpenCodeEventMapper: Sendable {
         var input: JSONValue
     }
 
-    /// O `rawInput` chega em parcelas: no `pending` o CLI ainda não sabe o
-    /// comando, e no quadro terminal ele vem nulo. Guardamos o mais rico.
     private mutating func hold(_ update: JSONValue, id: String) {
         let input = update["rawInput"] ?? .null
         guard var held = heldToolCalls[id] else {
@@ -206,9 +186,6 @@ public struct OpenCodeEventMapper: Sendable {
         heldToolCalls[id] = held
     }
 
-    /// Anuncia a chamada só quando ela deixa de ser `pending`, que é quando o
-    /// argumento existe. Antes disso o transcript gravaria uma ferramenta sem
-    /// comando.
     private mutating func announce(_ id: String) -> [TranscriptEntry] {
         guard !announcedToolCalls.contains(id), let held = heldToolCalls[id] else { return [] }
         announcedToolCalls.insert(id)
@@ -292,8 +269,6 @@ public struct OpenCodeEventMapper: Sendable {
         let usage = result["usage"]
         let stopReason = result["stopReason"]?.stringValue
 
-        /// O `usage_update` do turno é a fonte melhor — traz o contexto
-        /// inteiro. O result só serve de reserva quando ele não veio.
         let read = (usage?["inputTokens"]?.intValue ?? 0)
             + (usage?["cachedReadTokens"]?.intValue ?? 0)
         if contextTokens == 0, read > 0 {

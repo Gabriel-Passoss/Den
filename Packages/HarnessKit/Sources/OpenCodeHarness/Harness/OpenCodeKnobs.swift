@@ -17,9 +17,6 @@ public enum OpenCodeKnobs {
         effort: "Esforço",
     ]
 
-    /// O CLI manda os rótulos em inglês (`build`, `plan`, `xhigh`). A tradução
-    /// é por par botão/valor porque `default` quer dizer coisas diferentes em
-    /// botões diferentes; o que não estiver aqui cai no nome que o CLI deu.
     static let labels: [String: [String: String]] = [
         mode: [
             "build": "Construir",
@@ -39,10 +36,6 @@ public enum OpenCodeKnobs {
         names[id] ?? capitalized(fallback)
     }
 
-    /// O CLI classifica em `model`, `mode` e `thought_level`; o último é o
-    /// esforço, que só existe enquanto o modelo escolhido aceita. Um balde
-    /// desconhecido vira `.effort` porque é o lado do painel onde cabe um
-    /// botão a mais sem empurrar o modo para longe do campo de texto.
     static func category(for raw: String, id: String) -> HarnessKnob.Category {
         switch raw {
         case "model": .model
@@ -52,9 +45,6 @@ public enum OpenCodeKnobs {
         }
     }
 
-    /// `"OpenAI/GPT-5.5"` chega num campo só. O provedor vira cabeçalho de
-    /// seção e o nome do modelo fica sozinho no rótulo — senão o botão
-    /// fechado mostra o provedor repetido a cada troca.
     static func split(modelName: String) -> (label: String, group: String?) {
         guard let slash = modelName.firstIndex(of: "/") else { return (modelName, nil) }
         let provider = String(modelName[modelName.startIndex..<slash])
@@ -78,8 +68,6 @@ public enum OpenCodeKnobs {
             label: labels[knobID]?[value] ?? capitalized(given))
     }
 
-    /// Traduz os `configOptions` que o CLI devolve em `session/new`,
-    /// `session/load` e `session/set_config_option`.
     public static func parse(_ configOptions: JSONValue?) -> [HarnessKnob] {
         guard let items = configOptions?.arrayValue else { return [] }
         return items.compactMap { item in

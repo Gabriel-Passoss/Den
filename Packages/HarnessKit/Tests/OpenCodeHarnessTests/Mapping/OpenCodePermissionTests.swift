@@ -3,8 +3,6 @@ import Foundation
 import HarnessCore
 @testable import OpenCodeHarness
 
-/// Lê o `session/request_permission` que foi realmente gravado na fixture,
-/// em vez de um exemplo escrito à mão.
 private func recordedPermissionParams() throws -> JSONValue {
     let url = try #require(Bundle.module.url(
         forResource: "Fixtures/turn-with-permission", withExtension: "ndjson"))

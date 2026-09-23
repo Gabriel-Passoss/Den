@@ -111,7 +111,6 @@ private let harnessB = HarnessID(rawValue: "harness-b")
     let first = Segment(harness: harnessA,
                         harnessSessionID: UUID().uuidString, model: "m1")
 
-    /// O id do segundo harness não é UUID — é a forma que motivou a emenda.
     let second = Segment(harness: harnessB,
                          harnessSessionID: "ses_f36f01b7dffeoyVh8oyerb5GJG",
                          model: "m2",
@@ -123,7 +122,6 @@ private let harnessB = HarnessID(rawValue: "harness-b")
     try await store.saveMetadata(session)
     try await store.append(conversation[0], to: first.id, in: session.id)
 
-    // a troca: o metadata vai ao disco antes do primeiro append do novo trecho
     session.segments.append(second)
     try await store.saveMetadata(session)
     try await store.append(conversation[5], to: second.id, in: session.id)
@@ -152,8 +150,6 @@ private let harnessB = HarnessID(rawValue: "harness-b")
                           segments: [first])
     try await store.saveMetadata(session)
 
-    /// É por causa desta recusa que `switchHarness` grava o metadata antes de
-    /// entregar a semente.
     let orphan = Segment(harness: harnessB, harnessSessionID: "b", model: "m")
     await #expect(throws: TranscriptStoreError.segmentNotFound(orphan.id)) {
         try await store.append(conversation[0], to: orphan.id, in: session.id)
@@ -171,8 +167,6 @@ private let harnessB = HarnessID(rawValue: "harness-b")
     #expect(message.contains("**Você:** oi"))
     #expect(message.hasSuffix("continue daqui"))
 
-    /// O pedido precisa estar separado do histórico, senão o modelo responde
-    /// à conversa antiga em vez do que acabaram de escrever.
     #expect(message.contains(HandoffSeed.requestHeading))
 }
 

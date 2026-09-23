@@ -111,8 +111,6 @@ public actor OpenCodeSession: HarnessSession {
             try? await applyRemotely(knob: id, value: value)
         }
 
-        /// O ACP não lista os comandos embutidos do CLI, então o catálogo diz
-        /// só o que dá para afirmar: o OpenCode atende `/compact`.
         continuation?.yield(.event(.sessionInitialized(
             model: OpenCodeKnobs.model(in: currentKnobs),
             harnessSessionID: harnessSessionID ?? "",
@@ -157,10 +155,6 @@ public actor OpenCodeSession: HarnessSession {
             automaticReply: replied ? Self.refusalMessage : nil)))
     }
 
-    /// `session/load` devolve a sessão inteira antes de responder, e ela já
-    /// está gravada deste lado: aceitá-la como entrada nova duplicaria a
-    /// conversa a cada abertura — e o chat pularia enquanto a cópia desce.
-    /// Do replay interessa só o estado: catálogo, contexto, configuração.
     static func replayable(_ output: MappedOutput) -> [SessionEvent] {
         output.events.filter { event in
             switch event {
@@ -208,8 +202,6 @@ public actor OpenCodeSession: HarnessSession {
         }
         continuation?.yield(.event(.turnStarted))
 
-        /// `session/prompt` só responde quando o turno inteiro acaba, então ele
-        /// não pode bloquear quem mandou — o resultado desagua no stream.
         self.turn = Task { [weak self, channel] in
             do {
                 let result = try await channel.send("session/prompt", .object([

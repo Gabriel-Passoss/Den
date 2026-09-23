@@ -43,8 +43,6 @@ enum OpenCodePermission {
         )
     }
 
-    /// O CLI espera uma opção nomeada. Uma decisão binária vinda de outro
-    /// caminho escolhe a primeira opção compatível que ele ofereceu.
     static func outcome(for decision: PermissionDecision,
                         offered: [PermissionOption]) -> JSONValue {
         let chosen: String?

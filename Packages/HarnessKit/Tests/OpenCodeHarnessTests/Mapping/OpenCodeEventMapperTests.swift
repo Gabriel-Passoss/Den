@@ -27,8 +27,6 @@ private func update(_ text: String) -> JSONValue {
     try! JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
 }
 
-/// Roda a fixture inteira: cada `session/update` pelo mapper, e o resultado
-/// do `session/prompt` pelo `turnResult`.
 private func runFixture(_ name: String) throws -> MappedOutput {
     let url = try #require(Bundle.module.url(
         forResource: "Fixtures/\(name)", withExtension: "ndjson"))

@@ -32,8 +32,6 @@ public struct CommandCatalog: Sendable, Equatable, Codable {
 
     public static let empty = CommandCatalog()
 
-    /// O texto que compacta a conversa. Vale para os dois harnesses, e é o
-    /// que a sessão compara para saber que o turno é uma compactação.
     public static let compactCommand = "/compact"
 
     public var isEmpty: Bool {

@@ -47,8 +47,6 @@ public struct TurnResult: Sendable, Equatable, Codable {
     public let stopReason: String?
     public let isError: Bool
 
-    /// O contexto ocupado ao fechar o turno. Opcional porque transcritos
-    /// gravados antes deste campo continuam decodificando.
     public let contextTokens: Int?
 
     public init(usage: UsageTotals, stopReason: String?, isError: Bool,

@@ -21,12 +21,8 @@ public enum SessionEvent: Sendable, Equatable {
 
     case notice(subtype: String, text: String)
 
-    /// Quanto do contexto o modelo leu na última mensagem: é o número que
-    /// sobe durante o turno e desaba quando a conversa é compactada.
     case contextUsage(tokens: Int)
 
-    /// Nem todo harness entrega o catálogo no init: alguns anunciam os
-    /// comandos depois, e o menu tem de acompanhar.
     case catalogUpdated(CommandCatalog)
 
     case compaction(CompactionPhase)

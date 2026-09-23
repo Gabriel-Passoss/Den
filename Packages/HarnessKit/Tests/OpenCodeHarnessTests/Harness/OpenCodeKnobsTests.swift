@@ -7,7 +7,6 @@ private func value(_ text: String) -> JSONValue {
     try! JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
 }
 
-/// Forma real devolvida pelo `session/new` do opencode 1.18.31, encurtada.
 private let recordedConfigOptions = value(#"""
 [{"id":"model","name":"Model","category":"model","type":"select",
   "currentValue":"opencode/big-pickle",
@@ -37,8 +36,6 @@ private let recordedConfigOptions = value(#"""
     #expect(knobs[1].options.map(\.label) == ["Construir", "Plano"])
 }
 
-/// Forma real de quando o modelo escolhido aceita esforço: o CLI passa a
-/// devolver um terceiro botão, classificado como `thought_level`.
 private let recordedWithEffort = value(#"""
 [{"id":"model","name":"Model","category":"model","type":"select",
   "currentValue":"openai/gpt-5.5",
@@ -55,8 +52,6 @@ private let recordedWithEffort = value(#"""
 @Test func thoughtLevelIsEffort() {
     let knobs = OpenCodeKnobs.parse(recordedWithEffort)
 
-    /// Sem isto o esforço cai no balde do modo e o painel o desenha do lado
-    /// errado do campo de texto.
     #expect(knobs.map(\.category) == [.model, .effort, .mode])
     #expect(knobs[1].name == "Esforço")
     #expect(knobs[1].options.map(\.label)
@@ -80,7 +75,6 @@ private let recordedWithEffort = value(#"""
     #expect(knobs[0].options.map(\.label) == ["GPT-5.4", "Big Pickle"])
     #expect(knobs[0].options.map(\.group) == ["OpenAI", "OpenCode Zen"])
 
-    /// O botão fechado mostra o modelo sem repetir o provedor.
     #expect(knobs[0].label(for: "opencode/big-pickle") == "Big Pickle")
 }
 

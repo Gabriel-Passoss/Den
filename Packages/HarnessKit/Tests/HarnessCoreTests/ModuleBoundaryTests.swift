@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import HarnessCore
+import HarnessTestSupport
 
 @Test func theGenericTypesLiveInHarnessCore() async throws {
     let transport = ProcessTransport()
@@ -50,11 +51,7 @@ import HarnessCore
 }
 
 @Test func harnessCoreNeverNamesASpecificHarness() throws {
-    let core = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appending(path: "Sources/HarnessCore")
+    let core = packageRoot().appending(path: "Sources/HarnessCore")
 
     let files = try #require(
         FileManager.default.enumerator(at: core, includingPropertiesForKeys: nil)?

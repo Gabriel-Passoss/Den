@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import HarnessCore
+import HarnessTestSupport
 
 private let encoder: JSONEncoder = {
     let e = JSONEncoder()
@@ -202,11 +203,7 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
 }
 
 @Test func theOpenEnumsDoNotDivergeFromTheirKnownDiscriminators() throws {
-    let sources = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appending(path: "Sources/HarnessCore")
+    let sources = packageRoot().appending(path: "Sources/HarnessCore")
 
     let subjects: [(String, String, String, Set<String>, String)] = [
         ("TranscriptEntry.swift", "public enum Kind:", "private enum Known:",
@@ -215,8 +212,16 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
          Handoff.knownDiscriminators, "Handoff"),
     ]
 
+    let located = try #require(
+        FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+    )
+
     for (file, opening, closing, known, name) in subjects {
-        let text = try String(contentsOf: sources.appending(path: file), encoding: .utf8)
+        let url = try #require(located.first { $0.lastPathComponent == file },
+                               "não achei \(file) sob Sources/HarnessCore")
+        let text = try String(contentsOf: url, encoding: .utf8)
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         let start = try #require(lines.firstIndex { $0.contains(opening) },
                                  "não achei \(opening) em \(file) — a fonte mudou de forma")
@@ -230,7 +235,6 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
                 "\(name) declara \(declared) casos e conhece \(known.count) discriminadores — um caso novo não chegou em Known.CodingKeys")
     }
 }
-
 
 @Test func aPermissionRequestWrittenBeforeOptionsExistedStillDecodes() throws {
 

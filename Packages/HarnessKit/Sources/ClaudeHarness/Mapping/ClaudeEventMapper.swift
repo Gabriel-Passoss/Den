@@ -3,7 +3,6 @@ import HarnessCore
 
 public struct ClaudeEventMapper: Sendable {
 
-    /// O CLI anuncia skills, comandos e servidores MCP no evento de init.
     static func catalog(from line: JSONValue) -> CommandCatalog {
         let commands = line["slash_commands"]?.arrayValue?
             .compactMap(\.stringValue) ?? []
@@ -24,9 +23,6 @@ public struct ClaudeEventMapper: Sendable {
                               supportsCompact: commands.contains("compact"))
     }
 
-
-    /// O contexto vivo é tudo que o modelo leu para responder: a entrada
-    /// nova mais o que veio do cache.
     static func contextTokens(in usage: JSONValue?) -> Int? {
         guard let usage else { return nil }
         let total = (usage["input_tokens"]?.intValue ?? 0)
@@ -213,8 +209,6 @@ private extension ClaudeEventMapper {
             cacheCreationTokens: usage?["cache_creation_input_tokens"]?.intValue ?? 0,
             costUSD: line["total_cost_usd"]?.doubleValue ?? 0
         )
-        /// O total do result soma o turno inteiro; o contexto é o da última
-        /// ida ao modelo.
         let context = ClaudeEventMapper.contextTokens(in: usage?["iterations"]?.arrayValue?.last)
         let turn = TurnResult(
             usage: totals,

@@ -1,15 +1,5 @@
 import Foundation
 
-/// Materializa um transcript em texto para semear o próximo segmento.
-///
-/// Nenhum CLI aceita injetar turnos de assistente numa sessão nova — todos só
-/// recebem conteúdo de usuário. Então "continuar com o mesmo contexto" é
-/// entregar a conversa anterior como a primeira mensagem.
-///
-/// Ela viaja **colada** ao primeiro pedido que o usuário fizer no segmento
-/// novo, nunca como um turno próprio: a troca de harness não gasta um turno,
-/// não produz resposta que o usuário não pediu, e não custa nada se ele trocar
-/// e não escrever mais nada.
 public enum HandoffSeed: Sendable {
 
     public static let defaultBudget = 60_000
@@ -46,8 +36,6 @@ public enum HandoffSeed: Sendable {
             return Result(text: whole, handoff: .replay(throughEntry: last.id))
         }
 
-        /// Estourou: mantém as falas mais recentes que cabem e diz que cortou,
-        /// em vez de entregar um documento que o modelo novo não consegue ler.
         var kept: [String] = []
         var size = preamble.count + omissionMarker.count
         for entry in rendered.reversed() {
@@ -60,9 +48,6 @@ public enum HandoffSeed: Sendable {
         return Result(text: assemble([omissionMarker] + kept), handoff: .briefing(assemble(kept)))
     }
 
-    /// Junta a semente ao que o usuário escreveu, deixando explícito onde o
-    /// histórico acaba e o pedido começa. Um turno só com anexo chega aqui com
-    /// texto vazio, e ainda assim precisa de um pedido para o modelo atender.
     public static func message(seed: String, request: String) -> String {
         let trimmed = request.trimmingCharacters(in: .whitespacesAndNewlines)
         return [seed, requestHeading, trimmed.isEmpty ? emptyRequest : trimmed]
@@ -89,8 +74,6 @@ public enum HandoffSeed: Sendable {
                 ? "_(usou \(call.rawName))_"
                 : "_(usou \(call.rawName): \(detail))_"
 
-        /// O raciocínio é do modelo que saiu, e o resultado de ferramenta o
-        /// modelo novo pode reobter. Nenhum dos dois entra na semente.
         case .assistantThinking, .toolResult, .permissionRequest,
              .permissionDecision, .systemNotice, .turnResult,
              .contextCompacted, .unrecognized:
