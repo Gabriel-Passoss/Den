@@ -491,7 +491,7 @@ struct ChatView: View {
     private func bubble(text: String, moment: Date?, tint: AnyShapeStyle,
                         markdown: Bool = false, images: [Data] = [],
                         files: [String] = []) -> some View {
-        let sizes = images.map(Self.displaySize(for:))
+        let sizes = images.map { Self.displaySize(for: $0) }
         let contentWidth = sizes.map(\.width).max()
         return VStack(alignment: .center, spacing: 6) {
             ForEach(files, id: \.self) { name in
@@ -600,7 +600,6 @@ struct ChatView: View {
         }
     }
 
-    @ViewBuilder
     private func steps(id: UUID, lines: [CockpitModel.Line]) -> some View {
         let isOpen = expanded.contains(id)
         return VStack(alignment: .leading, spacing: 6) {

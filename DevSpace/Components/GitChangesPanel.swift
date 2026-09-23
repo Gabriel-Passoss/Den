@@ -191,10 +191,10 @@ struct GitChangesPanel: View {
         let name = (relative as NSString).lastPathComponent
         let nameText = Text(name).font(.system(size: 12, weight: .medium))
         guard !folder.isEmpty else { return nameText }
-        return Text(folder + "/")
+        let folderText = Text(folder + "/")
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
-            + nameText
+        return Text("\(folderText)\(nameText)")
     }
 
     private func repoHeader(_ repo: GitChangesModel.Repo) -> some View {
