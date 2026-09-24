@@ -30,17 +30,7 @@ struct MarkdownText: View {
                 .padding(.top, 2)
 
         case .code(let code, let language):
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Self.highlighted(code, language: language)) { line in
-                    Text(line.text)
-                        .font(.system(size: 12, design: .monospaced))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+            CodeBlock(code: code, language: language)
 
         case .listItem(let marker, let depth, let content):
             HStack(alignment: .firstTextBaseline, spacing: 6) {
