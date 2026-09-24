@@ -70,7 +70,7 @@ printf '{"type":"result","decidiu":"%s"}\n' "$behavior"
         for try await output in stream {
             switch output {
             case .permissionRequest(let r):
-                try await channel.respond(to: r.id, with: .deny(message: "não", interrupt: false))
+                try await channel.respond(to: r.id, with: .deny(message: "no", interrupt: false))
             case .conversation(let data):
                 let v = try JSONDecoder().decode(JSONValue.self, from: data)
                 if let d = v["decidiu"]?.stringValue { decided = d }

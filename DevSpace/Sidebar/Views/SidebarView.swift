@@ -52,7 +52,7 @@ struct SidebarView: View {
             }
     }
 
-    // MARK: - Lista
+    // MARK: - List
 
     @ViewBuilder
     private var list: some View {
@@ -199,7 +199,7 @@ struct SidebarView: View {
         }
     }
 
-    // MARK: - Seleção
+    // MARK: - Selection
 
     private var selectionBinding: Binding<UUID?> {
         Binding(

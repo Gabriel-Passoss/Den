@@ -47,9 +47,9 @@ private struct FakeCommandRunner: CommandRunner {
 
 @Test func aVersionItCannotReadIsReportedAsSuch() async {
     let runner = FakeCommandRunner(responses: [
-        "/opt/homebrew/bin/opencode --version": "não sou uma versão\n",
+        "/opt/homebrew/bin/opencode --version": "not a version\n",
     ])
-    await #expect(throws: OpenCodeDiscovery.DiscoveryError.unreadableVersion("não sou uma versão")) {
+    await #expect(throws: OpenCodeDiscovery.DiscoveryError.unreadableVersion("not a version")) {
         _ = try await OpenCodeDiscovery(
             runner: runner, shell: "/bin/zsh",
             fallbackPaths: ["/opt/homebrew/bin/opencode"]).discover()

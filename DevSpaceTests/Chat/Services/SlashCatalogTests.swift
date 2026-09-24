@@ -7,15 +7,15 @@ private let catalog = CommandCatalog(
     skills: ["review", "preview"],
     servers: [
         .init(name: "context7", status: .connected, prompts: ["mcp__context7__search"]),
-        .init(name: "quebrado", status: .needsAuth),
+        .init(name: "broken", status: .needsAuth),
     ],
     supportsCompact: true)
 
 @Test func queryRequiresALoneSlashToken() {
     #expect(SlashCatalog.query(in: "/comp") == "comp")
     #expect(SlashCatalog.query(in: "/") == "")
-    #expect(SlashCatalog.query(in: "sem barra") == nil)
-    #expect(SlashCatalog.query(in: "/duas\nlinhas") == nil)
+    #expect(SlashCatalog.query(in: "no slash") == nil)
+    #expect(SlashCatalog.query(in: "/two\nlines") == nil)
 }
 
 @Test func rootGroupsSkillsAndServers() {
@@ -26,7 +26,7 @@ private let catalog = CommandCatalog(
 
 @Test func mcpFlattensPromptsAndKeepsBareServers() {
     let items = SlashCatalog.mcp(from: catalog)
-    #expect(items.map(\.id) == ["mcp__context7__search", "mcp:quebrado"])
+    #expect(items.map(\.id) == ["mcp__context7__search", "mcp:broken"])
     #expect(items[0].title == "context7 · search")
     #expect(items[1].detail == "precisa autenticar")
 }

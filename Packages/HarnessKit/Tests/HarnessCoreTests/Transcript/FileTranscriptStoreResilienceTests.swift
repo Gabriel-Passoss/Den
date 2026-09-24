@@ -33,14 +33,14 @@ private func texts(of session: Session) -> [String] {
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
-    try await store.append(entry("dois"), to: segment.id, in: session.id)
+    try await store.append(entry("one"), to: segment.id, in: session.id)
+    try await store.append(entry("two"), to: segment.id, in: session.id)
 
     let file = root.appendingPathComponent(session.id.uuidString)
         .appendingPathComponent("\(segment.id.uuidString).ndjson")
     let handle = try FileHandle(forWritingTo: file)
     try handle.seekToEnd()
-    try handle.write(contentsOf: Data(#"{"id":"não termi"#.utf8))
+    try handle.write(contentsOf: Data(#"{"id":"unfinis"#.utf8))
     try handle.close()
 
     let loaded = try await store.load(session.id)
@@ -48,7 +48,7 @@ private func texts(of session: Session) -> [String] {
         if case .assistantText(let t) = e.kind { return t }
         return nil
     }
-    #expect(texts == ["um", "dois"], "meia linha não pode custar a conversa inteira")
+    #expect(texts == ["one", "two"], "half a line must not cost the whole conversation")
 }
 
 @Test func aCorruptLineInTheMiddleDoesNotHideTheOnesAfterIt() async throws {
@@ -60,22 +60,22 @@ private func texts(of session: Session) -> [String] {
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
+    try await store.append(entry("one"), to: segment.id, in: session.id)
 
     let file = root.appendingPathComponent(session.id.uuidString)
         .appendingPathComponent("\(segment.id.uuidString).ndjson")
     let handle = try FileHandle(forWritingTo: file)
     try handle.seekToEnd()
-    try handle.write(contentsOf: Data("{lixo}\n".utf8))
+    try handle.write(contentsOf: Data("{junk}\n".utf8))
     try handle.close()
-    try await store.append(entry("tres"), to: segment.id, in: session.id)
+    try await store.append(entry("three"), to: segment.id, in: session.id)
 
     let loaded = try await store.load(session.id)
     let texts = loaded.allEntries.compactMap { e -> String? in
         if case .assistantText(let t) = e.kind { return t }
         return nil
     }
-    #expect(texts == ["um", "tres"])
+    #expect(texts == ["one", "three"])
 }
 
 @Test func aTruncatedTailDoesNotSwallowTheEntryAppendedAfterARestart() async throws {
@@ -88,7 +88,7 @@ private func texts(of session: Session) -> [String] {
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
+    try await store.append(entry("one"), to: segment.id, in: session.id)
 
     let file = root.appendingPathComponent(session.id.uuidString)
         .appendingPathComponent("\(segment.id.uuidString).ndjson")
@@ -97,15 +97,15 @@ private func texts(of session: Session) -> [String] {
     try handle.write(contentsOf: Data(#"{"id":"partial"#.utf8))
     try handle.close()
 
-    try await store.append(entry("tres"), to: segment.id, in: session.id)
+    try await store.append(entry("three"), to: segment.id, in: session.id)
 
     let loaded = try await store.load(session.id)
     let texts = loaded.allEntries.compactMap { e -> String? in
         if case .assistantText(let t) = e.kind { return t }
         return nil
     }
-    #expect(texts == ["um", "tres"],
-             "a entrada nova não pode ser perdida junto com o fragmento truncado")
+    #expect(texts == ["one", "three"],
+             "the new entry must not be lost along with the truncated fragment")
 }
 
 @Test func listCountsRawLinesWhileLoadCountsDecodableEntries() async throws {
@@ -118,8 +118,8 @@ private func texts(of session: Session) -> [String] {
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
-    try await store.append(entry("dois"), to: segment.id, in: session.id)
+    try await store.append(entry("one"), to: segment.id, in: session.id)
+    try await store.append(entry("two"), to: segment.id, in: session.id)
 
     let file = root.appendingPathComponent(session.id.uuidString)
         .appendingPathComponent("\(segment.id.uuidString).ndjson")
@@ -134,7 +134,7 @@ private func texts(of session: Session) -> [String] {
     #expect(listing.sessions.first?.entryCount == 3,
              "list() conta a linha truncada como uma linha em disco")
     #expect(loaded.allEntries.count == 2,
-             "load() só conta o que de fato decodificou")
+             "load() only counts what actually decoded")
 }
 
 @Test func aSegmentWithNoFileYetLoadsAsEmpty() async throws {
@@ -172,7 +172,7 @@ private func texts(of session: Session) -> [String] {
 
     let junk = root.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: junk, withIntermediateDirectories: true)
-    try Data("{não sou json".utf8).write(to: junk.appendingPathComponent("session.json"))
+    try Data("{not json".utf8).write(to: junk.appendingPathComponent("session.json"))
     try FileManager.default.createDirectory(
         at: root.appendingPathComponent("nem-diretorio-de-sessao"),
         withIntermediateDirectories: true)
@@ -202,9 +202,9 @@ private func texts(of session: Session) -> [String] {
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
-    try await store.append(entry("dois"), to: segment.id, in: session.id)
-    try await store.append(entry("três"), to: segment.id, in: session.id)
+    try await store.append(entry("one"), to: segment.id, in: session.id)
+    try await store.append(entry("two"), to: segment.id, in: session.id)
+    try await store.append(entry("three"), to: segment.id, in: session.id)
 
     let file = root.appendingPathComponent(session.id.uuidString)
         .appendingPathComponent("\(segment.id.uuidString).ndjson")
@@ -217,23 +217,23 @@ private func texts(of session: Session) -> [String] {
 
     let asOneString = try? String(contentsOf: file, encoding: .utf8)
     #expect(asOneString == nil,
-             "o fixture precisa cortar DENTRO do caractere, não numa fronteira")
+             "the fixture must cut INSIDE the character, not on a boundary")
 
     let afterCrash = try await store.load(session.id)
-    #expect(texts(of: afterCrash) == ["um", "dois", "três"],
-             "meio caractere não pode custar a conversa inteira")
+    #expect(texts(of: afterCrash) == ["one", "two", "three"],
+             "half a character must not cost the whole conversation")
 
-    try await store.append(entry("quatro"), to: segment.id, in: session.id)
+    try await store.append(entry("four"), to: segment.id, in: session.id)
     let afterRestart = try await store.load(session.id)
-    #expect(texts(of: afterRestart) == ["um", "dois", "três", "quatro"],
-             "a entrada escrita depois do restart não pode ficar invisível")
+    #expect(texts(of: afterRestart) == ["one", "two", "three", "four"],
+             "the entry written after the restart must not stay invisible")
 
     let listing = try await store.list()
     #expect(listing.sessions.first?.entryCount == 5,
              "quatro linhas boas mais a cauda cortada")
 }
 
-// MARK: - session.json: uma sessão danificada não pode sumir calada
+// MARK: - session.json: a damaged session must not vanish silently
 
 private let futureHandoffJSON = #"{"summarizeWithModel":{"model":"m-9","tokens":800}}"#
 
@@ -290,7 +290,7 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
     try sessionJSONWithFutureHandoff(session: session, segment: segment).write(to: metadata)
 
     var renamed = try await store.load(session.id)
-    renamed.title = "outro título"
+    renamed.title = "another title"
     try await store.saveMetadata(renamed)
 
     let rewritten = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: metadata))
@@ -311,7 +311,7 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
     let damagedID = UUID()
     let damaged = root.appendingPathComponent(damagedID.uuidString)
     try FileManager.default.createDirectory(at: damaged, withIntermediateDirectories: true)
-    try Data(#"{"id":"não sou uma sessão válida"#.utf8)
+    try Data(#"{"id":"not a valid session"#.utf8)
         .write(to: damaged.appendingPathComponent("session.json"))
 
     try FileManager.default.createDirectory(
@@ -320,9 +320,9 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
 
     let listing = try await store.list()
     #expect(listing.sessions.map(\.id) == [good.id],
-             "a sessão boa continua listada — uma danificada não derruba a lista")
+             "the good session stays listed — a damaged one does not take the list down")
     #expect(listing.unreadable.count == 1,
-             "a sessão danificada é relatada, não omitida")
+             "the damaged session is reported, not omitted")
     #expect(listing.unreadable.first?.id == damagedID)
 
     #expect(listing.unreadable.first?.location.resolvingSymlinksInPath().path
@@ -330,7 +330,7 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
     #expect(listing.unreadable.first?.reason.isEmpty == false)
 }
 
-// MARK: - updatedAt segue o transcript, não só os metadados
+// MARK: - updatedAt follows the transcript, not just the metadata
 
 @Test func updatedAtFollowsTheTranscriptAndNotOnlyTheMetadata() async throws {
     let root = try makeRoot()
@@ -341,7 +341,7 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
     let session = Session(title: "t", workingDirectory: URL(fileURLWithPath: "/tmp"),
                           segments: [segment])
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
+    try await store.append(entry("one"), to: segment.id, in: session.id)
 
     let directory = root.appendingPathComponent(session.id.uuidString)
     let oldMetadata = Date(timeIntervalSince1970: 1_000_000_000)
@@ -356,7 +356,7 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
     let listing = try await store.list()
     let updatedAt = try #require(listing.sessions.first?.updatedAt)
     #expect(abs(updatedAt.timeIntervalSince(recentAppend)) < 0.001,
-             "updatedAt tem que vir do segmento, que é o arquivo que o append toca")
+             "updatedAt must come from the segment, the file append actually touches")
 }
 
 @Test func updatedAtStillComesFromTheMetadataWhenNoSegmentHasBeenWrittenYet() async throws {

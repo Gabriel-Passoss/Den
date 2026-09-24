@@ -97,7 +97,7 @@ done
     let line = try #require(seen)
     #expect(line.contains(#""method":"session/cancel""#))
 
-    #expect(!line.contains(#""id""#), "a notificação levou id — o agente vai esperar resposta")
+    #expect(!line.contains(#""id""#), "the notification carried an id — the agent will wait for a response")
     await channel.stop()
 }
 

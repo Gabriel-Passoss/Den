@@ -12,11 +12,11 @@ private func roundTrip(_ json: String) throws -> String {
 
 @Test func decodesEachScalarKind() throws {
     let v = try JSONDecoder().decode(JSONValue.self, from: Data(#"""
-    {"n":null,"b":true,"i":42,"d":1.5,"s":"oi"}
+    {"n":null,"b":true,"i":42,"d":1.5,"s":"hi"}
     """#.utf8))
     #expect(v == .object([
         "n": .null, "b": .bool(true), "i": .int(42),
-        "d": .double(1.5), "s": .string("oi"),
+        "d": .double(1.5), "s": .string("hi"),
     ]))
 }
 
@@ -61,7 +61,7 @@ private func roundTrip(_ json: String) throws -> String {
 }
 
 @Test func stringAccessorReturnsNilForOtherKinds() throws {
-    #expect(JSONValue.string("oi").stringValue == "oi")
+    #expect(JSONValue.string("hi").stringValue == "hi")
     #expect(JSONValue.int(1).stringValue == nil)
 }
 

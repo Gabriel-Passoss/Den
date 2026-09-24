@@ -13,7 +13,7 @@ struct RecordPreflightTests {
     @Test("an existing --cwd and an unused --out pass")
     func happyPath() {
         let problem = preflightRecord(
-            RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratch", outputPath: "/tmp/novo.ndjson"),
+            RecordArguments(prompt: "hi", cwd: "/tmp/probe-scratch", outputPath: "/tmp/novo.ndjson"),
             on: probe(directories: ["/tmp/probe-scratch"])
         )
         #expect(problem == nil)
@@ -22,7 +22,7 @@ struct RecordPreflightTests {
     @Test("a missing --out really is optional")
     func withoutOut() {
         let problem = preflightRecord(
-            RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratch"),
+            RecordArguments(prompt: "hi", cwd: "/tmp/probe-scratch"),
             on: probe(directories: ["/tmp/probe-scratch"])
         )
         #expect(problem == nil)
@@ -31,7 +31,7 @@ struct RecordPreflightTests {
     @Test("a nonexistent --cwd is refused")
     func nonexistentCwd() {
         let problem = preflightRecord(
-            RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratchh"),
+            RecordArguments(prompt: "hi", cwd: "/tmp/probe-scratchh"),
             on: probe(directories: ["/tmp/probe-scratch"])
         )
         #expect(problem == .cwdNotFound("/tmp/probe-scratchh"))
@@ -41,7 +41,7 @@ struct RecordPreflightTests {
     @Test("a --cwd pointing at a file is refused")
     func cwdPointingAtAFile() {
         let problem = preflightRecord(
-            RecordArguments(prompt: "oi", cwd: "/tmp/arquivo.txt"),
+            RecordArguments(prompt: "hi", cwd: "/tmp/arquivo.txt"),
             on: probe(files: ["/tmp/arquivo.txt"])
         )
         #expect(problem == .cwdNotADirectory("/tmp/arquivo.txt"))
@@ -51,7 +51,7 @@ struct RecordPreflightTests {
     func existingOut() {
         let fixture = "Tests/ClaudeHarnessTests/Fixtures/hello.ndjson"
         let problem = preflightRecord(
-            RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratch", outputPath: fixture),
+            RecordArguments(prompt: "hi", cwd: "/tmp/probe-scratch", outputPath: fixture),
             on: probe(directories: ["/tmp/probe-scratch"], files: [fixture])
         )
         #expect(problem == .outputAlreadyExists(fixture))
@@ -62,7 +62,7 @@ struct RecordPreflightTests {
     func cwdIsCheckedBeforeOut() {
         let fixture = "Tests/ClaudeHarnessTests/Fixtures/hello.ndjson"
         let problem = preflightRecord(
-            RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratchh", outputPath: fixture),
+            RecordArguments(prompt: "hi", cwd: "/tmp/probe-scratchh", outputPath: fixture),
             on: probe(directories: ["/tmp/probe-scratch"], files: [fixture])
         )
         #expect(problem == .cwdNotFound("/tmp/probe-scratchh"))

@@ -52,16 +52,16 @@ struct FakeCommandRunner: CommandRunner {
 @Test func failsWhenTheVersionIsUnreadable() async {
     let runner = FakeCommandRunner(responses: [
         "/bin/zsh -l -c command -v claude": "/opt/homebrew/bin/claude\n",
-        "/opt/homebrew/bin/claude --version": "não sou uma versão\n",
+        "/opt/homebrew/bin/claude --version": "not a version\n",
     ])
-    await #expect(throws: ClaudeDiscovery.DiscoveryError.unreadableVersion("não sou uma versão")) {
+    await #expect(throws: ClaudeDiscovery.DiscoveryError.unreadableVersion("not a version")) {
         _ = try await ClaudeDiscovery(runner: runner, shell: "/bin/zsh", fallbackPaths: []).discover()
     }
 }
 
 @Test func discardsAVersionFailureWhenAFallbackWorks() async throws {
     let runner = FakeCommandRunner(responses: [
-        "/opt/homebrew/bin/claude --version": "não sou uma versão\n",
+        "/opt/homebrew/bin/claude --version": "not a version\n",
         "/usr/local/bin/claude --version": "2.0.9 (Claude Code)\n",
     ])
     let install = try await ClaudeDiscovery(

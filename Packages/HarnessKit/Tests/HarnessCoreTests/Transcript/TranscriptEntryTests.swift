@@ -15,8 +15,8 @@ private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {
 
 @Test func everyKindSurvivesARoundTrip() throws {
     let kinds: [TranscriptEntry.Kind] = [
-        .userMessage(text: "oi", attachments: []),
-        .assistantText("olá"),
+        .userMessage(text: "hi", attachments: []),
+        .assistantText("hello"),
         .assistantThinking("hmm"),
         .toolCall(ToolCall(id: "t1", rawName: "Bash", canonical: .execute,
                            input: .object(["command": .string("ls")]))),
@@ -25,7 +25,7 @@ private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {
             id: "r1", toolName: "Write", displayName: "Write", description: nil,
             input: .object([:]), toolUseID: "t2", suggestions: [])),
         .permissionDecision(requestID: "r1", .allow(updatedInput: nil)),
-        .systemNotice(subtype: "init", text: "sessão iniciada"),
+        .systemNotice(subtype: "init", text: "session started"),
         .turnResult(TurnResult(usage: UsageTotals(inputTokens: 10, outputTokens: 20,
                                                   cacheReadTokens: 0, cacheCreationTokens: 0,
                                                   costUSD: 0.01),
@@ -33,7 +33,7 @@ private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {
     ]
     for kind in kinds {
         let entry = TranscriptEntry(id: fixedID, timestamp: fixedDate, kind: kind, raw: .null)
-        #expect(try roundTrip(entry) == entry, "caso não sobreviveu: \(kind)")
+        #expect(try roundTrip(entry) == entry, "case did not survive: \(kind)")
     }
 }
 
@@ -44,7 +44,7 @@ private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {
         "message": .object(["role": .string("assistant"), "extra": .int(7)]),
     ])
     let entry = TranscriptEntry(id: fixedID, timestamp: fixedDate,
-                                kind: .assistantText("olá"), raw: raw)
+                                kind: .assistantText("hello"), raw: raw)
     #expect(try roundTrip(entry).raw == raw)
     #expect(try roundTrip(entry).raw["message"]?["extra"] == .int(7))
 }
@@ -83,7 +83,7 @@ private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {
     #expect(UsageTotals.zero + a == a)
 }
 
-// MARK: - Caso 10: um discriminador que esta versão não conhece
+// MARK: - Case 10: a discriminator this version does not know
 
 private func decodeEntry(_ json: String) throws -> TranscriptEntry {
     let decoder = JSONDecoder()
@@ -120,8 +120,8 @@ private let unknownKindJSON = """
 @Test func theNineKnownCasesStillDecodeToThemselvesNotToUnrecognized() throws {
 
     let kinds: [TranscriptEntry.Kind] = [
-        .userMessage(text: "oi", attachments: []),
-        .assistantText("olá"),
+        .userMessage(text: "hi", attachments: []),
+        .assistantText("hello"),
         .assistantThinking("hmm"),
         .toolCall(ToolCall(id: "t1", rawName: "Bash", canonical: .execute,
                            input: .object(["command": .string("ls")]))),
@@ -130,7 +130,7 @@ private let unknownKindJSON = """
             id: "r1", toolName: "Write", displayName: "Write", description: nil,
             input: .object([:]), toolUseID: "t2", suggestions: [])),
         .permissionDecision(requestID: "r1", .allow(updatedInput: nil)),
-        .systemNotice(subtype: "init", text: "sessão iniciada"),
+        .systemNotice(subtype: "init", text: "session started"),
         .turnResult(TurnResult(usage: UsageTotals(inputTokens: 10, outputTokens: 20,
                                                   cacheReadTokens: 0, cacheCreationTokens: 0,
                                                   costUSD: 0.01),
@@ -168,7 +168,7 @@ private let unknownKindJSON = """
     let missingID = """
     {
       "timestamp": "2023-11-14T22:13:20Z",
-      "kind": {"assistantText": {"_0": "oi"}},
+      "kind": {"assistantText": {"_0": "hi"}},
       "raw": null
     }
     """

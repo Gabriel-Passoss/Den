@@ -4,35 +4,35 @@ import Foundation
 
 @Test func queryDetectsAnActiveMentionToken() {
     let controller = MentionController()
-    #expect(controller.query(in: "veja @Sources/App") == "Sources/App")
+    #expect(controller.query(in: "see @Sources/App") == "Sources/App")
     #expect(controller.query(in: "@") == "")
-    #expect(controller.query(in: "email@exemplo.com") == nil)
-    #expect(controller.query(in: "veja @um dois") == nil)
-    #expect(controller.query(in: "sem menção") == nil)
+    #expect(controller.query(in: "email@example.com") == nil)
+    #expect(controller.query(in: "see @one two") == nil)
+    #expect(controller.query(in: "no mention") == nil)
 }
 
 @Test func matchesRankNameHitsAboveDeepPathHits() {
     let controller = MentionController()
     controller.fileIndex = [
-        MentionCandidate(path: "chat/Notas.txt", isDirectory: false),
-        MentionCandidate(path: "Docs/meu-chat.md", isDirectory: false),
+        MentionCandidate(path: "chat/Notes.txt", isDirectory: false),
+        MentionCandidate(path: "Docs/my-chat.md", isDirectory: false),
         MentionCandidate(path: "Sources/Chat/ChatView.swift", isDirectory: false),
     ]
-    let hits = controller.matches(prompt: "veja @chat")
+    let hits = controller.matches(prompt: "see @chat")
     #expect(hits.map(\.path) == [
         "Sources/Chat/ChatView.swift",
-        "Docs/meu-chat.md",
-        "chat/Notas.txt",
+        "Docs/my-chat.md",
+        "chat/Notes.txt",
     ])
 
     controller.dismissed = true
-    #expect(controller.matches(prompt: "veja @chat").isEmpty)
+    #expect(controller.matches(prompt: "see @chat").isEmpty)
 }
 
 @Test func matchesOfferTheIndexWhileTheQueryIsEmpty() {
     let controller = MentionController()
     controller.fileIndex = (0..<12).map {
-        MentionCandidate(path: "arquivo-\($0).txt", isDirectory: false)
+        MentionCandidate(path: "file-\($0).txt", isDirectory: false)
     }
     #expect(controller.matches(prompt: "@").count == 8)
 }
@@ -50,7 +50,7 @@ import Foundation
     try Data().write(to: root.appending(path: "a.swift"))
     try Data().write(to: root.appending(path: "Sub/b.swift"))
     try Data().write(to: root.appending(path: "node_modules/x.js"))
-    try Data().write(to: root.appending(path: ".escondido"))
+    try Data().write(to: root.appending(path: ".hidden"))
 
     let candidates = MentionController.indexFiles(under: root)
     #expect(candidates.map(\.path) == ["Sub", "a.swift", "Sub/b.swift"])
@@ -61,13 +61,13 @@ import Foundation
     let chat = inertChat()
     let controller = MentionController()
 
-    chat.prompt = "veja @Sour"
+    chat.prompt = "see @Sour"
     controller.accept(MentionCandidate(path: "Sources/App.swift", isDirectory: false), in: chat)
-    #expect(chat.prompt == "veja @Sources/App.swift ")
+    #expect(chat.prompt == "see @Sources/App.swift ")
 
-    chat.prompt = "abra @D"
+    chat.prompt = "open @D"
     controller.accept(MentionCandidate(path: "Docs", isDirectory: true), in: chat)
-    #expect(chat.prompt == "abra @Docs/")
+    #expect(chat.prompt == "open @Docs/")
 }
 
 @Test func indexFilesResolveSymlinkedRoots() throws {
@@ -78,15 +78,15 @@ import Foundation
     defer { try? FileManager.default.removeItem(at: scratch) }
 
     let files = FileManager.default
-    let destino = scratch.appending(path: "destino")
-    try files.createDirectory(at: destino.appending(path: "Sub"),
+    let target = scratch.appending(path: "target")
+    try files.createDirectory(at: target.appending(path: "Sub"),
                               withIntermediateDirectories: true)
-    try Data().write(to: destino.appending(path: "a.swift"))
-    try Data().write(to: destino.appending(path: "Sub/b.swift"))
+    try Data().write(to: target.appending(path: "a.swift"))
+    try Data().write(to: target.appending(path: "Sub/b.swift"))
 
-    let atalho = scratch.appending(path: "atalho")
-    try files.createSymbolicLink(at: atalho, withDestinationURL: destino)
+    let link = scratch.appending(path: "link")
+    try files.createSymbolicLink(at: link, withDestinationURL: target)
 
-    let candidates = MentionController.indexFiles(under: atalho)
+    let candidates = MentionController.indexFiles(under: link)
     #expect(candidates.map(\.path) == ["Sub", "a.swift", "Sub/b.swift"])
 }

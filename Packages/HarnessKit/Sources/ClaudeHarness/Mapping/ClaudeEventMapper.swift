@@ -72,7 +72,7 @@ public struct ClaudeEventMapper: Sendable {
         return map(value)
     }
 
-    // MARK: - Efêmero
+    // MARK: - Ephemeral
 
     private func ephemeral(_ line: JSONValue) -> MappedOutput {
         guard let event = line["event"], let kind = event["type"]?.stringValue else {
@@ -115,7 +115,7 @@ public struct ClaudeEventMapper: Sendable {
         }
     }
 
-    // MARK: - Degradação
+    // MARK: - Degradation
 
     func unrecognized(_ discriminator: String, _ payload: JSONValue,
                       at moment: Date? = nil) -> TranscriptEntry {
@@ -128,7 +128,7 @@ public struct ClaudeEventMapper: Sendable {
     }
 }
 
-// MARK: - Durável
+// MARK: - Durable
 
 private extension ClaudeEventMapper {
 

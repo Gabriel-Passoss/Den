@@ -65,7 +65,7 @@ extension JSONValue: Codable {
         if let a = try? container.decode([JSONValue].self) { self = .array(a); return }
         if let o = try? container.decode([String: JSONValue].self) { self = .object(o); return }
         throw DecodingError.dataCorruptedError(
-            in: container, debugDescription: "valor JSON não reconhecido"
+            in: container, debugDescription: "unrecognized JSON value"
         )
     }
 

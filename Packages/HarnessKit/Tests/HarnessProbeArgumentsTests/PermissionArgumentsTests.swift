@@ -11,14 +11,14 @@ struct PermissionArgumentsTests {
 
     @Test("accepts the flags in any order")
     func acceptsFlagsInAnyOrder() throws {
-        let value = try parsePermissionArguments(["--cwd", "/tmp/probe", "--prompt", "oi"]).get()
-        #expect(value == PermissionArguments(prompt: "oi", cwd: "/tmp/probe"))
+        let value = try parsePermissionArguments(["--cwd", "/tmp/probe", "--prompt", "hi"]).get()
+        #expect(value == PermissionArguments(prompt: "hi", cwd: "/tmp/probe"))
     }
 
     @Test("--out is not a flag of this subcommand")
     func outIsRejectedHere() {
         let result = parsePermissionArguments([
-            "--prompt", "oi", "--cwd", "/tmp/probe", "--out", "/tmp/x.ndjson",
+            "--prompt", "hi", "--cwd", "/tmp/probe", "--out", "/tmp/x.ndjson",
         ])
         #expect(result == .failure(.unknownFlag("--out")))
     }
@@ -31,7 +31,7 @@ struct PermissionArgumentsTests {
 
     @Test("an empty --cwd does not silently mean here")
     func emptyCwdIsRejected() {
-        let result = parsePermissionArguments(["--prompt", "oi", "--cwd", ""])
+        let result = parsePermissionArguments(["--prompt", "hi", "--cwd", ""])
         #expect(result == .failure(.emptyValue(flag: "--cwd")))
     }
 
@@ -43,7 +43,7 @@ struct PermissionArgumentsTests {
 
     @Test("--cwd missing")
     func missingCwd() {
-        #expect(parsePermissionArguments(["--prompt", "oi"])
+        #expect(parsePermissionArguments(["--prompt", "hi"])
             == .failure(.missingRequired(flag: "--cwd")))
     }
 }
@@ -71,7 +71,7 @@ struct PermissionAnswerTests {
     @Test("anything unrecognized denies, including near misses")
     func unrecognizedDenies() {
         for no in ["n", "não", "no", "sempre", "si", "ss", "yep", "sim por favor", "1", "allowed"] {
-            #expect(parsePermissionAnswer(no) == .deny, "\(no) não deveria permitir")
+            #expect(parsePermissionAnswer(no) == .deny, "\(no) should not allow")
         }
     }
 }

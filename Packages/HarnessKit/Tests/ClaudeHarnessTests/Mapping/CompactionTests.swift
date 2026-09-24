@@ -53,7 +53,7 @@ import HarnessCore
     let out = ClaudeEventMapper().map(line)
     #expect(out.events.isEmpty)
     guard case .contextCompacted(let compaction) = out.entries.first?.kind else {
-        Issue.record("a fronteira não virou entrada de compactação")
+        Issue.record("the boundary did not become a compaction entry")
         return
     }
     #expect(compaction.trigger == .manual)
@@ -71,7 +71,7 @@ import HarnessCore
 
     guard case .contextCompacted(let compaction)
             = ClaudeEventMapper().map(line).entries.first?.kind else {
-        Issue.record("a fronteira não virou entrada de compactação")
+        Issue.record("the boundary did not become a compaction entry")
         return
     }
     #expect(compaction.trigger == .automatic)

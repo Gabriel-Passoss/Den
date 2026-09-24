@@ -46,7 +46,7 @@ public actor OpenCodeSession: HarnessSession {
         )
     }
 
-    // MARK: - Ciclo de vida
+    // MARK: - Lifecycle
 
     public func start(_ start: SessionStart) async throws -> AsyncStream<SessionUpdate> {
         let outputs = try await channel.start(
@@ -117,7 +117,7 @@ public actor OpenCodeSession: HarnessSession {
             catalog: CommandCatalog(supportsCompact: true))))
     }
 
-    // MARK: - Entrada do CLI
+    // MARK: - CLI input
 
     private func consume(_ output: ACPOutput) async {
         switch output {
@@ -179,7 +179,7 @@ public actor OpenCodeSession: HarnessSession {
         continuation = nil
     }
 
-    // MARK: - Saída para o CLI
+    // MARK: - CLI output
 
     public func send(_ turn: UserTurn) async throws {
         guard let sessionID = harnessSessionID else { throw ACPChannel.ChannelError.notStarted }

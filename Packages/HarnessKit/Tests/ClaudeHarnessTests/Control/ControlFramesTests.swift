@@ -138,12 +138,12 @@ private func fixtureLines(_ name: String) throws -> [Data] {
 }
 
 @Test func theAutomaticRefusalUsesTheProtocolsOwnErrorEnvelope() throws {
-    let data = try ControlErrorResponse(requestID: "r-7", message: "não entendi").data()
+    let data = try ControlErrorResponse(requestID: "r-7", message: "did not understand").data()
     guard case .response(let id, let result) = ControlFrame.classify(data) else {
         Issue.record("esperava .response"); return
     }
     #expect(id == "r-7")
-    #expect(result.errorMessage == "não entendi")
+    #expect(result.errorMessage == "did not understand")
 }
 
 @Test func malformedJSONIsTreatedAsConversationNotAsAFailure() throws {
@@ -164,11 +164,11 @@ private func fixtureLines(_ name: String) throws -> [Data] {
 }
 
 @Test func encodesADenyDecision() throws {
-    let decision = PermissionDecision.deny(message: "não", interrupt: false)
+    let decision = PermissionDecision.deny(message: "no", interrupt: false)
     let data = try decision.responseData(requestID: "req-9")
     let decoded = try JSONDecoder().decode(JSONValue.self, from: data)
     #expect(decoded["response"]?["response"]?["behavior"] == .string("deny"))
-    #expect(decoded["response"]?["response"]?["message"] == .string("não"))
+    #expect(decoded["response"]?["response"]?["message"] == .string("no"))
     #expect(decoded["response"]?["response"]?["interrupt"] == .bool(false))
 }
 

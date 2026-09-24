@@ -28,7 +28,7 @@ public struct OpenCodeEventMapper: Sendable {
         compactionProse = []
     }
 
-    // MARK: - Notificações de sessão
+    // MARK: - Session notifications
 
     public mutating func map(update: JSONValue) -> MappedOutput {
         guard let kind = update["sessionUpdate"]?.stringValue else {
@@ -162,7 +162,7 @@ public struct OpenCodeEventMapper: Sendable {
         )])
     }
 
-    // MARK: - Ferramentas
+    // MARK: - Tools
 
     struct HeldTool {
         var title: String
@@ -261,7 +261,7 @@ public struct OpenCodeEventMapper: Sendable {
         return update["rawOutput"] ?? .null
     }
 
-    // MARK: - Fim de turno
+    // MARK: - Turn end
 
     public mutating func turnResult(_ result: JSONValue) -> MappedOutput {
         var output = flush()
@@ -298,7 +298,7 @@ public struct OpenCodeEventMapper: Sendable {
         return output
     }
 
-    // MARK: - Degradação
+    // MARK: - Degradation
 
     func unrecognized(_ discriminator: String, _ payload: JSONValue) -> TranscriptEntry {
         TranscriptEntry(

@@ -51,7 +51,7 @@ struct GitChangesPanel: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    // MARK: - Cabeçalho
+    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 7) {
@@ -100,7 +100,7 @@ struct GitChangesPanel: View {
         .padding(.vertical, 9)
     }
 
-    // MARK: - Conteúdo
+    // MARK: - Content
 
     @ViewBuilder
     private var content: some View {
@@ -169,7 +169,7 @@ struct GitChangesPanel: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Caminho relativo à sessão
+    // MARK: - Path relative to the session
 
     private func sessionRelativePath(of path: String,
                                      in repo: GitChangesModel.Repo) -> String {
@@ -246,7 +246,7 @@ struct GitChangesPanel: View {
         .accessibilityLabel(isCollapsed ? "Expandir \(repo.name)" : "Recolher \(repo.name)")
     }
 
-    // MARK: - Grupos de arquivos novos (pastas 100% não rastreadas)
+    // MARK: - New file groups (fully untracked folders)
 
     @ViewBuilder
     private func groupCard(dir: String, files: [GitChangesModel.FileChange],
@@ -318,7 +318,7 @@ struct GitChangesPanel: View {
         }
     }
 
-    // MARK: - Arquivos
+    // MARK: - Files
 
     private func fileHeader(_ file: GitChangesModel.FileChange,
                             in repo: GitChangesModel.Repo,

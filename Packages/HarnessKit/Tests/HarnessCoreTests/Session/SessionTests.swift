@@ -27,8 +27,8 @@ private func segment(
         id: UUID(), title: "refatorar o webhook",
         workingDirectory: URL(fileURLWithPath: "/tmp/repo"),
         segments: [
-            segment(harnessA, entries: [entry("um"), entry("dois")]),
-            segment(harnessB, entries: [entry("três")],
+            segment(harnessA, entries: [entry("one"), entry("two")]),
+            segment(harnessB, entries: [entry("three")],
                     seededBy: .briefing("resumo do que foi feito")),
         ])
     #expect(session.segments.count == 2)
@@ -64,17 +64,17 @@ private func segment(
 }
 
 @Test func aHandoffRecordsHowTheNextSegmentWasSeeded() throws {
-    let briefed = segment(harnessA, seededBy: .briefing("o que já foi feito"))
+    let briefed = segment(harnessA, seededBy: .briefing("what has been done so far"))
     let target = UUID()
     let replayed = segment(harnessA, seededBy: .replay(throughEntry: target))
-    #expect(briefed.seededBy == .briefing("o que já foi feito"))
+    #expect(briefed.seededBy == .briefing("what has been done so far"))
     #expect(replayed.seededBy == .replay(throughEntry: target))
     #expect(segment(harnessA).seededBy == nil)
 }
 
 @Test func aSessionSurvivesACodableRoundTrip() throws {
     let session = Session(
-        id: UUID(), title: "com acentuação é", workingDirectory: URL(fileURLWithPath: "/tmp/a b"),
+        id: UUID(), title: "with accents é", workingDirectory: URL(fileURLWithPath: "/tmp/a b"),
         segments: [segment(harnessA, entries: [entry("x")],
                            usage: UsageTotals(inputTokens: 3), seededBy: .briefing("b"))])
     let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
@@ -103,7 +103,7 @@ private func segment(
 @Test func aSummaryOfAPartiallyLoadedSessionTrustsTheCallersEntryCountNotTheEmptyArrays() {
 
     let session = Session(
-        id: UUID(), title: "sessão parcialmente carregada",
+        id: UUID(), title: "partially loaded session",
         workingDirectory: URL(fileURLWithPath: "/tmp"),
         segments: [
             segment(harnessA, entries: [], usage: UsageTotals(inputTokens: 100)),

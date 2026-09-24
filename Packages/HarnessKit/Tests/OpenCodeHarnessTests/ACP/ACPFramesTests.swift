@@ -20,7 +20,7 @@ private func classify(_ text: String) -> ACPFrame {
 @Test func aFrameWithMethodAndNoIDIsANotification() {
     let frame = classify(#"{"jsonrpc":"2.0","method":"session/update","params":{"b":2}}"#)
     guard case .notification(let method, let params) = frame else {
-        Issue.record("esperava notificação, veio \(frame)"); return
+        Issue.record("expected a notification, got \(frame)"); return
     }
     #expect(method == "session/update")
     #expect(params["b"]?.intValue == 2)
@@ -37,8 +37,8 @@ private func classify(_ text: String) -> ACPFrame {
 }
 
 @Test func aLineThatIsNotJSONDegradesInsteadOfThrowing() {
-    guard case .malformed = classify("isto não é json") else {
-        Issue.record("uma linha ilegível precisa degradar, nunca derrubar a sessão"); return
+    guard case .malformed = classify("this is not json") else {
+        Issue.record("an unreadable line must degrade, never take the session down"); return
     }
 }
 

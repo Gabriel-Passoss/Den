@@ -58,7 +58,7 @@ import HarnessTestSupport
             .compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" }
     )
-    #expect(!files.isEmpty, "a varredura não achou fonte nenhuma — o caminho mudou")
+    #expect(!files.isEmpty, "the scan found no sources at all — the path changed")
 
     let forbidden = ["claude", "codex", "opencode"]
     for file in files {

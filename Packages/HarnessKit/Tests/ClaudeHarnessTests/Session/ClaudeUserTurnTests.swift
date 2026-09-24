@@ -4,14 +4,14 @@ import HarnessCore
 @testable import ClaudeHarness
 
 @Test func aTextOnlyTurnKeepsTheStringContentWire() {
-    let line = ClaudeSession.userTurn(text: "oi", attachments: [])
-    #expect(line["message"]?["content"]?.stringValue == "oi")
+    let line = ClaudeSession.userTurn(text: "hi", attachments: [])
+    #expect(line["message"]?["content"]?.stringValue == "hi")
 }
 
 @Test func aTurnWithImagesBecomesContentBlocks() {
     let data = Data([0x89, 0x50, 0x4E, 0x47])
     let line = ClaudeSession.userTurn(
-        text: "o que é isto?",
+        text: "what is this?",
         attachments: [MediaAttachment(mediaType: "image/png", data: data)]
     )
     let blocks = line["message"]?["content"]?.arrayValue
@@ -21,7 +21,7 @@ import HarnessCore
     #expect(blocks?[0]["source"]?["media_type"]?.stringValue == "image/png")
     #expect(blocks?[0]["source"]?["data"]?.stringValue == data.base64EncodedString())
     #expect(blocks?[1]["type"]?.stringValue == "text")
-    #expect(blocks?[1]["text"]?.stringValue == "o que é isto?")
+    #expect(blocks?[1]["text"]?.stringValue == "what is this?")
 }
 
 @Test func aPDFBecomesADocumentBlock() {

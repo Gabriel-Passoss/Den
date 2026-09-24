@@ -80,7 +80,7 @@ public enum ControlResponseResult: Equatable, Sendable {
     public var payload: JSONValue? { if case .success(let p) = self { return p }; return nil }
 }
 
-// MARK: - Formato de fio dos tipos neutros de permissão
+// MARK: - Wire format for the neutral permission types
 
 extension PermissionRequest {
 

@@ -229,7 +229,7 @@ private actor SingleSignal {
             case .conversation(let data):
                 unblocked = try? JSONDecoder().decode(JSONValue.self, from: data)
             case .permissionRequest:
-                Issue.record("um subtipo desconhecido não é pedido de permissão")
+                Issue.record("an unknown subtype is not a permission request")
             }
         }
         return (seen, unblocked)
@@ -261,7 +261,7 @@ private actor SingleSignal {
             switch output {
             case .unrecognizedControl(let u): seen = u
             case .permissionRequest:
-                Issue.record("um pedido sem id não é respondível — não pode virar diálogo")
+                Issue.record("a request without an id cannot be answered — it must not become a dialog")
             case .conversation: break
             }
         }
@@ -282,12 +282,12 @@ private actor SingleSignal {
             guard case .permissionRequest(let r) = output else { continue }
             try await channel.respond(to: r.id, with: .allow(updatedInput: nil))
             await #expect(throws: ControlChannel.ChannelError.unknownRequest(r.id)) {
-                try await channel.respond(to: r.id, with: .deny(message: "tudo não", interrupt: true))
+                try await channel.respond(to: r.id, with: .deny(message: "all no", interrupt: true))
             }
 
             return
         }
-        Issue.record("o harness falso nunca pediu permissão")
+        Issue.record("the fake harness never asked for permission")
     }
     await channel.stop()
 }
@@ -332,7 +332,7 @@ sleep 30
                 }
                 return
             case .unrecognizedControl:
-                Issue.record("esperava um pedido de permissão bem formado")
+                Issue.record("expected a well-formed permission request")
             }
         }
         Issue.record("o harness falso nunca anunciou que fechou o stdin")

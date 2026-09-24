@@ -36,8 +36,8 @@ private let golden: [Golden] = [
     ),
     Golden(
         discriminator: "assistantText",
-        kind: .assistantText("oi"),
-        wire: #"{"assistantText":{"_0":"oi"}}"#
+        kind: .assistantText("hi"),
+        wire: #"{"assistantText":{"_0":"hi"}}"#
     ),
     Golden(
         discriminator: "assistantThinking",
@@ -74,13 +74,13 @@ private let golden: [Golden] = [
     ),
     Golden(
         discriminator: "permissionDecision",
-        kind: .permissionDecision(requestID: "r2", .deny(message: "não", interrupt: true)),
-        wire: #"{"permissionDecision":{"_1":{"deny":{"interrupt":true,"message":"não"}},"requestID":"r2"}}"#
+        kind: .permissionDecision(requestID: "r2", .deny(message: "no", interrupt: true)),
+        wire: #"{"permissionDecision":{"_1":{"deny":{"interrupt":true,"message":"no"}},"requestID":"r2"}}"#
     ),
     Golden(
         discriminator: "systemNotice",
-        kind: .systemNotice(subtype: "init", text: "sessão iniciada"),
-        wire: #"{"systemNotice":{"subtype":"init","text":"sessão iniciada"}}"#
+        kind: .systemNotice(subtype: "init", text: "session started"),
+        wire: #"{"systemNotice":{"subtype":"init","text":"session started"}}"#
     ),
     Golden(
         discriminator: "turnResult",
@@ -112,7 +112,7 @@ private let golden: [Golden] = [
     for item in golden {
         let written = try json(String(decoding: try encoder.encode(item.kind), as: UTF8.self))
         #expect(written == (try json(item.wire)),
-                "o encoder mudou de forma para \(item.discriminator) — todo transcript já em disco vira órfão")
+                "the encoder changed shape for \(item.discriminator) — every transcript on disk becomes an orphan")
     }
 }
 
@@ -124,19 +124,19 @@ private let golden: [Golden] = [
 @Test func theEnvelopeOfATranscriptEntryIsFixedToo() throws {
 
     let wire = #"""
-    {"id":"11111111-1111-1111-1111-111111111111","kind":{"assistantText":{"_0":"oi"}},"raw":{"a":1},"timestamp":"2023-11-14T22:13:20Z"}
+    {"id":"11111111-1111-1111-1111-111111111111","kind":{"assistantText":{"_0":"hi"}},"raw":{"a":1},"timestamp":"2023-11-14T22:13:20Z"}
     """#
     let expected = TranscriptEntry(
         id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
         timestamp: Date(timeIntervalSince1970: 1_700_000_000),
-        kind: .assistantText("oi"), raw: .object(["a": .int(1)]))
+        kind: .assistantText("hi"), raw: .object(["a": .int(1)]))
 
     #expect(try decoder.decode(TranscriptEntry.self, from: Data(wire.utf8)) == expected)
     #expect(try json(String(decoding: try encoder.encode(expected), as: UTF8.self))
             == (try json(wire)))
 }
 
-// MARK: - Handoff: a proveniência que este plano existe para registrar
+// MARK: - Handoff: the provenance this plan exists to record
 
 private let goldenHandoffs: [(String, Handoff, String)] = [
     ("briefing", .briefing("resumo"), #"{"briefing":{"_0":"resumo"}}"#),
@@ -178,7 +178,7 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
             == (try json(wire)))
 }
 
-// MARK: - Os dois enums abertos não podem divergir de si mesmos
+// MARK: - The two open enums must not drift from themselves
 
 @Test func anUnknownHandoffStrategyDegradesAndReencodesIdempotently() throws {
     let wire = #"{"summarizeWithModel":{"model":"m-9","tokens":800}}"#
@@ -220,19 +220,19 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
 
     for (file, opening, closing, known, name) in subjects {
         let url = try #require(located.first { $0.lastPathComponent == file },
-                               "não achei \(file) sob Sources/HarnessCore")
+                               "could not find \(file) under Sources/HarnessCore")
         let text = try String(contentsOf: url, encoding: .utf8)
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         let start = try #require(lines.firstIndex { $0.contains(opening) },
-                                 "não achei \(opening) em \(file) — a fonte mudou de forma")
+                                 "could not find \(opening) in \(file) — the source changed shape")
         let end = try #require(lines[start...].firstIndex { $0.contains(closing) },
-                               "não achei \(closing) em \(file) — a fonte mudou de forma")
+                               "could not find \(closing) in \(file) — the source changed shape")
         let declared = lines[start..<end]
             .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("case ") }
             .count
 
         #expect(declared == known.count + 1,
-                "\(name) declara \(declared) casos e conhece \(known.count) discriminadores — um caso novo não chegou em Known.CodingKeys")
+                "\(name) declares \(declared) cases and knows \(known.count) discriminators — a new case never reached Known.CodingKeys")
     }
 }
 
@@ -244,7 +244,7 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
         TranscriptEntry.Kind.self, from: Data(beforeOptions.utf8))
 
     guard case .permissionRequest(let request) = decoded else {
-        Issue.record("caiu no fallback — o transcript antigo virou órfão")
+        Issue.record("fell through to the fallback — the old transcript became an orphan")
         return
     }
     #expect(request.id == "r1")

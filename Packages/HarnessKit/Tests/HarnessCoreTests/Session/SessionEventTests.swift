@@ -21,7 +21,7 @@ import HarnessCore
 }
 
 @Test func deltasAreDistinguishedByBlockIndex() {
-    let a = SessionEvent.textDelta(blockIndex: 0, text: "oi")
-    let b = SessionEvent.textDelta(blockIndex: 1, text: "oi")
+    let a = SessionEvent.textDelta(blockIndex: 0, text: "hi")
+    let b = SessionEvent.textDelta(blockIndex: 1, text: "hi")
     #expect(a != b)
 }

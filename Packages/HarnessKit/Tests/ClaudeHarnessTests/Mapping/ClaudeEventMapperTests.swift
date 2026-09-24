@@ -18,9 +18,9 @@ private func json(_ text: String) throws -> JSONValue {
 @Test func aTextDeltaBecomesAnEphemeralEventAndNothingDurable() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"stream_event","event":{"type":"content_block_delta","index":0,
-     "delta":{"type":"text_delta","text":"Olá"}},"session_id":"s"}
+     "delta":{"type":"text_delta","text":"Hello"}},"session_id":"s"}
     """#))
-    #expect(out.events == [.textDelta(blockIndex: 0, text: "Olá")])
+    #expect(out.events == [.textDelta(blockIndex: 0, text: "Hello")])
     #expect(out.entries.isEmpty)
 }
 
@@ -82,7 +82,7 @@ private func json(_ text: String) throws -> JSONValue {
     }
 }
 
-// MARK: - Degradação
+// MARK: - Degradation
 
 @Test func anUnknownLineTypeIsPreservedNotDropped() throws {
     let line = try json(#"{"type":"future_thing","payload":{"a":1}}"#)
@@ -102,10 +102,10 @@ private func json(_ text: String) throws -> JSONValue {
 }
 
 @Test func aLineThatIsNotJSONIsPreservedAsText() {
-    let out = makeMapper().map(line: Data("isto não é json".utf8))
+    let out = makeMapper().map(line: Data("this is not json".utf8))
     #expect(out.entries.count == 1)
     #expect(out.entries.first?.kind
-            == .unrecognized(discriminator: "claude:nonJSON", payload: .string("isto não é json")))
+            == .unrecognized(discriminator: "claude:nonJSON", payload: .string("this is not json")))
 }
 
 @Test func theDiscriminatorNeverCollidesWithAKnownKind() throws {
@@ -123,7 +123,7 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(try makeMapper().map(json(#"{"type":"control_response","response":{}}"#)) == .empty)
 }
 
-// MARK: - Durável: assistant
+// MARK: - Durable: assistant
 
 @Test func anAssistantTextBlockBecomesOneDurableEntryAndNoEvent() throws {
     let out = makeMapper().map(try json(#"""
@@ -228,7 +228,7 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(entry.kind == .unrecognized(discriminator: "claude:assistant", payload: line))
 }
 
-// MARK: - Durável: user
+// MARK: - Durable: user
 
 @Test func aToolResultBlockBecomesAToolResultEntry() throws {
     let out = makeMapper().map(try json(#"""
@@ -288,7 +288,7 @@ private func json(_ text: String) throws -> JSONValue {
 @Test func aToolResultBlockWithoutAToolUseIDIsPreservedNotGuessed() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"user","message":{"content":[
-      {"type":"tool_result","content":"oi"}]}}
+      {"type":"tool_result","content":"hi"}]}}
     """#))
     guard case .unrecognized(let discriminator, _) =
             try #require(out.entries.first).kind else {
@@ -297,7 +297,7 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(discriminator == "claude:content/tool_result")
 }
 
-// MARK: - Durável: result
+// MARK: - Durable: result
 
 @Test func aResultLineBecomesATurnResultWithItsUsage() throws {
     let out = makeMapper().map(try json(#"""
@@ -431,7 +431,7 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(out.entries[0].raw["rate_limit_info"]?["rateLimitType"]?.stringValue == "five_hour")
 }
 
-// MARK: - Entradas de permissão
+// MARK: - Permission entries
 
 @Test func aPermissionRequestBecomesAnEntryWithItsSuggestions() throws {
     let raw = try json(#"""
@@ -499,7 +499,7 @@ private func json(_ text: String) throws -> JSONValue {
     guard case .turnResult(let turn) = try #require(out.entries.first).kind else {
         Issue.record("esperava .turnResult"); return
     }
-    #expect(turn.contextTokens == 43_002, "o contexto é o da última ida ao modelo")
+    #expect(turn.contextTokens == 43_002, "the context is the one from the last trip to the model")
     #expect(turn.usage.cacheReadTokens == 200_000, "o total do turno continua somado")
 }
 

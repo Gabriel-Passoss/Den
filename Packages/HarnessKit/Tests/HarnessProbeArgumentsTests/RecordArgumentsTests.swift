@@ -6,23 +6,23 @@ struct RecordArgumentsTests {
     @Test("accepts a valid line with --out")
     func acceptsAValidLineWithOut() throws {
         let value = try parseRecordArguments([
-            "--prompt", "oi", "--cwd", "/tmp/probe-scratch", "--out", "/tmp/out.ndjson",
+            "--prompt", "hi", "--cwd", "/tmp/probe-scratch", "--out", "/tmp/out.ndjson",
         ]).get()
-        #expect(value == RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratch", outputPath: "/tmp/out.ndjson"))
+        #expect(value == RecordArguments(prompt: "hi", cwd: "/tmp/probe-scratch", outputPath: "/tmp/out.ndjson"))
     }
 
     @Test("accepts a valid line without --out")
     func acceptsAValidLineWithoutOut() throws {
-        let value = try parseRecordArguments(["--prompt", "oi", "--cwd", "/tmp/probe-scratch"]).get()
-        #expect(value == RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratch", outputPath: nil))
+        let value = try parseRecordArguments(["--prompt", "hi", "--cwd", "/tmp/probe-scratch"]).get()
+        #expect(value == RecordArguments(prompt: "hi", cwd: "/tmp/probe-scratch", outputPath: nil))
     }
 
     @Test("accepts the flags in any order")
     func acceptsFlagsInAnyOrder() throws {
         let value = try parseRecordArguments([
-            "--cwd", "/tmp/probe-scratch", "--out", "/tmp/out.ndjson", "--prompt", "oi",
+            "--cwd", "/tmp/probe-scratch", "--out", "/tmp/out.ndjson", "--prompt", "hi",
         ]).get()
-        #expect(value == RecordArguments(prompt: "oi", cwd: "/tmp/probe-scratch", outputPath: "/tmp/out.ndjson"))
+        #expect(value == RecordArguments(prompt: "hi", cwd: "/tmp/probe-scratch", outputPath: "/tmp/out.ndjson"))
     }
 
     @Test("--prompt followed by another flag does not become its value")
@@ -44,14 +44,14 @@ struct RecordArgumentsTests {
     @Test("--cwd at the end of the list, with no value")
     func cwdAtTheEndOfTheListWithNoValue() {
 
-        let result = parseRecordArguments(["--prompt", "oi", "--cwd"])
+        let result = parseRecordArguments(["--prompt", "hi", "--cwd"])
         #expect(result == .failure(.missingValue(flag: "--cwd")))
     }
 
     @Test("an empty --cwd does not silently mean \"here\"")
     func emptyCwdDoesNotSilentlyMeanHere() {
 
-        let result = parseRecordArguments(["--prompt", "oi", "--cwd", ""])
+        let result = parseRecordArguments(["--prompt", "hi", "--cwd", ""])
         #expect(result == .failure(.emptyValue(flag: "--cwd")))
     }
 
@@ -63,32 +63,32 @@ struct RecordArgumentsTests {
 
     @Test("an empty --out is rejected too")
     func emptyOutIsAlsoRejected() {
-        let result = parseRecordArguments(["--prompt", "oi", "--cwd", "/tmp/probe-scratch", "--out", ""])
+        let result = parseRecordArguments(["--prompt", "hi", "--cwd", "/tmp/probe-scratch", "--out", ""])
         #expect(result == .failure(.emptyValue(flag: "--out")))
     }
 
     @Test("a whitespace-only value is rejected, not just an empty string")
     func whitespaceOnlyValueIsRejected() {
-        let result = parseRecordArguments(["--prompt", "oi", "--cwd", "   "])
+        let result = parseRecordArguments(["--prompt", "hi", "--cwd", "   "])
         #expect(result == .failure(.emptyValue(flag: "--cwd")))
     }
 
     @Test("tabs and newlines also count as blank")
     func tabsAndNewlinesAlsoCountAsBlank() {
-        let result = parseRecordArguments(["--prompt", "oi", "--cwd", "\t\n  "])
+        let result = parseRecordArguments(["--prompt", "hi", "--cwd", "\t\n  "])
         #expect(result == .failure(.emptyValue(flag: "--cwd")))
     }
 
     @Test("--out followed by another flag does not become a value either")
     func outFollowedByAnotherFlagIsNotAValueEither() {
-        let result = parseRecordArguments(["--prompt", "oi", "--cwd", "/tmp/probe-scratch", "--out", "--prompt"])
+        let result = parseRecordArguments(["--prompt", "hi", "--cwd", "/tmp/probe-scratch", "--out", "--prompt"])
         #expect(result == .failure(.missingValue(flag: "--out")))
     }
 
     @Test("an unknown flag is rejected, not ignored")
     func unknownFlagIsRejectedNotIgnored() {
         let result = parseRecordArguments([
-            "--prompt", "oi", "--cwd", "/tmp/probe-scratch", "--bogus", "y",
+            "--prompt", "hi", "--cwd", "/tmp/probe-scratch", "--bogus", "y",
         ])
         #expect(result == .failure(.unknownFlag("--bogus")))
     }
@@ -101,7 +101,7 @@ struct RecordArgumentsTests {
 
     @Test("--cwd missing")
     func missingCwd() {
-        let result = parseRecordArguments(["--prompt", "oi"])
+        let result = parseRecordArguments(["--prompt", "hi"])
         #expect(result == .failure(.missingRequired(flag: "--cwd")))
     }
 

@@ -52,7 +52,7 @@ nonisolated enum SyntaxHighlighter {
         }
     }
 
-    // MARK: - Cores
+    // MARK: - Colors
 
     private static let keywordColor = Color.pink
     private static let stringColor = Color.orange
@@ -151,7 +151,7 @@ nonisolated enum SyntaxHighlighter {
         return result
     }
 
-    // MARK: - Detalhes léxicos
+    // MARK: - Lexical details
 
     private static func isCommentStart(_ chars: [Character], at i: Int,
                                        language: Language) -> Bool {

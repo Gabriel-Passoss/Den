@@ -9,5 +9,5 @@ public func packageRoot(from filePath: String = #filePath) -> URL {
         }
         directory = directory.deletingLastPathComponent()
     }
-    fatalError("não achei Package.swift subindo a partir de \(filePath)")
+    fatalError("could not find Package.swift walking up from \(filePath)")
 }

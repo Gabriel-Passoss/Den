@@ -69,7 +69,7 @@ final class GitChangesModel {
         repos.reduce(0) { $0 + $1.files.count }
     }
 
-    // MARK: - Revisão
+    // MARK: - Review
 
     private var reviewed: Set<String> = []
 
@@ -237,7 +237,7 @@ final class GitChangesModel {
                     truncatedFiles: entries.count > maxFilesPerRepo)
     }
 
-    // MARK: - Trabalho fora da main thread
+    // MARK: - Off the main thread
 
     nonisolated private static let skippedFolders: Set<String> = [
         "node_modules", ".build", "DerivedData", ".next", "dist", "build",

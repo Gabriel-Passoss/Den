@@ -7,7 +7,7 @@ private let catalog = CommandCatalog(skills: ["review"], supportsCompact: true)
 
 @Test func matchesRequireALiveSlashPrompt() {
     let controller = SlashController()
-    #expect(controller.matches(prompt: "sem barra", catalog: catalog).isEmpty)
+    #expect(controller.matches(prompt: "no slash", catalog: catalog).isEmpty)
     #expect(controller.matches(prompt: "/rev", catalog: catalog).map(\.id) == ["review"])
     #expect(controller.matches(prompt: "/", catalog: .empty).isEmpty)
 
@@ -40,13 +40,13 @@ private let catalog = CommandCatalog(skills: ["review"], supportsCompact: true)
 
 @Test func runIgnoresServerRows() {
     let chat = inertChat()
-    chat.prompt = "/que"
+    chat.prompt = "/bro"
     let controller = SlashController()
 
-    let server = SlashCommand(id: "mcp:quebrado", title: "quebrado", detail: "",
+    let server = SlashCommand(id: "mcp:broken", title: "broken", detail: "",
                               kind: .mcpServer(status: .needsAuth))
     #expect(controller.run(server, in: chat) == false)
-    #expect(chat.prompt == "/que")
+    #expect(chat.prompt == "/bro")
     #expect(!controller.dismissed)
 }
 

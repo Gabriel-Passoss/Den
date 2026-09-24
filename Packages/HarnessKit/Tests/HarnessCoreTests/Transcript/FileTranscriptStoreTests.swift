@@ -35,8 +35,8 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
 
     let segment = newSegment()
     let session = newSession(segments: [segment])
-    let first = entry("um")
-    let second = entry("dois")
+    let first = entry("one")
+    let second = entry("two")
     try await store.saveMetadata(session)
     try await store.append(first, to: segment.id, in: session.id)
     try await store.append(second, to: segment.id, in: session.id)
@@ -88,8 +88,8 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
     let segment = newSegment()
     let session = newSession(segments: [segment])
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
-    try await store.append(entry("dois"), to: segment.id, in: session.id)
+    try await store.append(entry("one"), to: segment.id, in: session.id)
+    try await store.append(entry("two"), to: segment.id, in: session.id)
 
     let file = root.appendingPathComponent(session.id.uuidString)
         .appendingPathComponent("\(segment.id.uuidString).ndjson")
@@ -125,13 +125,13 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
     let segment = newSegment()
     var session = newSession(segments: [segment])
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
+    try await store.append(entry("one"), to: segment.id, in: session.id)
 
-    session.title = "outro título"
+    session.title = "another title"
     try await store.saveMetadata(session)
 
     let loaded = try await store.load(session.id)
-    #expect(loaded.title == "outro título")
+    #expect(loaded.title == "another title")
     #expect(loaded.allEntries.count == 1)
 }
 
@@ -142,7 +142,7 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
     let missingSessionID = UUID()
 
     await #expect(throws: TranscriptStoreError.sessionNotFound(missingSessionID)) {
-        try await store.append(entry("um"), to: UUID(), in: missingSessionID)
+        try await store.append(entry("one"), to: UUID(), in: missingSessionID)
     }
 }
 
@@ -154,7 +154,7 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
     let segment = newSegment()
     var session = newSession(segments: [segment])
     try await store.saveMetadata(session)
-    try await store.append(entry("um"), to: segment.id, in: session.id)
+    try await store.append(entry("one"), to: segment.id, in: session.id)
 
     let yesterday = Date(timeIntervalSinceNow: -86_400)
     let file = root.appendingPathComponent(
@@ -162,7 +162,7 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
     try FileManager.default.setAttributes(
         [.modificationDate: yesterday], ofItemAtPath: file.path)
 
-    session.title = "outro título"
+    session.title = "another title"
     try await store.saveMetadata(session)
 
     let summary = try #require(try await store.list().sessions.first)
@@ -191,7 +191,7 @@ private func newSegment(_ harness: HarnessID = harnessA) -> Segment {
 
     let strangerSegmentID = UUID()
     await #expect(throws: TranscriptStoreError.segmentNotFound(strangerSegmentID)) {
-        try await store.append(entry("um"), to: strangerSegmentID, in: session.id)
+        try await store.append(entry("one"), to: strangerSegmentID, in: session.id)
     }
 }
 

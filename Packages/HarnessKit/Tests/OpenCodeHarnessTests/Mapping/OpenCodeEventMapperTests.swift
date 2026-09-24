@@ -79,7 +79,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     }
     #expect(deltas.count == 4)
     #expect(output.events.count == deltas.count + 1,
-            "além dos deltas, só o contexto reportado no fim do turno")
+            "besides the deltas, only the context reported at the end of the turn")
 }
 
 @Test func theToolCallKeepsItsNameAndTheResultItsOutput() throws {
@@ -87,7 +87,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
 
     guard case .toolCall(let call) = output.entries[1].kind,
           case .toolResult(let result) = output.entries[2].kind else {
-        Issue.record("esperava chamada e resultado de ferramenta"); return
+        Issue.record("expected a tool call and its result"); return
     }
 
     #expect(call.rawName == "bash")
@@ -103,7 +103,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     let output = try runFixture("turn-with-permission")
 
     let results = output.entries.filter { if case .toolResult = $0.kind { true } else { false } }
-    #expect(results.count == 1, "a ferramenta foi anunciada uma vez e concluída uma vez")
+    #expect(results.count == 1, "the tool was announced once and completed once")
 
     let calls = output.entries.filter { if case .toolCall = $0.kind { true } else { false } }
     #expect(calls.count == 1)
@@ -125,14 +125,14 @@ private func runFixture(_ name: String) throws -> MappedOutput {
 @Test func theCommandListFeedsTheMenuAndStaysOutOfTheTranscript() throws {
     let output = try runFixture("available-commands")
 
-    #expect(output.entries.isEmpty, "catálogo não é conversa")
+    #expect(output.entries.isEmpty, "a catalog is not a conversation")
     guard case .catalogUpdated(let catalog) = try #require(output.events.first) else {
         Issue.record("esperava .catalogUpdated"); return
     }
     #expect(catalog.skills.count == 45)
     #expect(catalog.skills == catalog.skills.sorted())
-    #expect(catalog.servers.isEmpty, "o ACP não lista servidores MCP")
-    #expect(catalog.supportsCompact, "o /compact é atendido sem ser anunciado")
+    #expect(catalog.servers.isEmpty, "ACP does not list MCP servers")
+    #expect(catalog.supportsCompact, "/compact is served without being announced")
 }
 
 @Test func theContextOfTheTurnComesFromTheUsageUpdate() throws {
@@ -161,7 +161,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     #expect(compaction.tokensAfter == 7_000)
 }
 
-// MARK: - Variantes que a fixture não cobre
+// MARK: - Variants the fixture does not cover
 
 @Test func aThoughtChunkBecomesThinkingNotText() {
     var subject = mapper()
@@ -188,13 +188,13 @@ private func runFixture(_ name: String) throws -> MappedOutput {
 @Test func aFailedToolIsMarkedAsAnError() {
     var subject = mapper()
     let out = subject.map(update: update(
-        #"{"sessionUpdate":"tool_call_update","toolCallId":"c1","kind":"execute","status":"failed","rawOutput":{"output":"não deu"}}"#))
+        #"{"sessionUpdate":"tool_call_update","toolCallId":"c1","kind":"execute","status":"failed","rawOutput":{"output":"it failed"}}"#))
 
     guard case .toolResult(let result) = out.entries.last?.kind else {
         Issue.record("esperava resultado de ferramenta"); return
     }
     #expect(result.isError)
-    #expect(result.content.stringValue == "não deu")
+    #expect(result.content.stringValue == "it failed")
 }
 
 @Test func aResultThatOnlyHasContentBlocksStillCarriesItsText() {
@@ -214,7 +214,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
         #"{"sessionUpdate":"weather_update","temperature":21}"#))
 
     guard case .unrecognized(let discriminator, let payload) = out.entries.first?.kind else {
-        Issue.record("spec §5.4: o desconhecido precisa sobreviver, não sumir"); return
+        Issue.record("spec §5.4: the unknown must survive, not vanish"); return
     }
     #expect(discriminator == "opencode:weather_update")
     #expect(payload["temperature"]?.intValue == 21)
@@ -239,7 +239,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     let announcedTooEarly = subject.map(update: update(
         #"{"sessionUpdate":"tool_call","toolCallId":"c1","title":"bash","kind":"execute","status":"pending","rawInput":{"cwd":"/tmp"}}"#))
     #expect(announcedTooEarly.entries.isEmpty,
-            "no pending o CLI ainda não sabe o comando — anunciar aqui grava uma ferramenta vazia")
+            "while pending the CLI does not know the command yet — announcing here records an empty tool")
 
     let announced = subject.map(update: update(
         #"{"sessionUpdate":"tool_call_update","toolCallId":"c1","status":"in_progress","kind":"execute","title":"echo oi","rawInput":{"command":"echo oi","cwd":"/tmp"}}"#))
@@ -255,7 +255,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     _ = subject.map(update: update(
         #"{"sessionUpdate":"tool_call","toolCallId":"c1","title":"bash","kind":"execute","status":"pending","rawInput":{"cwd":"/tmp"}}"#))
     let announced = subject.map(update: update(
-        #"{"sessionUpdate":"tool_call_update","toolCallId":"c1","status":"completed","rawInput":null,"rawOutput":{"output":"oi"}}"#))
+        #"{"sessionUpdate":"tool_call_update","toolCallId":"c1","status":"completed","rawInput":null,"rawOutput":{"output":"hi"}}"#))
 
     guard case .toolCall(let call) = announced.entries.first?.kind else {
         Issue.record("a ferramenta precisa ser anunciada mesmo indo direto para o fim"); return
@@ -272,7 +272,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     let closed = subject.turnResult(update(#"{"stopReason":"cancelled"}"#))
 
     #expect(closed.entries.map { kindName($0.kind) } == ["toolCall", "turnResult"],
-            "uma ferramenta presa em pending não pode sumir do transcript")
+            "a tool stuck in pending must not vanish from the transcript")
 }
 
 @Test func anInterruptedTurnIsNotRecordedAsAFailure() {
@@ -287,7 +287,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     #expect(result.isError == false)
 }
 
-// MARK: - Compactação
+// MARK: - Compaction
 
 private let summaryChunk = #"""
 {"sessionUpdate":"agent_message_chunk","messageId":"m1",
@@ -327,7 +327,7 @@ private let thoughtChunk = #"""
         Issue.record("esperava contextCompacted"); return
     }
     #expect(compaction.trigger == .manual)
-    #expect(compaction.tokensBefore == 0, "o ACP não informa o contexto anterior")
+    #expect(compaction.tokensBefore == 0, "ACP does not report the previous context")
     #expect(compaction.tokensAfter == 0, "nem o que sobrou")
 }
 
@@ -336,7 +336,7 @@ private let thoughtChunk = #"""
     subject.beginCompaction()
 
     #expect(subject.map(update: update(summaryChunk)).events.isEmpty,
-            "quem desenha o turno é o cartão de progresso")
+            "the progress card is what draws the turn")
 }
 
 @Test func aTurnThatIsNotACompactionKeepsItsProseAndItsDeltas() throws {
@@ -360,14 +360,14 @@ private let thoughtChunk = #"""
 
     #expect(closed.entries.map { kindName($0.kind) }
             == ["contextCompacted", "assistantText", "turnResult"],
-            "o resumo sai em partes e vira um registro só")
+            "the summary arrives in parts and becomes a single record")
 
     guard case .assistantText(let summary) = closed.entries[1].kind else {
         Issue.record("esperava o resumo"); return
     }
     #expect(summary.contains("fechar o commit"))
-    #expect(summary.contains("gerar a build"), "a segunda parte não se perde")
-    #expect(!summary.contains("Organizing"), "o raciocínio do sumarizador não é conversa")
+    #expect(summary.contains("gerar a build"), "the second part is not lost")
+    #expect(!summary.contains("Organizing"), "the summarizer reasoning is not conversation")
 }
 
 @Test func theReplayOfASessionOnlyCarriesState() throws {
@@ -382,7 +382,7 @@ private let thoughtChunk = #"""
     #expect(replayed == [.contextUsage(tokens: 19_818),
                          .catalogUpdated(CommandCatalog(skills: ["tdd"],
                                                         supportsCompact: true))],
-            "o histórico reproduzido não volta como conversa nova")
+            "replayed history does not come back as new conversation")
 }
 
 @Test func aCompactionThatEndsWithoutProseLeavesNoBoundary() throws {
@@ -395,5 +395,5 @@ private let thoughtChunk = #"""
     _ = subject.map(update: update(summaryChunk))
     let next = subject.turnResult(update(#"{"stopReason":"end_turn"}"#))
     #expect(next.entries.map { kindName($0.kind) } == ["assistantText", "turnResult"],
-            "a compactação cancelada não contamina o turno seguinte")
+            "a cancelled compaction does not contaminate the next turn")
 }

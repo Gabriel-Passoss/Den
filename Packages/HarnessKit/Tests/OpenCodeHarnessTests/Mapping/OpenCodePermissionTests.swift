@@ -13,7 +13,7 @@ private func recordedPermissionParams() throws -> JSONValue {
             return params
         }
     }
-    Issue.record("a fixture perdeu o pedido de permissão")
+    Issue.record("the fixture lost the permission request")
     return .null
 }
 
@@ -49,7 +49,7 @@ private func recordedPermissionParams() throws -> JSONValue {
     #expect(OpenCodePermission.outcome(for: .allow(updatedInput: nil), offered: offered)["optionId"]?
         .stringValue == "once")
     #expect(OpenCodePermission.outcome(
-        for: .deny(message: "não", interrupt: false), offered: offered)["optionId"]?
+        for: .deny(message: "no", interrupt: false), offered: offered)["optionId"]?
         .stringValue == "reject")
 }
 

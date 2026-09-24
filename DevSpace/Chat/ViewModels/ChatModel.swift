@@ -106,7 +106,7 @@ final class ChatModel {
 
     var isLive: Bool { session != nil }
 
-    // MARK: - Nascimento
+    // MARK: - Creation
 
     init(store: FileTranscriptStore, workingDirectory: URL,
          harness: HarnessID? = nil, cache: SessionCache = .standard) {
@@ -182,7 +182,7 @@ final class ChatModel {
         return "\(folder) · branch \(branch)"
     }
 
-    // MARK: - Ciclo de vida
+    // MARK: - Lifecycle
 
     func start() async {
         guard session == nil else { return }
@@ -502,7 +502,7 @@ final class ChatModel {
         await persistMetadata()
     }
 
-    // MARK: - Tradução para a tela
+    // MARK: - Rendering
 
     private func apply(_ update: SessionUpdate) {
         switch update {
@@ -676,7 +676,7 @@ final class ChatModel {
                           timestamp: moment, verb: verb, title: title))
     }
 
-    // MARK: - Recados de sistema que chegam como mensagem do usuário
+    // MARK: - System notices arriving as user messages
 
     private var awaitingCompactionSummary = false
 

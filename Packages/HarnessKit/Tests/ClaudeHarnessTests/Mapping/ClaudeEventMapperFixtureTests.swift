@@ -58,7 +58,7 @@ func everyFixtureMapsToTheMeasuredCounts(
         guard case .assistantText(let text) = entry.kind else { return nil }
         return text
     }
-    #expect(texts.count == 1, "um texto consolidado por turno, não um por delta")
+    #expect(texts.count == 1, "one consolidated text per turn, not one per delta")
 }
 
 @Test func theOrderOfKindsPreservesTheStory() throws {
@@ -78,7 +78,7 @@ func everyFixtureMapsToTheMeasuredCounts(
 @Test(arguments: ["hello", "tool-use", "permission-request", "permission-denied"])
 func theHappyPathFixturesShareTheSameSpine(name: String) throws {
     let kinds = try mapFixture(name).entries.map { kindName($0.kind) }
-    #expect(kinds.first == "systemNotice", "toda sessão abre com um system/init")
+    #expect(kinds.first == "systemNotice", "every session opens with a system/init")
     #expect(kinds.last == "turnResult", "e fecha com o result do turno")
 }
 
@@ -86,7 +86,7 @@ func theHappyPathFixturesShareTheSameSpine(name: String) throws {
 func noFixtureLineDegrades(name: String) throws {
     for entry in try mapFixture(name).entries {
         if case .unrecognized(let discriminator, _) = entry.kind {
-            Issue.record("\(name): forma não prevista \(discriminator)")
+            Issue.record("\(name): unexpected shape \(discriminator)")
         }
     }
 }
@@ -101,7 +101,7 @@ func everyToolResultPointsAtAToolCallInTheSameTranscript(name: String) throws {
     #expect(!callIDs.isEmpty)
     for entry in entries {
         guard case .toolResult(let result) = entry.kind else { continue }
-        #expect(callIDs.contains(result.callID), "resultado órfão: \(result.callID)")
+        #expect(callIDs.contains(result.callID), "orphan result: \(result.callID)")
     }
 }
 
@@ -115,7 +115,7 @@ func everyToolResultPointsAtAToolCallInTheSameTranscript(name: String) throws {
     for entry in entries {
         guard case .permissionDecision(let requestID, let decision) = entry.kind else { continue }
         decisions += 1
-        #expect(callIDs.contains(requestID), "negação órfã: \(requestID)")
+        #expect(callIDs.contains(requestID), "orphan denial: \(requestID)")
         guard case .deny = decision else { Issue.record("esperava .deny"); continue }
     }
     #expect(decisions == 6)

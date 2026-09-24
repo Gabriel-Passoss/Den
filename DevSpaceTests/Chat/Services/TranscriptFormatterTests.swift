@@ -4,10 +4,10 @@ import HarnessCore
 @testable import DevSpace
 
 @Test func unwrappedStripsCommandEnvelopes() {
-    let wrapped = "<command-name>/compact</command-name>\n<command-args> agora </command-args>"
-    #expect(TranscriptFormatter.unwrapped(wrapped) == "/compact\n agora")
-    #expect(TranscriptFormatter.unwrapped("<local-command-stdout>saída</local-command-stdout>") == "saída")
-    #expect(TranscriptFormatter.unwrapped("  sem envelope  ") == "sem envelope")
+    let wrapped = "<command-name>/compact</command-name>\n<command-args> now </command-args>"
+    #expect(TranscriptFormatter.unwrapped(wrapped) == "/compact\n now")
+    #expect(TranscriptFormatter.unwrapped("<local-command-stdout>output</local-command-stdout>") == "output")
+    #expect(TranscriptFormatter.unwrapped("  no envelope  ") == "no envelope")
 }
 
 @Test func tokensAbbreviateThousands() {
@@ -51,7 +51,7 @@ import HarnessCore
     #expect(TranscriptFormatter.oneLine(.null) == "—")
     #expect(TranscriptFormatter.oneLine(.object(["b": .int(2), "a": .string("x")])) == "a=x b=2")
     #expect(TranscriptFormatter.oneLine(.array([.int(1), .bool(true)])) == "1, true")
-    #expect(TranscriptFormatter.oneLine(.string("um\ndois")) == "um dois")
+    #expect(TranscriptFormatter.oneLine(.string("one\ntwo")) == "one two")
 
     let long = TranscriptFormatter.oneLine(.string(String(repeating: "x", count: 250)))
     #expect(long.count == 201)

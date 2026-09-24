@@ -8,12 +8,12 @@ private func entry(_ kind: TranscriptEntry.Kind) -> TranscriptEntry {
 }
 
 private let conversation: [TranscriptEntry] = [
-    entry(.userMessage(text: "como faço X?", attachments: [])),
-    entry(.assistantThinking("o usuário quer X, vou ler o arquivo")),
+    entry(.userMessage(text: "how do I do X?", attachments: [])),
+    entry(.assistantThinking("the user wants X, I will read the file")),
     entry(.assistantText("Vou olhar o arquivo.")),
     entry(.toolCall(ToolCall(id: "c1", rawName: "Read", canonical: .read,
                              input: .object(["file_path": .string("/tmp/a.swift")])))),
-    entry(.toolResult(ToolResult(callID: "c1", isError: false, content: .string("conteúdo")))),
+    entry(.toolResult(ToolResult(callID: "c1", isError: false, content: .string("content")))),
     entry(.assistantText("Faz assim: …")),
 ]
 
@@ -21,7 +21,7 @@ private let conversation: [TranscriptEntry] = [
     let seed = try #require(HandoffSeed.make(conversation))
 
     let body = seed.text
-    let you = try #require(body.range(of: "**Você:** como faço X?"))
+    let you = try #require(body.range(of: "**Você:** how do I do X?"))
     let first = try #require(body.range(of: "**Assistente:** Vou olhar o arquivo."))
     let last = try #require(body.range(of: "**Assistente:** Faz assim: …"))
 
@@ -34,12 +34,12 @@ private let conversation: [TranscriptEntry] = [
 
     #expect(seed.text.contains("_(usou Read: /tmp/a.swift)_"))
 
-    #expect(!seed.text.contains("conteúdo"))
+    #expect(!seed.text.contains("content"))
 }
 
 @Test func theSeedLeavesTheOldModelsReasoningBehind() throws {
     let seed = try #require(HandoffSeed.make(conversation))
-    #expect(!seed.text.contains("o usuário quer X"))
+    #expect(!seed.text.contains("the user wants X"))
 }
 
 @Test func theSeedTellsTheNewModelNotToAnswerTheOldConversation() throws {
@@ -66,12 +66,12 @@ private let conversation: [TranscriptEntry] = [
 
     #expect(!seed.isComplete)
     if case .briefing = seed.handoff {} else {
-        Issue.record("um estouro precisa ser registrado como briefing, não como replay")
+        Issue.record("an overflow must be recorded as a briefing, not as a replay")
     }
     #expect(seed.text.contains(HandoffSeed.omissionMarker))
 
     #expect(seed.text.contains("resposta 199"))
-    #expect(!seed.text.contains("como faço X?"))
+    #expect(!seed.text.contains("how do I do X?"))
 
     #expect(seed.text.count <= 4_000)
 }
@@ -79,7 +79,7 @@ private let conversation: [TranscriptEntry] = [
 @Test func anEmptyConversationHasNothingToSeed() {
     #expect(HandoffSeed.make([]) == nil)
 
-    #expect(HandoffSeed.make([entry(.systemNotice(subtype: "init", text: "oi"))]) == nil)
+    #expect(HandoffSeed.make([entry(.systemNotice(subtype: "init", text: "hi"))]) == nil)
 }
 
 @Test func aBudgetTooSmallForEvenOneTurnSeedsNothing() {
@@ -97,7 +97,7 @@ private let conversation: [TranscriptEntry] = [
     #expect(seed.text.count < 400)
 }
 
-// MARK: - A troca atravessando o disco
+// MARK: - The handoff crossing the disk
 
 private let harnessA = HarnessID(rawValue: "harness-a")
 private let harnessB = HarnessID(rawValue: "harness-b")
@@ -156,29 +156,29 @@ private let harnessB = HarnessID(rawValue: "harness-b")
     }
 }
 
-// MARK: - A semente colada ao primeiro pedido
+// MARK: - The seed glued to the first request
 
 @Test func theSeedTravelsAttachedToTheRequest() throws {
-    let seed = HandoffSeed.make([entry(.userMessage(text: "oi", attachments: []))])
+    let seed = HandoffSeed.make([entry(.userMessage(text: "hi", attachments: []))])
 
-    let message = HandoffSeed.message(seed: try #require(seed).text, request: "continue daqui")
+    let message = HandoffSeed.message(seed: try #require(seed).text, request: "continue from here")
 
     #expect(message.hasPrefix(HandoffSeed.preamble))
-    #expect(message.contains("**Você:** oi"))
-    #expect(message.hasSuffix("continue daqui"))
+    #expect(message.contains("**Você:** hi"))
+    #expect(message.hasSuffix("continue from here"))
 
     #expect(message.contains(HandoffSeed.requestHeading))
 }
 
 @Test func aTurnWithOnlyAnAttachmentStillCarriesARequest() throws {
-    let seed = try #require(HandoffSeed.make([entry(.userMessage(text: "oi", attachments: []))]))
+    let seed = try #require(HandoffSeed.make([entry(.userMessage(text: "hi", attachments: []))]))
 
     let message = HandoffSeed.message(seed: seed.text, request: "   \n ")
 
     #expect(message.hasSuffix(HandoffSeed.emptyRequest))
 }
 
-// MARK: - Agrupamento das opções
+// MARK: - Option grouping
 
 @Test func aFlatListIsOneUntitledGroup() {
     let knob = HarnessKnob(id: "model", category: .model, name: "Modelo", options: [
