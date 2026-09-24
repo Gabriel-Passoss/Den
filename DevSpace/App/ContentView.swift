@@ -2,7 +2,7 @@ import SwiftUI
 import HarnessCore
 
 struct ContentView: View {
-    @State private var workspace = WorkspaceModel()
+    @State private var workspace = WorkspaceModel.live()
 
     @State private var columns = NavigationSplitViewVisibility.all
 

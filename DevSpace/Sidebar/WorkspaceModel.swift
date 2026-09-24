@@ -18,25 +18,27 @@ final class WorkspaceModel {
     }
 
     var folders: [Folder] = [] {
-        didSet { Self.persistFolders(folders) }
+        didSet { persistFolders(folders) }
     }
 
     var membership: [String: String] = [:] {
-        didSet { UserDefaults.standard.set(membership, forKey: Self.membershipKey) }
+        didSet { defaults.set(membership, forKey: Self.membershipKey) }
     }
 
     var sessionOrder: [String] = [] {
-        didSet { UserDefaults.standard.set(sessionOrder, forKey: Self.orderKey) }
+        didSet { defaults.set(sessionOrder, forKey: Self.orderKey) }
     }
 
     var defaultHarness: HarnessID {
-        get { HarnessRegistry.preferred }
-        set { HarnessRegistry.preferred = newValue }
+        get { HarnessRegistry.preferred(in: defaults) }
+        set { HarnessRegistry.setPreferred(newValue, in: defaults) }
     }
 
     var availableHarnesses: [HarnessID] { HarnessRegistry.all.map(\.id) }
 
     private let store: FileTranscriptStore
+    private let defaults: UserDefaults
+    private let cache: SessionCache
     private var chats: [UUID: ChatModel] = [:]
     private var legacyPathToFolder: [String: String] = [:]
 
@@ -46,12 +48,18 @@ final class WorkspaceModel {
     private static let legacyFoldersKey = "DevSpace.folders"
     private static let legacyNamesKey = "DevSpace.folderNames"
 
-    init() {
+    static func live() -> WorkspaceModel {
         let root = URL.applicationSupportDirectory.appending(path: "DevSpace/sessions")
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        self.store = FileTranscriptStore(root: root)
+        return WorkspaceModel(store: FileTranscriptStore(root: root),
+                              defaults: .standard, cache: .standard)
+    }
 
-        let defaults = UserDefaults.standard
+    init(store: FileTranscriptStore, defaults: UserDefaults, cache: SessionCache) {
+        self.store = store
+        self.defaults = defaults
+        self.cache = cache
+
         if let data = defaults.data(forKey: Self.foldersKey),
            let decoded = try? JSONDecoder().decode([Folder].self, from: data) {
             self.folders = decoded
@@ -67,7 +75,7 @@ final class WorkspaceModel {
                 legacyPathToFolder[path] = folder.id
             }
             self.folders = migrated
-            Self.persistFolders(migrated)
+            persistFolders(migrated)
         }
         self.membership = defaults.dictionary(forKey: Self.membershipKey) as? [String: String] ?? [:]
         self.sessionOrder = defaults.array(forKey: Self.orderKey) as? [String] ?? []
@@ -144,9 +152,9 @@ final class WorkspaceModel {
         }
     }
 
-    private static func persistFolders(_ folders: [Folder]) {
+    private func persistFolders(_ folders: [Folder]) {
         guard let data = try? JSONEncoder().encode(folders) else { return }
-        UserDefaults.standard.set(data, forKey: foldersKey)
+        defaults.set(data, forKey: Self.foldersKey)
     }
 
     func addFolder() {
@@ -253,7 +261,7 @@ final class WorkspaceModel {
             workingDirectory = summary.workingDirectory
         }
         let chat = ChatModel(store: store, workingDirectory: workingDirectory,
-                                   harness: harness ?? defaultHarness)
+                             harness: harness ?? defaultHarness, cache: cache)
         adopt(chat)
         await chat.persistMetadata()
         if let folderID { membership[chat.sessionID.uuidString] = folderID }
@@ -270,7 +278,7 @@ final class WorkspaceModel {
             return
         }
         guard let session = try? await store.load(id) else { return }
-        let chat = ChatModel(store: store, restoring: session)
+        let chat = ChatModel(store: store, restoring: session, cache: cache)
         adopt(chat)
         chats[id] = chat
     }

@@ -19,12 +19,18 @@ nonisolated enum HarnessRegistry {
 
     private static let defaultKey = "DevSpace.defaultHarness"
 
+    static func preferred(in defaults: UserDefaults) -> HarnessID {
+        guard let raw = defaults.string(forKey: defaultKey) else { return fallback }
+        let id = HarnessID(rawValue: raw)
+        return harness(for: id) == nil ? fallback : id
+    }
+
+    static func setPreferred(_ harness: HarnessID, in defaults: UserDefaults) {
+        defaults.set(harness.rawValue, forKey: defaultKey)
+    }
+
     static var preferred: HarnessID {
-        get {
-            guard let raw = UserDefaults.standard.string(forKey: defaultKey) else { return fallback }
-            let id = HarnessID(rawValue: raw)
-            return harness(for: id) == nil ? fallback : id
-        }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: defaultKey) }
+        get { preferred(in: .standard) }
+        set { setPreferred(newValue, in: .standard) }
     }
 }
