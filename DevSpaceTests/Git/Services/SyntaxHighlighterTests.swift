@@ -104,6 +104,27 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
             == ["plain:n = ", "number:0o777", "plain: + ", "number:0b1010"])
 }
 
+@Test(.timeLimit(.minutes(1)))
+func digitsOutsideAsciiNeverStallTheScanner() {
+    // Every character here answers true to isNumber but matches nothing in the
+    // scan's advance set. Entering the number branch used to leave the index
+    // parked and spin the loop forever, freezing the app on such a diff.
+    #expect(tokens("x = \u{0663}", .swift) == ["plain:x = \u{0663}"])  // arabic-indic
+    #expect(tokens("x = \u{0968}", .swift) == ["plain:x = \u{0968}"])  // devanagari
+    #expect(tokens("x = \u{00B2}", .swift) == ["plain:x = \u{00B2}"])  // superscript
+    #expect(tokens("x = \u{2462}", .swift) == ["plain:x = \u{2462}"])  // circled
+    #expect(tokens("x = \u{FF13}", .swift) == ["plain:x = \u{FF13}"])  // fullwidth
+}
+
+@Test func aRomanNumeralTakesTheIdentifierPath() {
+    // isLetter is true for these, so they read as a capitalised word.
+    #expect(tokens("x = \u{2162}", .swift) == ["plain:x = ", "type:\u{2162}"])
+}
+
+@Test func asciiDigitsAreStillNumbers() {
+    #expect(tokens("x = 3", .swift) == ["plain:x = ", "number:3"])
+}
+
 @Test func aNumberGreedilyEatsATrailingDot() {
     // Known quirk: the scan accepts "." so member access on a literal splits oddly.
     #expect(tokens("value = 3.toString()", .cFamily)

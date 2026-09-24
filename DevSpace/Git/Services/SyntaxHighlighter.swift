@@ -106,7 +106,7 @@ nonisolated enum SyntaxHighlighter {
                 continue
             }
 
-            if c.isNumber, i == 0 || !isIdentifierChar(chars[i - 1]) {
+            if c.isASCII, c.isNumber, i == 0 || !isIdentifierChar(chars[i - 1]) {
                 var j = i
                 while j < chars.count,
                       chars[j].isHexDigit || chars[j] == "." || chars[j] == "_"
