@@ -18,17 +18,17 @@ private let catalog = CommandCatalog(
     #expect(SlashCatalog.query(in: "/two\nlines") == nil)
 }
 
-@Test func rootGroupsSkillsAndServers() {
+@Test func rootGroupsSkillsAndServers() throws {
     let items = SlashCatalog.root(from: catalog)
     #expect(items.map(\.id) == ["compact", "group:skills", "group:mcp"])
-    #expect(items[1].detail == "2 habilidades")
+    #expect(try #require(items.dropFirst().first).detail == "2 habilidades")
 }
 
-@Test func mcpFlattensPromptsAndKeepsBareServers() {
+@Test func mcpFlattensPromptsAndKeepsBareServers() throws {
     let items = SlashCatalog.mcp(from: catalog)
     #expect(items.map(\.id) == ["mcp__context7__search", "mcp:broken"])
-    #expect(items[0].title == "context7 · search")
-    #expect(items[1].detail == "precisa autenticar")
+    #expect(try #require(items.first).title == "context7 · search")
+    #expect(try #require(items.dropFirst().first).detail == "precisa autenticar")
 }
 
 @Test func matchesRankPrefixHitsFirst() {
@@ -42,8 +42,9 @@ private let catalog = CommandCatalog(
     #expect(SlashCatalog.matches("context", in: catalog, group: .skills).isEmpty)
 }
 
-@Test func commandTextComesFromTheKind() {
+@Test func commandTextComesFromTheKind() throws {
     #expect(SlashCatalog.compact().command == "/compact")
     #expect(SlashCatalog.skills(from: catalog).first?.command == "/review")
-    #expect(SlashCatalog.root(from: catalog)[1].command == nil)
+    let group = try #require(SlashCatalog.root(from: catalog).dropFirst().first)
+    #expect(group.command == nil)
 }

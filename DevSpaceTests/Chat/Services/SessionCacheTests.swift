@@ -15,6 +15,21 @@ private let other = HarnessID(rawValue: "other-harness")
     }
 }
 
+@Test func catalogsOfDifferentDirectoriesNeverBleed() {
+    withTemporaryCache { cache in
+        let one = URL(fileURLWithPath: "/tmp/devspace-tests/one")
+        let two = URL(fileURLWithPath: "/tmp/devspace-tests/two")
+        let first = CommandCatalog(skills: ["review"], supportsCompact: true)
+        let second = CommandCatalog(skills: ["deploy"], supportsCompact: false)
+
+        cache.remember(first, for: one, harness: harness)
+        cache.remember(second, for: two, harness: harness)
+
+        #expect(cache.rememberedCatalog(for: one, harness: harness) == first)
+        #expect(cache.rememberedCatalog(for: two, harness: harness) == second)
+    }
+}
+
 @Test func catalogFallsBackToTheLastOneForNewDirectories() {
     withTemporaryCache { cache in
         let known = URL(fileURLWithPath: "/tmp/devspace-tests/known")
