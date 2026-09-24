@@ -68,6 +68,7 @@ struct MessageBubble: View {
         guard text.utf8.count > limit else { return text }
         let head = String(text.prefix(limit))
         let hidden = text.count - head.count
+        guard hidden > 0 else { return text }
         return head + "\n⋯ +\(hidden) caracteres não exibidos"
     }
 }
