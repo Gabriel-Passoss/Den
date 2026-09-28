@@ -10,6 +10,7 @@ struct ZoomedImage: Identifiable, Equatable {
 
 @Observable final class ChatKeyMonitor {
     var escArmed = false
+    var composerFocused = false
 
     private var monitor: Any?
     private var escDisarm: Task<Void, Never>?
@@ -110,6 +111,11 @@ struct ZoomedImage: Identifiable, Equatable {
                 let images = Self.pasteboardImages()
                 if !images.isEmpty {
                     for data in images { chat.attach(imageData: data) }
+                    return nil
+                }
+                if composerFocused,
+                   let text = NSPasteboard.general.string(forType: .string),
+                   chat.capturePaste(text) {
                     return nil
                 }
             }

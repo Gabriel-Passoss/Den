@@ -44,15 +44,7 @@ struct TranscriptRow: View {
             DigestRow(title: line.title ?? Digest.summary,
                       text: line.text,
                       mono: line.title == Digest.command,
-                      isOpen: expanded.contains(line.id)) {
-                withAnimation(.easeOut(duration: 0.15)) {
-                    if expanded.contains(line.id) {
-                        expanded.remove(line.id)
-                    } else {
-                        expanded.insert(line.id)
-                    }
-                }
-            }
+                      isOpen: expanded.contains(line.id)) { toggle(line.id) }
 
         case .unknown:
             EmptyView()
@@ -64,7 +56,19 @@ struct TranscriptRow: View {
             Spacer(minLength: 64)
             MessageBubble(text: line.text, moment: line.timestamp,
                           tint: AnyShapeStyle(Color.accentColor.opacity(0.22)),
-                          images: line.images, files: line.files, onZoom: onZoom)
+                          images: line.images, files: line.files, onZoom: onZoom,
+                          isOpen: expanded.contains(line.id),
+                          onToggle: LongText.isLong(line.text) ? { toggle(line.id) } : nil)
+        }
+    }
+
+    private func toggle(_ id: UUID) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            if expanded.contains(id) {
+                expanded.remove(id)
+            } else {
+                expanded.insert(id)
+            }
         }
     }
 

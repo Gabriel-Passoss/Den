@@ -9,12 +9,14 @@ struct ChatComposer: View {
     let keys: ChatKeyMonitor
     var stickToBottom: () -> Void
 
+    @FocusState private var focused: Bool
+
     var body: some View {
         VStack(spacing: 7) {
             slashSuggestions
             mentionSuggestions
 
-            if !chat.pendingAttachments.isEmpty {
+            if !chat.pendingAttachments.isEmpty || !chat.pendingPastes.isEmpty {
                 pendingAttachmentRow
             }
 
@@ -22,6 +24,8 @@ struct ChatComposer: View {
                 .textFieldStyle(.plain)
                 .lineLimit(1...6)
                 .font(.system(size: 13))
+                .focused($focused)
+                .onChange(of: focused, initial: true) { keys.composerFocused = focused }
                 .onSubmit { submit() }
 
             HStack(spacing: 8) {
@@ -87,7 +91,8 @@ struct ChatComposer: View {
                 .buttonStyle(.plain)
                 .disabled(!chat.isBusy
                           && chat.prompt.trimmingCharacters(in: .whitespaces).isEmpty
-                          && chat.pendingAttachments.isEmpty)
+                          && chat.pendingAttachments.isEmpty
+                          && chat.pendingPastes.isEmpty)
                 .help(chat.isBusy ? "Parar o que está rodando" : "Enviar mensagem")
             }
         }
@@ -164,7 +169,9 @@ struct ChatComposer: View {
                             .frame(width: 56, height: 56)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .overlay(alignment: .topTrailing) {
-                                removeAttachmentButton(pending.id, help: "Remover imagem")
+                                removeButton(help: "Remover imagem") {
+                                    chat.removeAttachment(pending.id)
+                                }
                             }
                     } else {
                         HStack(spacing: 6) {
@@ -182,20 +189,55 @@ struct ChatComposer: View {
                         .background(.quaternary.opacity(0.4),
                                     in: RoundedRectangle(cornerRadius: 8))
                         .overlay(alignment: .topTrailing) {
-                            removeAttachmentButton(pending.id, help: "Remover arquivo")
+                            removeButton(help: "Remover arquivo") {
+                                chat.removeAttachment(pending.id)
+                            }
                         }
                     }
                 }
+                ForEach(chat.pendingPastes) { pasteChip($0) }
             }
             .padding(.top, 2)
         }
         .frame(height: 62)
     }
 
-    private func removeAttachmentButton(_ id: UUID, help: String) -> some View {
+    private func pasteChip(_ paste: PastedText) -> some View {
         Button {
-            chat.removeAttachment(id)
+            chat.expandPaste(paste.id)
+            focused = true
         } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Image(systemName: "doc.plaintext")
+                        .foregroundStyle(.secondary)
+                    Text("Texto colado")
+                        .fontWeight(.medium)
+                }
+                .font(.system(size: 11))
+                Text(paste.headline)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(LongText.lineLabel(paste.lineCount))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 10)
+            .frame(width: 170, height: 56, alignment: .leading)
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .help("Clique para mostrar o texto inteiro no campo")
+        .overlay(alignment: .topTrailing) {
+            removeButton(help: "Remover texto colado") { chat.removePaste(paste.id) }
+        }
+    }
+
+    private func removeButton(help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 13))
                 .foregroundStyle(.white, .black.opacity(0.6))
