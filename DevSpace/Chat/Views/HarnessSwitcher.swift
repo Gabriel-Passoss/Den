@@ -6,7 +6,7 @@ struct HarnessSwitcher: View {
 
     var body: some View {
         Menu {
-            ForEach(HarnessRegistry.all.map(\.id), id: \.rawValue) { candidate in
+            ForEach(chat.availableHarnesses, id: \.rawValue) { candidate in
                 Button {
                     Task { await chat.switchHarness(to: candidate) }
                 } label: {

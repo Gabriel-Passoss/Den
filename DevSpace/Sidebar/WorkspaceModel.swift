@@ -30,15 +30,16 @@ final class WorkspaceModel {
     }
 
     var defaultHarness: HarnessID {
-        get { HarnessRegistry.preferred(in: defaults) }
-        set { HarnessRegistry.setPreferred(newValue, in: defaults) }
+        get { registry.preferred(in: defaults) }
+        set { registry.setPreferred(newValue, in: defaults) }
     }
 
-    var availableHarnesses: [HarnessID] { HarnessRegistry.all.map(\.id) }
+    var availableHarnesses: [HarnessID] { registry.ids }
 
     private let store: FileTranscriptStore
     private let defaults: UserDefaults
     private let cache: SessionCache
+    private let registry: HarnessRegistry
     private var chats: [UUID: ChatModel] = [:]
     private var legacyPathToFolder: [String: String] = [:]
 
@@ -52,13 +53,16 @@ final class WorkspaceModel {
         let root = URL.applicationSupportDirectory.appending(path: "DevSpace/sessions")
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return WorkspaceModel(store: FileTranscriptStore(root: root),
-                              defaults: .standard, cache: .standard)
+                              defaults: .standard, cache: .standard,
+                              registry: .standard)
     }
 
-    init(store: FileTranscriptStore, defaults: UserDefaults, cache: SessionCache) {
+    init(store: FileTranscriptStore, defaults: UserDefaults, cache: SessionCache,
+         registry: HarnessRegistry = .standard) {
         self.store = store
         self.defaults = defaults
         self.cache = cache
+        self.registry = registry
 
         if let data = defaults.data(forKey: Self.foldersKey),
            let decoded = try? JSONDecoder().decode([Folder].self, from: data) {
@@ -261,7 +265,8 @@ final class WorkspaceModel {
             workingDirectory = summary.workingDirectory
         }
         let chat = ChatModel(store: store, workingDirectory: workingDirectory,
-                             harness: harness ?? defaultHarness, cache: cache)
+                             harness: harness ?? defaultHarness, cache: cache,
+                             registry: registry)
         adopt(chat)
         await chat.persistMetadata()
         if let folderID { membership[chat.sessionID.uuidString] = folderID }
@@ -278,7 +283,8 @@ final class WorkspaceModel {
             return
         }
         guard let session = try? await store.load(id) else { return }
-        let chat = ChatModel(store: store, restoring: session, cache: cache)
+        let chat = ChatModel(store: store, restoring: session, cache: cache,
+                             registry: registry)
         adopt(chat)
         chats[id] = chat
     }

@@ -31,6 +31,6 @@ struct HarnessBadge: View {
     }
 
     nonisolated static func name(for harness: HarnessID) -> String {
-        HarnessRegistry.displayName(for: harness)
+        HarnessRegistry.standard.displayName(for: harness)
     }
 }

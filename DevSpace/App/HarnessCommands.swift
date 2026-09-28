@@ -10,7 +10,7 @@ struct HarnessCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Harness") {
-            ForEach(HarnessRegistry.all.map(\.id), id: \.rawValue) { candidate in
+            ForEach(chat?.availableHarnesses ?? HarnessRegistry.standard.ids, id: \.rawValue) { candidate in
                 Button {
                     Task { await chat?.switchHarness(to: candidate) }
                 } label: {

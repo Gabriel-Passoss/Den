@@ -83,12 +83,15 @@ final class ChatModel {
 
     private var settings: [String: String] = [:]
 
-    var harnessName: String { HarnessRegistry.displayName(for: harness) }
+    var harnessName: String { registry.displayName(for: harness) }
+
+    var availableHarnesses: [HarnessID] { registry.ids }
 
     func knob(_ id: String) -> HarnessKnob? { knobs.first { $0.id == id } }
 
     private let store: FileTranscriptStore
     private let cache: SessionCache
+    private let registry: HarnessRegistry
     private var session: (any HarnessSession)?
     private var consumer: Task<Void, Never>?
     private var hasTitle = false
@@ -109,10 +112,12 @@ final class ChatModel {
     // MARK: - Creation
 
     init(store: FileTranscriptStore, workingDirectory: URL,
-         harness: HarnessID? = nil, cache: SessionCache = .standard) {
+         harness: HarnessID? = nil, cache: SessionCache = .standard,
+         registry: HarnessRegistry = .standard) {
         self.store = store
         self.cache = cache
-        let harness = harness ?? HarnessRegistry.preferred
+        self.registry = registry
+        let harness = harness ?? registry.fallback
         let id = UUID()
         self.sessionID = id
         self.title = "Nova sessão"
@@ -128,19 +133,21 @@ final class ChatModel {
     }
 
     init(store: FileTranscriptStore, restoring session: Session,
-         cache: SessionCache = .standard) {
+         cache: SessionCache = .standard,
+         registry: HarnessRegistry = .standard) {
         self.store = store
         self.cache = cache
+        self.registry = registry
         self.sessionID = session.id
         self.segments = session.segments.isEmpty
-            ? [Segment(harness: HarnessRegistry.fallback, harnessSessionID: "", model: "")]
+            ? [Segment(harness: registry.fallback, harnessSessionID: "", model: "")]
             : session.segments.map { var bare = $0; bare.entries = []; return bare }
         self.title = session.title
         self.workingDirectory = session.workingDirectory
         self.model = session.segments.last?.model ?? ""
         self.hasTitle = true
         self.harnessSessionID = session.segments.last?.harnessSessionID ?? ""
-        self.harness = session.segments.last?.harness ?? HarnessRegistry.fallback
+        self.harness = session.segments.last?.harness ?? registry.fallback
         self.isRestored = true
         self.status = "fria"
         restorePreferences()
@@ -186,7 +193,7 @@ final class ChatModel {
 
     func start() async {
         guard session == nil else { return }
-        guard let adapter = HarnessRegistry.harness(for: harness) else {
+        guard let adapter = registry.harness(for: harness) else {
             status = "falhou: harness desconhecido"
             append(.notice, "não conheço o harness \(harness.rawValue)")
             return
@@ -385,7 +392,7 @@ final class ChatModel {
     }
 
     private func loadKnobs() {
-        guard let adapter = HarnessRegistry.harness(for: harness) else { return }
+        guard let adapter = registry.harness(for: harness) else { return }
 
         var discovered = adapter.knobs(for: HarnessInstallation(executable: "", version: ""),
                                        workingDirectory: workingDirectory)
@@ -424,12 +431,12 @@ final class ChatModel {
     }
 
     var canSwitchHarness: Bool {
-        !isBusy && HarnessRegistry.all.count > 1
+        !isBusy && registry.harnesses.count > 1
     }
 
     func switchHarness(to newHarness: HarnessID) async {
         guard newHarness != harness,
-              HarnessRegistry.harness(for: newHarness) != nil else { return }
+              registry.harness(for: newHarness) != nil else { return }
 
         let seed = HandoffSeed.make(entries)
         await stop()
@@ -476,7 +483,7 @@ final class ChatModel {
     }
 
     private func generateTitle(from text: String) {
-        guard let adapter = HarnessRegistry.harness(for: harness) else { return }
+        guard let adapter = registry.harness(for: harness) else { return }
         let instruction = "Gere um título curto (3 a 5 palavras, sem aspas e sem "
             + "ponto final) que resuma o pedido a seguir, na mesma língua dele. "
             + "Responda somente o título.\n\nPedido: \(text.prefix(600))"

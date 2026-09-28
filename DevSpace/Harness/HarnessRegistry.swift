@@ -3,34 +3,32 @@ import HarnessCore
 import ClaudeHarness
 import OpenCodeHarness
 
-nonisolated enum HarnessRegistry {
+nonisolated struct HarnessRegistry {
+    let harnesses: [any Harness]
 
-    static let all: [any Harness] = [ClaudeCodeHarness(), OpenCodeHarness()]
+    static let standard = HarnessRegistry(harnesses: [ClaudeCodeHarness(), OpenCodeHarness()])
 
-    static let fallback: HarnessID = .claudeCode
+    var ids: [HarnessID] { harnesses.map(\.id) }
 
-    static func harness(for id: HarnessID) -> (any Harness)? {
-        all.first { $0.id == id }
+    var fallback: HarnessID { harnesses.first?.id ?? .claudeCode }
+
+    func harness(for id: HarnessID) -> (any Harness)? {
+        harnesses.first { $0.id == id }
     }
 
-    static func displayName(for id: HarnessID) -> String {
+    func displayName(for id: HarnessID) -> String {
         harness(for: id)?.displayName ?? id.rawValue
     }
 
     private static let defaultKey = "DevSpace.defaultHarness"
 
-    static func preferred(in defaults: UserDefaults) -> HarnessID {
-        guard let raw = defaults.string(forKey: defaultKey) else { return fallback }
+    func preferred(in defaults: UserDefaults) -> HarnessID {
+        guard let raw = defaults.string(forKey: Self.defaultKey) else { return fallback }
         let id = HarnessID(rawValue: raw)
         return harness(for: id) == nil ? fallback : id
     }
 
-    static func setPreferred(_ harness: HarnessID, in defaults: UserDefaults) {
-        defaults.set(harness.rawValue, forKey: defaultKey)
-    }
-
-    static var preferred: HarnessID {
-        get { preferred(in: .standard) }
-        set { setPreferred(newValue, in: .standard) }
+    func setPreferred(_ harness: HarnessID, in defaults: UserDefaults) {
+        defaults.set(harness.rawValue, forKey: Self.defaultKey)
     }
 }

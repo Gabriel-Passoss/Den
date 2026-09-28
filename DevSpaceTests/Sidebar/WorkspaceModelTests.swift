@@ -391,7 +391,7 @@ import HarnessCore
 
 @Test func theDefaultHarnessRoundTripsThroughTheInjectedDefaults() async throws {
     try await withWorkspace { harness in
-        #expect(harness.model.defaultHarness == HarnessRegistry.fallback)
+        #expect(harness.model.defaultHarness == HarnessRegistry.standard.fallback)
 
         let target = try #require(harness.model.availableHarnesses.last)
         harness.model.defaultHarness = target
@@ -407,6 +407,6 @@ import HarnessCore
     try await withWorkspace(seed: { defaults in
         defaults.set("ghost-harness", forKey: "DevSpace.defaultHarness")
     }) { harness in
-        #expect(harness.model.defaultHarness == HarnessRegistry.fallback)
+        #expect(harness.model.defaultHarness == HarnessRegistry.standard.fallback)
     }
 }
