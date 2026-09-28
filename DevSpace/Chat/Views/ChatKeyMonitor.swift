@@ -10,7 +10,6 @@ struct ZoomedImage: Identifiable, Equatable {
 
 @Observable final class ChatKeyMonitor {
     var escArmed = false
-    var composerFocused = false
 
     private var monitor: Any?
     private var escDisarm: Task<Void, Never>?
@@ -21,12 +20,6 @@ struct ZoomedImage: Identifiable, Equatable {
         remove()
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
-            if event.keyCode == 36, event.modifierFlags.contains(.shift),
-               let editor = NSApp.keyWindow?.firstResponder as? NSTextView,
-               editor.isFieldEditor {
-                editor.insertNewlineIgnoringFieldEditor(nil)
-                return nil
-            }
             let slashMatches = slash.matches(prompt: chat.prompt,
                                                   catalog: chat.catalog)
             if !slashMatches.isEmpty {
@@ -111,11 +104,6 @@ struct ZoomedImage: Identifiable, Equatable {
                 let images = Self.pasteboardImages()
                 if !images.isEmpty {
                     for data in images { chat.attach(imageData: data) }
-                    return nil
-                }
-                if composerFocused,
-                   let text = NSPasteboard.general.string(forType: .string),
-                   chat.capturePaste(text) {
                     return nil
                 }
             }

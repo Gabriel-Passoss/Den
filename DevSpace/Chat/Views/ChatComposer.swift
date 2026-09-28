@@ -9,7 +9,7 @@ struct ChatComposer: View {
     let keys: ChatKeyMonitor
     var stickToBottom: () -> Void
 
-    @FocusState private var focused: Bool
+    @State private var focusRequested = false
 
     var body: some View {
         VStack(spacing: 7) {
@@ -20,13 +20,17 @@ struct ChatComposer: View {
                 pendingAttachmentRow
             }
 
-            TextField("Peça uma alteração…", text: $chat.prompt, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...6)
-                .font(.system(size: 13))
-                .focused($focused)
-                .onChange(of: focused, initial: true) { keys.composerFocused = focused }
-                .onSubmit { submit() }
+            ComposerTextView(text: $chat.prompt, focusRequested: $focusRequested,
+                             onSubmit: submit,
+                             onPaste: { chat.capturePaste($0) })
+                .overlay(alignment: .topLeading) {
+                    if chat.prompt.isEmpty {
+                        Text("Peça uma alteração…")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color(nsColor: .placeholderTextColor))
+                            .allowsHitTesting(false)
+                    }
+                }
 
             HStack(spacing: 8) {
                 ForEach(chat.knobs.filter { $0.category == .mode }) { KnobBadge(knob: $0, chat: chat) }
@@ -205,7 +209,7 @@ struct ChatComposer: View {
     private func pasteChip(_ paste: PastedText) -> some View {
         Button {
             chat.expandPaste(paste.id)
-            focused = true
+            focusRequested = true
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
