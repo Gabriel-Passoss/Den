@@ -61,6 +61,8 @@ final class ChatModel {
 
     var pendingAttachments: [PendingAttachment] = []
 
+    var pendingPastes: [PastedText] = []
+
     var pendingQuestion: QuestionPrompt?
 
     var branch: String?
@@ -70,7 +72,7 @@ final class ChatModel {
     }
 
     func run(command: String) async {
-        await send(text: command)
+        await send(text: command, keepingPastes: true)
     }
 
     private(set) var harness: HarnessID
@@ -244,6 +246,27 @@ final class ChatModel {
         pendingAttachments.removeAll { $0.id == id }
     }
 
+    @discardableResult
+    func capturePaste(_ text: String) -> Bool {
+        guard LongText.isLong(text) else { return false }
+        pendingPastes.append(PastedText(text: text))
+        return true
+    }
+
+    func removePaste(_ id: UUID) {
+        pendingPastes.removeAll { $0.id == id }
+    }
+
+    func expandPaste(_ id: UUID) {
+        guard let index = pendingPastes.firstIndex(where: { $0.id == id }) else { return }
+        let text = pendingPastes.remove(at: index).text
+        if prompt.isEmpty || prompt.last?.isNewline == true {
+            prompt += text
+        } else {
+            prompt += "\n" + text
+        }
+    }
+
     private static var attachmentsRoot: URL {
         URL.applicationSupportDirectory.appending(path: "DevSpace/attachments")
     }
@@ -262,11 +285,15 @@ final class ChatModel {
                           path: file.path, raw: .object(raw))
     }
 
-    func send(text explicit: String? = nil) async {
-        let text = (explicit ?? prompt).trimmingCharacters(in: .whitespacesAndNewlines)
+    func send(text explicit: String? = nil, keepingPastes: Bool = false) async {
+        let typed = (explicit ?? prompt).trimmingCharacters(in: .whitespacesAndNewlines)
+        let pastes = keepingPastes ? [] : pendingPastes
+        let pasted = pastes.map { $0.text.trimmingCharacters(in: .newlines) }
+        let text = ([typed] + pasted).filter { !$0.isEmpty }.joined(separator: "\n\n")
         let attached = pendingAttachments
         guard !text.isEmpty || !attached.isEmpty else { return }
         prompt = ""
+        if !keepingPastes { pendingPastes = [] }
         pendingAttachments = []
         if session == nil { await start() }
         guard let session else { return }
