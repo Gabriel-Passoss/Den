@@ -1,14 +1,9 @@
 import SwiftUI
-import AppKit
 
 struct InlineCode: TextAttribute {
     static let padding: CGFloat = 3
 
-    static let color = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            ? NSColor(srgbRed: 0.96, green: 0.49, blue: 0.45, alpha: 1)
-            : NSColor(srgbRed: 0.76, green: 0.22, blue: 0.20, alpha: 1)
-    })
+    static let color = Color(.inlineCode)
 
     struct Segment {
         var content: AttributedString
@@ -92,8 +87,8 @@ struct InlineCodeRenderer: TextRenderer {
             let runs = line.map { (bounds: $0.typographicBounds.rect, isCode: $0[InlineCode.self] != nil) }
             for rect in InlineCode.pills(in: runs) {
                 let pill = RoundedRectangle(cornerRadius: 4, style: .continuous).path(in: rect)
-                context.fill(pill, with: .color(.primary.opacity(0.06)))
-                context.stroke(pill, with: .color(.primary.opacity(0.13)), lineWidth: 0.5)
+                context.fill(pill, with: .color(InlineCode.color.opacity(0.10)))
+                context.stroke(pill, with: .color(InlineCode.color.opacity(0.25)), lineWidth: 0.5)
             }
         }
         for line in layout {
