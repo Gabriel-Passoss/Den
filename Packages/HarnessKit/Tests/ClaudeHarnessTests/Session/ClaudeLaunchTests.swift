@@ -32,9 +32,9 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
     #expect(launch.executable == "/opt/homebrew/bin/claude")
 }
 
-@Test func theEnvironmentAnnouncesDevSpaceAsTheEntrypoint() {
+@Test func theEnvironmentAnnouncesDenAsTheEntrypoint() {
     let launch = ClaudeLaunch.make(installation: install, workingDirectory: cwd, session: .fresh(sessionID: session))
-    #expect(launch.environment["CLAUDE_CODE_ENTRYPOINT"] == "devspace")
+    #expect(launch.environment["CLAUDE_CODE_ENTRYPOINT"] == "den")
 }
 
 // MARK: - SessionStart
