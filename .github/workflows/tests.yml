@@ -1,0 +1,79 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+# CI builds with the newest stable Xcode the runner image has, and without the team's
+# signing identity, so everything is signed ad hoc.
+env:
+  SIGNING: CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
+
+jobs:
+  harnesskit:
+    name: HarnessKit
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Test the package
+        run: swift test --package-path Packages/HarnessKit
+
+  app:
+    name: App (unit + pipeline E2E)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Test the app
+        run: |
+          xcodebuild test \
+            -project DevSpace.xcodeproj -scheme DevSpace \
+            -destination 'platform=macOS' \
+            -resultBundlePath build/app.xcresult \
+            $SIGNING
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: app-xcresult
+          path: build/app.xcresult
+
+  ui:
+    name: UI (XCUITest)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      # Under sudo the tool asks for root's password and waits forever, so run
+      # it as the runner's user, bounded, and let the UI tests report the rest.
+      - name: Allow UI automation without a password prompt
+        run: automationmodetool enable-automationmode-without-authentication < /dev/null
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: Test the UI
+        run: |
+          xcodebuild test \
+            -project DevSpace.xcodeproj -scheme DevSpaceUITests \
+            -destination 'platform=macOS' \
+            -resultBundlePath build/ui.xcresult \
+            $SIGNING
+      # A failing UI test attaches the accessibility tree; read it from here.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: ui-xcresult
+          path: build/ui.xcresult

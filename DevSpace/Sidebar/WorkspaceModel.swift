@@ -40,6 +40,7 @@ final class WorkspaceModel {
     private let defaults: UserDefaults
     private let cache: SessionCache
     private let registry: HarnessRegistry
+    private let attachmentsRoot: URL
     private var chats: [UUID: ChatModel] = [:]
     private var legacyPathToFolder: [String: String] = [:]
 
@@ -49,20 +50,26 @@ final class WorkspaceModel {
     private static let legacyFoldersKey = "DevSpace.folders"
     private static let legacyNamesKey = "DevSpace.folderNames"
 
-    static func live() -> WorkspaceModel {
-        let root = URL.applicationSupportDirectory.appending(path: "DevSpace/sessions")
+    static func live(_ environment: LaunchEnvironment = .current) -> WorkspaceModel {
+        let root = environment.sessionsRoot
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        return WorkspaceModel(store: FileTranscriptStore(root: root),
-                              defaults: .standard, cache: .standard,
-                              registry: .standard)
+        let workspace = WorkspaceModel(store: FileTranscriptStore(root: root),
+                                       defaults: environment.defaults,
+                                       cache: SessionCache(defaults: environment.defaults),
+                                       registry: environment.registry,
+                                       attachmentsRoot: environment.attachmentsRoot)
+        workspace.workingDirectory = environment.workingDirectory
+        return workspace
     }
 
     init(store: FileTranscriptStore, defaults: UserDefaults, cache: SessionCache,
-         registry: HarnessRegistry = .standard) {
+         registry: HarnessRegistry = .standard,
+         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
         self.defaults = defaults
         self.cache = cache
         self.registry = registry
+        self.attachmentsRoot = attachmentsRoot
 
         if let data = defaults.data(forKey: Self.foldersKey),
            let decoded = try? JSONDecoder().decode([Folder].self, from: data) {
@@ -266,7 +273,7 @@ final class WorkspaceModel {
         }
         let chat = ChatModel(store: store, workingDirectory: workingDirectory,
                              harness: harness ?? defaultHarness, cache: cache,
-                             registry: registry)
+                             registry: registry, attachmentsRoot: attachmentsRoot)
         adopt(chat)
         await chat.persistMetadata()
         if let folderID { membership[chat.sessionID.uuidString] = folderID }
@@ -284,7 +291,7 @@ final class WorkspaceModel {
         }
         guard let session = try? await store.load(id) else { return }
         let chat = ChatModel(store: store, restoring: session, cache: cache,
-                             registry: registry)
+                             registry: registry, attachmentsRoot: attachmentsRoot)
         adopt(chat)
         chats[id] = chat
     }

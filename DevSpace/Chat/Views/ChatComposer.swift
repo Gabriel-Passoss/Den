@@ -11,6 +11,8 @@ struct ChatComposer: View {
 
     @State private var focusRequested = false
 
+    private static let placeholder = "Peça uma alteração…"
+
     var body: some View {
         VStack(spacing: 7) {
             slashSuggestions
@@ -21,11 +23,12 @@ struct ChatComposer: View {
             }
 
             ComposerTextView(text: $chat.prompt, focusRequested: $focusRequested,
+                             placeholder: Self.placeholder,
                              onSubmit: submit,
                              onPaste: { chat.capturePaste($0) })
                 .overlay(alignment: .topLeading) {
                     if chat.prompt.isEmpty {
-                        Text("Peça uma alteração…")
+                        Text(Self.placeholder)
                             .font(.system(size: 13))
                             .foregroundStyle(Color(nsColor: .placeholderTextColor))
                             .allowsHitTesting(false)

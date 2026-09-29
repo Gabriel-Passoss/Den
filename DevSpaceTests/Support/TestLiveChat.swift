@@ -8,6 +8,7 @@ struct LiveChatHarness {
     let chat: ChatModel
     let harness: FakeHarness
     let others: [FakeHarness]
+    let attachments: URL
 
     var session: FakeSession { harness.session }
     var log: HarnessLog { harness.log }
@@ -22,24 +23,25 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
     var harness = FakeHarness()
     configure(&harness)
 
-    let suite = "DevSpaceTests." + UUID().uuidString
-    guard let defaults = UserDefaults(suiteName: suite) else {
-        fatalError("could not create suite \(suite)")
-    }
+    let scratch = ScratchDefaults()
+    let defaults = scratch.defaults
     let root = FileManager.default.temporaryDirectory
         .appending(path: "DevSpaceTests-" + UUID().uuidString)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer {
-        defaults.removePersistentDomain(forName: suite)
+        scratch.remove()
         try? FileManager.default.removeItem(at: root)
     }
 
+    let attachments = root.appending(path: "attachments")
     let chat = ChatModel(store: FileTranscriptStore(root: root),
                          workingDirectory: root,
                          harness: harness.id,
                          cache: SessionCache(defaults: defaults),
-                         registry: HarnessRegistry(harnesses: [harness] + others))
-    try await body(LiveChatHarness(chat: chat, harness: harness, others: others))
+                         registry: HarnessRegistry(harnesses: [harness] + others),
+                         attachmentsRoot: attachments)
+    try await body(LiveChatHarness(chat: chat, harness: harness, others: others,
+                                   attachments: attachments))
 }
 
 /// The update stream is consumed by a detached task, so assertions about events
@@ -47,12 +49,15 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
 /// patience is a failure, not a quiet return — otherwise the wait reads like an
 /// assertion while proving nothing.
 @MainActor
-func settle(until reached: @MainActor () -> Bool,
+func settle(within patience: Duration = .seconds(1),
+            until reached: @MainActor () -> Bool,
             sourceLocation: SourceLocation = #_sourceLocation) async {
-    for _ in 0..<200 {
+    let deadline = ContinuousClock.now + patience
+    while ContinuousClock.now < deadline {
         if reached() { return }
         try? await Task.sleep(for: .milliseconds(5))
     }
+    if reached() { return }
     Issue.record("the stream never reached the expected state",
                  sourceLocation: sourceLocation)
 }

@@ -135,6 +135,22 @@ cat > /dev/null
     }
 }
 
+@Test func aCLIThatDiesBeforeAnsweringSaysWhy() async throws {
+    let channel = ACPChannel(transport: ProcessTransport())
+    let stream = try await channel.start(
+        launch("read l; echo 'Error: not logged in' >&2; exit 1"))
+    let drain = Task { for try await _ in stream {} }
+    defer { drain.cancel() }
+
+    let failure = ProcessTransport.ExitFailure(status: 1, standardError: "Error: not logged in\n")
+    await #expect(throws: failure) {
+        try await withTimeout(seconds: 3) { try await channel.send("initialize") }
+    }
+    await #expect(throws: failure) {
+        try await channel.send("session/new")
+    }
+}
+
 @Test func sendAfterStopIsRefused() async throws {
     let channel = ACPChannel(transport: ProcessTransport())
     _ = try await channel.start(launch(echoingAgent))

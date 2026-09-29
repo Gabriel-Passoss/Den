@@ -72,9 +72,72 @@ private func floodScript(writers: Int) -> String {
     try await withTimeout(seconds: 5) {
         let transport = ProcessTransport()
         let stream = try await transport.start(shellLaunch("exit 3"))
-        for try await _ in stream {}
+        do { for try await _ in stream {} } catch is ProcessTransport.ExitFailure {}
         let status = await transport.terminationStatus
         #expect(status == 3)
+    }
+}
+
+@Test func aFailingExitEndsTheStreamWithItsStatusAndStandardError() async throws {
+    try await withTimeout(seconds: 5) {
+        let transport = ProcessTransport()
+        let stream = try await transport.start(shellLaunch(
+            #"printf '{"a":1}\n'; echo 'Error: invalid API key' >&2; exit 1"#))
+
+        var received: [String] = []
+        var failure: (any Error)?
+        do {
+            for try await line in stream { received.append(String(decoding: line, as: UTF8.self)) }
+        } catch {
+            failure = error
+        }
+
+        #expect(received == [#"{"a":1}"#])
+        #expect(failure as? ProcessTransport.ExitFailure
+                == ProcessTransport.ExitFailure(status: 1, standardError: "Error: invalid API key\n"))
+        #expect(failure.map { String(describing: $0) }
+                == "o CLI saiu com código 1: Error: invalid API key")
+    }
+}
+
+@Test func aCLIKilledByASignalItDidNotAskForSaysSo() async throws {
+    try await withTimeout(seconds: 5) {
+        let transport = ProcessTransport()
+        let stream = try await transport.start(shellLaunch("kill -9 $$"))
+
+        var failure: (any Error)?
+        do { for try await _ in stream {} } catch { failure = error }
+
+        #expect(failure as? ProcessTransport.ExitFailure
+                == ProcessTransport.ExitFailure(status: SIGKILL, standardError: "", signaled: true))
+        #expect(failure.map { String(describing: $0) } == "o CLI foi encerrado pelo sinal 9")
+    }
+}
+
+@Test func stoppingEndsCleanlyEvenWhenTheCLIExitsWithAFailure() async throws {
+    try await withTimeout(seconds: 5) {
+        let transport = ProcessTransport()
+        let stream = try await transport.start(
+            shellLaunch(#"trap 'exit 3' TERM; printf '{"armed":1}\n'; while :; do sleep 0.05; done"#))
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+
+        await transport.terminate()
+
+        while try await iterator.next() != nil {}
+        #expect(await transport.terminationStatus == 3)
+    }
+}
+
+@Test func aFailingExitWithNothingOnStandardErrorStillSaysSo() async throws {
+    try await withTimeout(seconds: 5) {
+        let transport = ProcessTransport()
+        let stream = try await transport.start(shellLaunch("exit 2"))
+
+        var failure: (any Error)?
+        do { for try await _ in stream {} } catch { failure = error }
+
+        #expect(failure.map { String(describing: $0) } == "o CLI saiu com código 2")
     }
 }
 

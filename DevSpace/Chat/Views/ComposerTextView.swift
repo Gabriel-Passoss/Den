@@ -4,6 +4,8 @@ import AppKit
 struct ComposerTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var focusRequested: Bool
+    /// Drawn over the view by the caller; given here so VoiceOver reads it.
+    var placeholder: String
     var onSubmit: () -> Void
     var onPaste: (String) -> Bool
 
@@ -44,6 +46,7 @@ struct ComposerTextView: NSViewRepresentable {
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
                                   height: .greatestFiniteMagnitude)
         textView.layoutManager?.allowsNonContiguousLayout = true
+        textView.setAccessibilityPlaceholderValue(placeholder)
         textView.string = text
 
         let scrollView = NSScrollView()

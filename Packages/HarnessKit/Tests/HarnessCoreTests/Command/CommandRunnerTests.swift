@@ -11,3 +11,28 @@ import HarnessTestSupport
     }
     #expect(output.trimmingCharacters(in: .whitespacesAndNewlines) == "done")
 }
+
+@Test func manyShortRunsAtOnceAllComeBack() async throws {
+    // Each run finishes on three events (exit, and the end of both pipes) in
+    // whatever order they come; every run must come back exactly once.
+    let runner = SystemCommandRunner()
+    let outputs = try await withTimeout(seconds: 30) {
+        try await withThrowingTaskGroup(of: String.self) { group in
+            for _ in 0..<100 {
+                group.addTask { try await runner.run("/bin/echo", ["ok"]) }
+            }
+            return try await group.reduce(into: [String]()) { $0.append($1) }
+        }
+    }
+    #expect(outputs.count == 100)
+    #expect(Set(outputs) == ["ok\n"])
+}
+
+@Test func aFailingRunReportsItsStatusAndStderr() async throws {
+    let runner = SystemCommandRunner()
+    await #expect(throws: CommandFailure(exitCode: 4, stderr: "nope\n")) {
+        try await withTimeout(seconds: 5) {
+            try await runner.run("/bin/sh", ["-c", "echo nope >&2; exit 4"])
+        }
+    }
+}
