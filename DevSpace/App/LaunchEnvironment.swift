@@ -69,8 +69,10 @@ struct LaunchEnvironment {
         shell.executableURL = URL(fileURLWithPath: "/bin/sh")
         shell.arguments = ["-c", script]
         shell.currentDirectoryURL = directory
+        let finished = DispatchSemaphore(value: 0)
+        shell.terminationHandler = { _ in finished.signal() }
         guard (try? shell.run()) != nil else { return }
-        shell.waitUntilExit()
+        finished.wait()
     }
 }
 
