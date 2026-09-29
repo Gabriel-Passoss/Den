@@ -11,6 +11,8 @@ import HarnessCore
             == URL.applicationSupportDirectory.appending(path: "DevSpace/sessions"))
     #expect(environment.attachmentsRoot == ChatModel.standardAttachmentsRoot)
     #expect(environment.workingDirectory.path == NSHomeDirectory())
+    #expect(environment.runConfigurationsFile
+            == URL.applicationSupportDirectory.appending(path: "DevSpace/run-configurations.json"))
     #expect(environment.registry.ids == HarnessRegistry.standard.ids)
 }
 
@@ -24,6 +26,7 @@ import HarnessCore
     #expect(environment.sessionsRoot.path.hasPrefix(root.path))
     #expect(environment.attachmentsRoot.path.hasPrefix(root.path))
     #expect(environment.workingDirectory.path.hasPrefix(root.path))
+    #expect(environment.runConfigurationsFile.path.hasPrefix(root.path))
     #expect(FileManager.default.fileExists(atPath: environment.workingDirectory.path))
     #expect(environment.defaults != .standard)
 }

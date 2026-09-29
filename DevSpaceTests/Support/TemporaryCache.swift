@@ -1,10 +1,14 @@
 import Foundation
 @testable import DevSpace
 
-func withTemporaryCache(_ body: (SessionCache) throws -> Void) rethrows {
+func withTemporaryDefaults(_ body: (UserDefaults) throws -> Void) rethrows {
     let scratch = ScratchDefaults()
     defer { scratch.remove() }
-    try body(SessionCache(defaults: scratch.defaults))
+    try body(scratch.defaults)
+}
+
+func withTemporaryCache(_ body: (SessionCache) throws -> Void) rethrows {
+    try withTemporaryDefaults { try body(SessionCache(defaults: $0)) }
 }
 
 let scratchCache: SessionCache = {
