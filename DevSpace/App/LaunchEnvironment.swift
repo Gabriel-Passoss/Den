@@ -5,8 +5,7 @@ import HarnessCore
 /// the real places. In Debug builds, UI tests set `DEVSPACE_UI_TEST_ROOT` so a
 /// run touches none of the user's sessions, attachments or preferences, and
 /// under that root `DEVSPACE_CLI_<harness id>` runs a fake CLI in place of the
-/// real one and `DEVSPACE_PROJECT_SETUP` is a shell script that fills the
-/// project folder. This file is the app's only test hook.
+/// real one. This file is the app's only test hook.
 struct LaunchEnvironment {
     static let rootKey = "DEVSPACE_UI_TEST_ROOT"
     static let cliKeyPrefix = "DEVSPACE_CLI_"
@@ -54,8 +53,6 @@ struct LaunchEnvironment {
             defaults.removePersistentDomain(forName: Self.testDefaultsSuite)
         }
 
-        // The runner cannot write where the app reads, so a test that needs
-        // files in the project sends a script, run once when the folder is new.
         let isNewProject = !FileManager.default.fileExists(atPath: workingDirectory.path)
         try? FileManager.default.createDirectory(at: workingDirectory,
                                                  withIntermediateDirectories: true)

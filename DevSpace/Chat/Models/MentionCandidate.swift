@@ -5,8 +5,6 @@ nonisolated struct MentionCandidate: Identifiable {
     let isDirectory: Bool
     var id: String { path }
 
-    /// The path as `searchable` spells it, in UTF-8, and where its file name
-    /// starts: worked out once, so a keystroke only compares bytes.
     private let key: [UInt8]
     private let nameStart: Int
 
@@ -17,14 +15,10 @@ nonisolated struct MentionCandidate: Identifiable {
         nameStart = key.lastIndex(of: UInt8(ascii: "/")).map { $0 + 1 } ?? 0
     }
 
-    /// Lowercased and composed, since a name on disk is often decomposed while
-    /// the keyboard types composed accents.
     static func searchable(_ text: String) -> String {
         text.lowercased().precomposedStringWithCanonicalMapping
     }
 
-    /// 0 when the file name starts with `query`, 1 when the name holds it, 2
-    /// when only the path does.
     func rank(for query: [UInt8]) -> Int? {
         if let hit = offset(of: query, from: nameStart) { return hit == nameStart ? 0 : 1 }
         return offset(of: query, from: 0) == nil ? nil : 2

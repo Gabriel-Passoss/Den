@@ -3,12 +3,6 @@ import Foundation
 import HarnessCore
 @testable import DevSpace
 
-// Mentions against real projects on disk the size of a web app and a Java
-// service side by side, where an index that runs out of room loses whole
-// folders and deep files.
-
-/// More entries than the index held before it skipped build output and
-/// duplicate checkouts.
 private let bigFolderSize = 4100
 
 private func makeBigProject(in project: URL) throws {
@@ -26,7 +20,6 @@ private func makeBigProject(in project: URL) throws {
 }
 
 private func git(_ arguments: [String], in directory: URL) async throws {
-    // The user's own config must not leak in: no signing, no hooks.
     _ = try await SystemCommandRunner().run("/usr/bin/git", [
         "-C", directory.path, "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
         "-c", "user.name=DevSpace Tests", "-c", "user.email=tests@devspace.invalid",
@@ -36,8 +29,6 @@ private func git(_ arguments: [String], in directory: URL) async throws {
 private let deepSource =
     "orders-api/orders-domain/src/main/java/com/example/orders/OrderRepository.java"
 
-/// A backend the way it sits in a multi-repo folder: more sources than the old
-/// limit, Maven's `target/`, and a worktree checked out for another branch.
 private func makeBackendWithWorktree(in project: URL) async throws {
     let files = FileManager.default
     let backend = project.appending(path: "orders-api")

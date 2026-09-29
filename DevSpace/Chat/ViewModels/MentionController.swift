@@ -21,8 +21,6 @@ import Observation
         guard !dismissed, let query = query(in: prompt) else { return [] }
         guard !query.isEmpty else { return Array(fileIndex.prefix(8)) }
         let needle = Array(MentionCandidate.searchable(query).utf8)
-        // Best rank first, index order within a rank. Eight hits of the best
-        // rank are the answer, so the walk stops there.
         var ranks: [[MentionCandidate]] = [[], [], []]
         for candidate in fileIndex {
             guard let rank = candidate.rank(for: needle), ranks[rank].count < 8 else { continue }
@@ -49,10 +47,6 @@ import Observation
         }.value
     }
 
-    /// Walks one level at a time, so when the limit cuts in it drops the
-    /// deepest entries. A depth-first walk spent it all inside the first big
-    /// folder and never reached the ones beside it. Build output and extra
-    /// checkouts of a repo stay out, so the limit goes to sources.
     nonisolated static func indexFiles(under root: URL, limit: Int = 25_000) -> [MentionCandidate] {
         let skip: Set<String> = ["node_modules", ".git", ".build", "DerivedData",
                                  ".next", "dist", "build", "Pods", ".venv", "vendor",
@@ -93,9 +87,6 @@ import Observation
         return URL(fileURLWithPath: path, isDirectory: true)
     }
 
-    /// Whether `folder` is a `git worktree` of a repo inside `root`: the same
-    /// sources again on another branch. Its `.git` file points into the repo's
-    /// `.git/worktrees`; a submodule's points into `.git/modules` and stays.
     nonisolated private static func isWorktree(_ folder: URL, ofARepoUnder root: URL) -> Bool {
         let marker = folder.appending(path: ".git")
         var isFolder: ObjCBool = false

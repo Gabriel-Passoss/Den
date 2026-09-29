@@ -26,7 +26,6 @@ final class ConversationUITests: XCTestCase {
         openCode.remove()
     }
 
-    /// `projectSetup` is a shell script the app runs in its empty project folder.
     @MainActor
     private func launch(projectSetup: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
@@ -65,7 +64,6 @@ final class ConversationUITests: XCTestCase {
         app.outlines["Sidebar"].staticTexts[title]
     }
 
-    /// Opens a conversation from the empty window, with its composer focused.
     @MainActor
     private func openComposer(in app: XCUIApplication) -> XCUIElement {
         require(app.staticTexts["Nenhuma conversa aberta"], in: app)
@@ -135,8 +133,6 @@ final class ConversationUITests: XCTestCase {
 
     // MARK: - Mentions
 
-    /// A admin-web and a backend side by side, each with more entries than the
-    /// mention index once held.
     private let bigProject = """
         mkdir -p admin-web/src orders-api/src
         : > orders-api/pom.xml
@@ -147,8 +143,6 @@ final class ConversationUITests: XCTestCase {
         done
         """
 
-    /// A backend with more sources than the index once held, Maven's `target/`,
-    /// and a worktree of it whose `.git` file points back into the backend.
     private let backendWithWorktree = """
         java=orders-domain/src/main/java/com/example/orders
         for copy in orders-api worktrees/feature-1/orders-api; do
