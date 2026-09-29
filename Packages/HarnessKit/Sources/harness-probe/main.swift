@@ -151,11 +151,6 @@ case "record":
     }
     sigintSource.resume()
 
-    defer {
-        try? outputHandle?.close()
-        await transport.terminate()
-    }
-
     do {
 
         let stream = try await transport.start(ProcessTransport.Launch(
@@ -186,17 +181,21 @@ case "record":
 
         var writeFailure: (line: Int, error: any Error)?
 
-        for try await line in stream {
-            FileHandle.standardOutput.write(line + Data("\n".utf8))
-            guard let outputHandle else { continue }
-            do {
-                try outputHandle.write(contentsOf: line)
-                try outputHandle.write(contentsOf: Data("\n".utf8))
-                count += 1
-            } catch {
-                writeFailure = (count + 1, error)
-                break
+        do {
+            for try await line in stream {
+                FileHandle.standardOutput.write(line + Data("\n".utf8))
+                guard let outputHandle else { continue }
+                do {
+                    try outputHandle.write(contentsOf: line)
+                    try outputHandle.write(contentsOf: Data("\n".utf8))
+                    count += 1
+                } catch {
+                    writeFailure = (count + 1, error)
+                    break
+                }
             }
+        } catch is ProcessTransport.ExitFailure {
+            // The exit status is reported below, after the summary.
         }
 
         if let outputPath {
@@ -226,6 +225,8 @@ case "record":
         }
         exitCode = 70
     }
+    try? outputHandle?.close()
+    await transport.terminate()
 
 case "permission":
 
@@ -284,8 +285,6 @@ case "permission":
         }
     }
     permissionSigint.resume()
-
-    defer { await channel.stop() }
 
     do {
         let stream = try await channel.start(launch)
@@ -364,6 +363,7 @@ case "permission":
         }
         exitCode = 70
     }
+    await channel.stop()
 
 default:
     usage()
