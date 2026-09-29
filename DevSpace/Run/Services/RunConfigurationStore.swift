@@ -3,11 +3,6 @@ import Foundation
 nonisolated struct RunConfigurationStore: Sendable {
     let url: URL
 
-    static var live: RunConfigurationStore {
-        RunConfigurationStore(url: URL.applicationSupportDirectory
-            .appending(path: "DevSpace/run-configurations.json"))
-    }
-
     private struct File: Codable {
         var version: Int
         var projects: [String: [RunConfiguration]]
