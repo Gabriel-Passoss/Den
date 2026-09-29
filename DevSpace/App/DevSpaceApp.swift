@@ -5,6 +5,7 @@ struct DevSpaceApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .defaultAppStorage(LaunchEnvironment.current.defaults)
         }
 
         .commands { HarnessCommands() }

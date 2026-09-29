@@ -135,6 +135,19 @@ private func notices(_ chat: ChatModel) -> [String] {
     }
 }
 
+@Test func sentAttachmentsAreStoredUnderTheInjectedRoot() async throws {
+    try await withLiveChat { live in
+        live.chat.attach(imageData: Data([0x89, 0x50]))
+        live.chat.attach(fileData: Data("x".utf8), name: "notes.txt",
+                         mediaType: "text/plain")
+        await live.chat.send(text: "look")
+
+        let stored = try FileManager.default.contentsOfDirectory(
+            at: live.attachments, includingPropertiesForKeys: nil)
+        #expect(stored.map(\.pathExtension).sorted() == ["png", "txt"])
+    }
+}
+
 @Test func anAttachmentAloneIsEnoughToSend() async throws {
     try await withLiveChat { live in
         live.chat.attach(fileData: Data("x".utf8), name: "notes.txt",
@@ -265,6 +278,62 @@ private let modeKnob = HarnessKnob(
         #expect(await live.session.appliedKnobs.isEmpty)
         #expect(live.log.madeSessions == 2)
         #expect(await live.session.stops == 1)
+    }
+}
+
+private let effortKnob = HarnessKnob(
+    id: "effort", category: .effort, name: "Esforço", currentValue: "low",
+    options: [.init(value: "low", label: "Baixo"), .init(value: "high", label: "Alto")])
+
+@Test func effortRelaunchesWhenOnlyThePermissionModeCanChangeInPlace() async throws {
+    try await withLiveChat(configure: { harness in
+        harness.declaredCapabilities = HarnessCapabilities(canSetPermissionMode: true)
+        harness.declaredKnobs = [effortKnob]
+    }) { live in
+        await live.session.offer(knobs: [effortKnob])
+        await live.chat.start()
+
+        await live.chat.choose(knob: "effort", value: "high")
+
+        #expect(await live.session.appliedKnobs.isEmpty)
+        #expect(live.log.madeSessions == 2)
+        #expect(live.log.lastSettings["effort"] == "high")
+    }
+}
+
+@Test func effortIsAppliedInPlaceWhenTheHarnessCanChangeIt() async throws {
+    try await withLiveChat(configure: { harness in
+        harness.declaredCapabilities = HarnessCapabilities(canSetEffortInSession: true)
+        harness.declaredKnobs = [effortKnob]
+    }) { live in
+        await live.session.offer(knobs: [effortKnob])
+        await live.chat.start()
+
+        await live.chat.choose(knob: "effort", value: "high")
+
+        #expect(await live.session.appliedKnobs.map(\.id) == ["effort"])
+        #expect(live.log.madeSessions == 1)
+    }
+}
+
+@Test func aKnobChosenMidTurnRelaunchesOnceTheTurnEnds() async throws {
+    try await withLiveChat(configure: { harness in
+        harness.declaredCapabilities = HarnessCapabilities(canSetPermissionMode: false)
+        harness.declaredKnobs = [modeKnob]
+    }) { live in
+        await live.session.offer(knobs: [modeKnob])
+        await live.chat.send(text: "working")
+
+        await live.chat.choose(knob: "mode", value: "auto")
+        #expect(live.log.madeSessions == 1)
+
+        await live.session.emit(.entry(TranscriptEntry(
+            timestamp: Date(),
+            kind: .turnResult(TurnResult(usage: .zero, stopReason: "end_turn", isError: false)),
+            raw: .object([:]))))
+
+        await settle { live.log.madeSessions == 2 }
+        #expect(live.log.lastSettings["mode"] == "auto")
     }
 }
 

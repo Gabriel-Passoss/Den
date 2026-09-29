@@ -1,0 +1,5 @@
+#!/bin/sh
+# The OpenCode CLI as the UI tests' app sees it.
+FAKE_CLI_STATE="$DEVSPACE_UI_TEST_ROOT/cli/opencode" \
+FAKE_CLI_SCENARIO="$FAKE_CLI_SCENARIO_OPENCODE" \
+exec "$(dirname "$0")/fake-cli" "$@"

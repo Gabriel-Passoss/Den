@@ -92,6 +92,7 @@ final class ChatModel {
     private let store: FileTranscriptStore
     private let cache: SessionCache
     private let registry: HarnessRegistry
+    private let attachmentsRoot: URL
     private var session: (any HarnessSession)?
     private var consumer: Task<Void, Never>?
     private var hasTitle = false
@@ -113,10 +114,12 @@ final class ChatModel {
 
     init(store: FileTranscriptStore, workingDirectory: URL,
          harness: HarnessID? = nil, cache: SessionCache = .standard,
-         registry: HarnessRegistry = .standard) {
+         registry: HarnessRegistry = .standard,
+         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
         self.cache = cache
         self.registry = registry
+        self.attachmentsRoot = attachmentsRoot
         let harness = harness ?? registry.fallback
         let id = UUID()
         self.sessionID = id
@@ -134,10 +137,12 @@ final class ChatModel {
 
     init(store: FileTranscriptStore, restoring session: Session,
          cache: SessionCache = .standard,
-         registry: HarnessRegistry = .standard) {
+         registry: HarnessRegistry = .standard,
+         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
         self.cache = cache
         self.registry = registry
+        self.attachmentsRoot = attachmentsRoot
         self.sessionID = session.id
         self.segments = session.segments.isEmpty
             ? [Segment(harness: registry.fallback, harnessSessionID: "", model: "")]
@@ -193,6 +198,7 @@ final class ChatModel {
 
     func start() async {
         guard session == nil else { return }
+        relaunchAfterTurn = false
         guard let adapter = registry.harness(for: harness) else {
             status = "falhou: harness desconhecido"
             append(.notice, "não conheço o harness \(harness.rawValue)")
@@ -244,12 +250,12 @@ final class ChatModel {
         pendingAttachments.removeAll { $0.id == id }
     }
 
-    private static var attachmentsRoot: URL {
+    nonisolated static var standardAttachmentsRoot: URL {
         URL.applicationSupportDirectory.appending(path: "DevSpace/attachments")
     }
 
     private func persistAttachment(_ pending: PendingAttachment) -> Attachment? {
-        let root = Self.attachmentsRoot
+        let root = attachmentsRoot
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let ext = pending.isImage
             ? "png"
@@ -368,9 +374,8 @@ final class ChatModel {
         adopt(knob: id, value: value)
         persistPreferences()
 
-        let live = knob(id)?.category == .model
-            ? capabilities.canSetModelInSession
-            : capabilities.canSetPermissionMode
+        let live = knob(id).map { capabilities.canChangeInSession($0.category) }
+            ?? capabilities.canSetPermissionMode
 
         guard let session, live else {
             await relaunchIfIdle()
@@ -424,8 +429,15 @@ final class ChatModel {
             settings.compactMapValues { $0.isEmpty ? nil : $0 }, for: sessionID)
     }
 
+    /// A setting the running CLI cannot take waits for the turn in flight to
+    /// end, then relaunches it.
+    private var relaunchAfterTurn = false
+
     private func relaunchIfIdle() async {
-        guard !isBusy else { return }
+        guard !isBusy else {
+            relaunchAfterTurn = true
+            return
+        }
         if session != nil { await stop() }
         await start()
     }
@@ -654,6 +666,7 @@ final class ChatModel {
             turnStartedAt = nil
             compactingSince = nil
             resetStreaming()
+            if relaunchAfterTurn { Task { await relaunchIfIdle() } }
             if !result.isError { isRateLimited = false }
             if let tokens = result.contextTokens { contextTokens = tokens }
             if result.isError {
