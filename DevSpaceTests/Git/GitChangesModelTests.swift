@@ -2,17 +2,6 @@ import Testing
 import Foundation
 @testable import DevSpace
 
-private func makeTree(_ relativePaths: [String]) throws -> URL {
-    let root = FileManager.default.temporaryDirectory
-        .appending(path: "DevSpaceTests-" + UUID().uuidString)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    for path in relativePaths {
-        try FileManager.default.createDirectory(at: root.appending(path: path),
-                                                withIntermediateDirectories: true)
-    }
-    return root
-}
-
 private func names(_ roots: [URL], under base: URL) -> [String] {
     roots.map { String($0.path.dropFirst(base.standardizedFileURL.path.count)
         .drop(while: { $0 == "/" })) }

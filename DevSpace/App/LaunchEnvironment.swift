@@ -14,6 +14,7 @@ struct LaunchEnvironment {
 
     let sessionsRoot: URL
     let attachmentsRoot: URL
+    let runConfigurationsFile: URL
     let defaults: UserDefaults
     let registry: HarnessRegistry
     let workingDirectory: URL
@@ -31,6 +32,7 @@ struct LaunchEnvironment {
             let support = URL.applicationSupportDirectory.appending(path: "DevSpace")
             sessionsRoot = support.appending(path: "sessions")
             attachmentsRoot = ChatModel.standardAttachmentsRoot
+            runConfigurationsFile = support.appending(path: "run-configurations.json")
             defaults = .standard
             registry = .standard
             workingDirectory = URL(fileURLWithPath: NSHomeDirectory())
@@ -39,6 +41,7 @@ struct LaunchEnvironment {
         let root = URL(fileURLWithPath: rootPath)
         sessionsRoot = root.appending(path: "sessions")
         attachmentsRoot = root.appending(path: "attachments")
+        runConfigurationsFile = root.appending(path: "run-configurations.json")
         workingDirectory = root.appending(path: "project")
 
         let pinned = Dictionary(uniqueKeysWithValues: HarnessRegistry.standard.ids.compactMap { id in

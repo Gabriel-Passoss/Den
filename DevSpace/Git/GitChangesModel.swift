@@ -248,16 +248,9 @@ final class GitChangesModel {
         let manager = FileManager.default
         var roots: [URL] = []
 
-        var toplevel: URL?
-        var probe = directory.standardizedFileURL
-        while probe.pathComponents.count > 1 {
-            if manager.fileExists(atPath: probe.appending(path: ".git").path) {
-                toplevel = probe
-                break
-            }
-            probe = probe.deletingLastPathComponent()
+        if let toplevel = GitRepository.toplevel(containing: directory) {
+            roots.append(toplevel)
         }
-        if let toplevel { roots.append(toplevel) }
 
         func scan(_ dir: URL, depth: Int) {
             guard roots.count < maxRepos,

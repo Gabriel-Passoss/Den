@@ -48,9 +48,7 @@ import Observation
     }
 
     nonisolated static func indexFiles(under root: URL, limit: Int = 25_000) -> [MentionCandidate] {
-        let skip: Set<String> = ["node_modules", ".git", ".build", "DerivedData",
-                                 ".next", "dist", "build", "Pods", ".venv", "vendor",
-                                 "target", ".gradle", "out", "coverage"]
+        let skip = ProjectScan.skippedFolders
         let base = canonical(root)
         var results: [MentionCandidate] = []
         var folders: [(url: URL, path: String)] = [(base, "")]
