@@ -9,6 +9,7 @@ import HarnessCore
 struct LaunchEnvironment {
     static let rootKey = "DEVSPACE_UI_TEST_ROOT"
     static let cliKeyPrefix = "DEVSPACE_CLI_"
+    static let projectSetupKey = "DEVSPACE_PROJECT_SETUP"
     static let testDefaultsSuite = "DevSpace.UITests"
 
     let sessionsRoot: URL
@@ -51,8 +52,24 @@ struct LaunchEnvironment {
         if !FileManager.default.fileExists(atPath: sessionsRoot.path) {
             defaults.removePersistentDomain(forName: Self.testDefaultsSuite)
         }
+
+        let isNewProject = !FileManager.default.fileExists(atPath: workingDirectory.path)
         try? FileManager.default.createDirectory(at: workingDirectory,
                                                  withIntermediateDirectories: true)
+        if isNewProject, let setup = environment[Self.projectSetupKey] {
+            Self.run(setup, in: workingDirectory)
+        }
+    }
+
+    private static func run(_ script: String, in directory: URL) {
+        let shell = Process()
+        shell.executableURL = URL(fileURLWithPath: "/bin/sh")
+        shell.arguments = ["-c", script]
+        shell.currentDirectoryURL = directory
+        let finished = DispatchSemaphore(value: 0)
+        shell.terminationHandler = { _ in finished.signal() }
+        guard (try? shell.run()) != nil else { return }
+        finished.wait()
     }
 }
 
