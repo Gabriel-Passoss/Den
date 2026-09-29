@@ -13,7 +13,10 @@ struct ChatView: View {
     @State private var scrollPosition = ScrollPosition()
     @State private var tableLock = TableScrollLock()
 
-    @AppStorage("DevSpace.gitInspector") private var showChanges = false
+    @AppStorage(InspectorPane.storageKey) private var pane: InspectorPane = .closed
+    @State private var lastOpenPane: InspectorPane = .changes
+    @Environment(RunManager.self) private var runs
+    @Environment(RunConfigurationsModel.self) private var runConfigurations
     let gitChanges: GitChangesModel
 
     private struct ScrollEdgeState: Equatable {
@@ -39,10 +42,8 @@ struct ChatView: View {
 
         .focusedSceneValue(\.chat, chat)
 
-        .inspector(isPresented: $showChanges) {
-            GitChangesPanel(model: gitChanges, directory: chat.workingDirectory,
-                            close: { showChanges = false })
-                .inspectorColumnWidth(min: 280, ideal: 784, max: 784)
+        .inspector(isPresented: inspectorPresented) {
+            inspectorContent
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -50,7 +51,7 @@ struct ChatView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showChanges.toggle()
+                    toggle(.changes)
                 } label: {
                     Label {
                         Text("Alterações")
@@ -62,12 +63,33 @@ struct ChatView: View {
                     }
                 }
                 .keyboardShortcut("0", modifiers: [.option, .command])
-                .help(showChanges ? "Ocultar alterações do Git"
-                                  : "Mostrar alterações do Git")
+                .help(pane == .changes ? "Ocultar alterações do Git"
+                                       : "Mostrar alterações do Git")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    toggle(.run)
+                } label: {
+                    Label {
+                        Text("Execução")
+                    } icon: {
+                        Image(systemName: "play.rectangle")
+                            .overlay(alignment: .topTrailing) {
+                                if runActive {
+                                    Circle()
+                                        .fill(.green)
+                                        .frame(width: 6, height: 6)
+                                        .offset(x: 3, y: -2)
+                                }
+                            }
+                    }
+                }
+                .keyboardShortcut("9", modifiers: [.option, .command])
+                .help(pane == .run ? "Ocultar execução" : "Mostrar execução")
             }
         }
-        .task(id: "\(showChanges)|\(chat.workingDirectory.path)") {
-            guard showChanges else { return }
+        .task(id: "\(pane == .changes)|\(chat.workingDirectory.path)") {
+            guard pane == .changes else { return }
             await gitChanges.load(directory: chat.workingDirectory)
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(4))
@@ -92,7 +114,7 @@ struct ChatView: View {
         .onChange(of: chat.isBusy) {
             if !chat.isBusy {
                 keys.disarmEsc()
-                if showChanges {
+                if pane == .changes {
                     let gitChanges = self.gitChanges
                     let directory = chat.workingDirectory
                     Task { await gitChanges.load(directory: directory) }
@@ -108,6 +130,37 @@ struct ChatView: View {
             }
         }
         .overlay { lightbox }
+    }
+
+    private var inspectorPresented: Binding<Bool> {
+        Binding(get: { pane != .closed }, set: { if !$0 { pane = .closed } })
+    }
+
+    @ViewBuilder
+    private var inspectorContent: some View {
+        if (pane == .closed ? lastOpenPane : pane) == .run {
+            RunPanel(root: runRoot, close: { pane = .closed })
+                .inspectorColumnWidth(min: 320, ideal: 560, max: 784)
+        } else {
+            GitChangesPanel(model: gitChanges, directory: chat.workingDirectory,
+                            close: { pane = .closed })
+                .inspectorColumnWidth(min: 280, ideal: 784, max: 784)
+        }
+    }
+
+    private var runRoot: URL { runConfigurations.root(for: chat.workingDirectory) }
+
+    private var runActive: Bool {
+        runConfigurations.configurations(in: runRoot).contains { runs.isActive($0.id) }
+    }
+
+    private func toggle(_ target: InspectorPane) {
+        if pane == target {
+            pane = .closed
+        } else {
+            pane = target
+            lastOpenPane = target
+        }
     }
 
     @ViewBuilder

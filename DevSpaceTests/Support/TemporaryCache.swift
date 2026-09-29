@@ -1,13 +1,17 @@
 import Foundation
 @testable import DevSpace
 
-func withTemporaryCache(_ body: (SessionCache) throws -> Void) rethrows {
+func withTemporaryDefaults(_ body: (UserDefaults) throws -> Void) rethrows {
     let suite = "DevSpaceTests." + UUID().uuidString
     guard let defaults = UserDefaults(suiteName: suite) else {
         fatalError("could not create suite \(suite)")
     }
     defer { defaults.removePersistentDomain(forName: suite) }
-    try body(SessionCache(defaults: defaults))
+    try body(defaults)
+}
+
+func withTemporaryCache(_ body: (SessionCache) throws -> Void) rethrows {
+    try withTemporaryDefaults { try body(SessionCache(defaults: $0)) }
 }
 
 let scratchCache: SessionCache = {
