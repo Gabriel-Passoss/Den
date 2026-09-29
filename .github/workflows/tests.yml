@@ -39,7 +39,7 @@ jobs:
       - name: Test the app
         run: |
           xcodebuild test \
-            -project DevSpace.xcodeproj -scheme DevSpace \
+            -project Den.xcodeproj -scheme Den \
             -destination 'platform=macOS' \
             -resultBundlePath build/app.xcresult \
             $SIGNING
@@ -67,7 +67,7 @@ jobs:
       - name: Test the UI
         run: |
           xcodebuild test \
-            -project DevSpace.xcodeproj -scheme DevSpaceUITests \
+            -project Den.xcodeproj -scheme DenUITests \
             -destination 'platform=macOS' \
             -resultBundlePath build/ui.xcresult \
             $SIGNING
