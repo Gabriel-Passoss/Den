@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 110;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -21,11 +21,19 @@
 			remoteGlobalIDString = BE5BD8D4305B606D00035C7F;
 			remoteInfo = DevSpace;
 		};
+		BE7E570000000000000000B7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BE5BD8CD305B606D00035C7F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BE5BD8D4305B606D00035C7F;
+			remoteInfo = DevSpace;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		BE5BD8D5305B606D00035C7F /* DevSpace.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DevSpace.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BE7E570000000000000000A1 /* DevSpaceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DevSpaceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE7E570000000000000000B1 /* DevSpaceUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DevSpaceUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -37,6 +45,16 @@
 		BE7E570000000000000000A2 /* DevSpaceTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DevSpaceTests;
+			sourceTree = "<group>";
+		};
+		BE7E570000000000000000B0 /* DevSpaceTestSupport */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DevSpaceTestSupport;
+			sourceTree = "<group>";
+		};
+		BE7E570000000000000000B2 /* DevSpaceUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DevSpaceUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -56,6 +74,11 @@
 				BE7E570000000000000000AD /* HarnessCore in Frameworks */,
 			);
 		};
+		BE7E570000000000000000B5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -64,6 +87,8 @@
 			children = (
 				BE5BD8D7305B606D00035C7F /* DevSpace */,
 				BE7E570000000000000000A2 /* DevSpaceTests */,
+				BE7E570000000000000000B0 /* DevSpaceTestSupport */,
+				BE7E570000000000000000B2 /* DevSpaceUITests */,
 				BE5BD8D6305B606D00035C7F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -73,6 +98,7 @@
 			children = (
 				BE5BD8D5305B606D00035C7F /* DevSpace.app */,
 				BE7E570000000000000000A1 /* DevSpaceTests.xctest */,
+				BE7E570000000000000000B1 /* DevSpaceUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -118,6 +144,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				BE7E570000000000000000A2 /* DevSpaceTests */,
+				BE7E570000000000000000B0 /* DevSpaceTestSupport */,
 			);
 			name = DevSpaceTests;
 			packageProductDependencies = (
@@ -126,6 +153,28 @@
 			productName = DevSpaceTests;
 			productReference = BE7E570000000000000000A1 /* DevSpaceTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		BE7E570000000000000000B3 /* DevSpaceUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BE7E570000000000000000BB /* Build configuration list for PBXNativeTarget "DevSpaceUITests" */;
+			buildPhases = (
+				BE7E570000000000000000B4 /* Sources */,
+				BE7E570000000000000000B5 /* Frameworks */,
+				BE7E570000000000000000B6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BE7E570000000000000000B8 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BE7E570000000000000000B2 /* DevSpaceUITests */,
+				BE7E570000000000000000B0 /* DevSpaceTestSupport */,
+			);
+			name = DevSpaceUITests;
+			productName = DevSpaceUITests;
+			productReference = BE7E570000000000000000B1 /* DevSpaceUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -141,6 +190,10 @@
 						CreatedOnToolsVersion = 27.0;
 					};
 					BE7E570000000000000000A3 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = BE5BD8D4305B606D00035C7F;
+					};
+					BE7E570000000000000000B3 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = BE5BD8D4305B606D00035C7F;
 					};
@@ -165,6 +218,7 @@
 			targets = (
 				BE5BD8D4305B606D00035C7F /* DevSpace */,
 				BE7E570000000000000000A3 /* DevSpaceTests */,
+				BE7E570000000000000000B3 /* DevSpaceUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -176,6 +230,11 @@
 			);
 		};
 		BE7E570000000000000000A6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		BE7E570000000000000000B6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -193,6 +252,11 @@
 			files = (
 			);
 		};
+		BE7E570000000000000000B4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -200,6 +264,11 @@
 			isa = PBXTargetDependency;
 			target = BE5BD8D4305B606D00035C7F /* DevSpace */;
 			targetProxy = BE7E570000000000000000A7 /* PBXContainerItemProxy */;
+		};
+		BE7E570000000000000000B8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BE5BD8D4305B606D00035C7F /* DevSpace */;
+			targetProxy = BE7E570000000000000000B7 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -428,6 +497,42 @@
 			};
 			name = Release;
 		};
+		BE7E570000000000000000B9 /* Debug configuration for PBXNativeTarget "DevSpaceUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2834RTT75D;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = gabrielpassos.DevSpaceUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = DevSpace;
+			};
+			name = Debug;
+		};
+		BE7E570000000000000000BA /* Release configuration for PBXNativeTarget "DevSpaceUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2834RTT75D;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = gabrielpassos.DevSpaceUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = DevSpace;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -452,6 +557,14 @@
 			buildConfigurations = (
 				BE7E570000000000000000A9 /* Debug configuration for PBXNativeTarget "DevSpaceTests" */,
 				BE7E570000000000000000AA /* Release configuration for PBXNativeTarget "DevSpaceTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		BE7E570000000000000000BB /* Build configuration list for PBXNativeTarget "DevSpaceUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE7E570000000000000000B9 /* Debug configuration for PBXNativeTarget "DevSpaceUITests" */,
+				BE7E570000000000000000BA /* Release configuration for PBXNativeTarget "DevSpaceUITests" */,
 			);
 			defaultConfigurationName = Release;
 		};

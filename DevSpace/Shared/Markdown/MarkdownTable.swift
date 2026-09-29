@@ -83,9 +83,8 @@ struct MarkdownTableView: View {
     private func cell(_ cells: [AttributedString], at column: Int, compact: Set<Int>,
                       fixedWidths: Bool, header: Bool) -> some View {
         let isCompact = compact.contains(column)
-        Text(column < cells.count ? cells[column] : AttributedString(""))
-            .font(.system(size: header ? 11 : 12,
-                          weight: header ? .semibold : .regular))
+        InlineCode.text(column < cells.count ? cells[column] : AttributedString(""),
+                        size: header ? 11 : 12, weight: header ? .semibold : .regular)
             .foregroundStyle(header ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
             .multilineTextAlignment(Self.textAlignment(table.alignments, at: column))
             .fixedSize(horizontal: false, vertical: true)

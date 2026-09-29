@@ -9,6 +9,7 @@ struct MarkdownText: View {
                 render(block)
             }
         }
+        .textRenderer(InlineCodeRenderer())
         .textSelection(.enabled)
     }
 
@@ -19,13 +20,11 @@ struct MarkdownText: View {
             MarkdownTableView(table: table)
 
         case .paragraph(let content):
-            Text(content)
-                .font(.system(size: 13))
+            InlineCode.text(content, size: 13)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .heading(let level, let content):
-            Text(content)
-                .font(.system(size: Self.headingSize(level), weight: .semibold))
+            InlineCode.text(content, size: Self.headingSize(level), weight: .semibold)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
 
@@ -38,8 +37,7 @@ struct MarkdownText: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 14, alignment: .trailing)
-                Text(content)
-                    .font(.system(size: 13))
+                InlineCode.text(content, size: 13)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.leading, CGFloat(max(0, depth - 1)) * 16)
@@ -49,8 +47,7 @@ struct MarkdownText: View {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(.tertiary)
                     .frame(width: 3)
-                Text(content)
-                    .font(.system(size: 13))
+                InlineCode.text(content, size: 13)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -138,9 +135,6 @@ struct MarkdownText: View {
             let intent = run.presentationIntent
             var slice = AttributedString(whole[run.range])
             slice.presentationIntent = nil
-            if run.inlinePresentationIntent?.contains(.code) == true {
-                slice.font = .system(size: 12, design: .monospaced)
-            }
             if !groups.isEmpty, groups[groups.count - 1].intent == intent {
                 groups[groups.count - 1].content += slice
             } else {

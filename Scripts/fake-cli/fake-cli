@@ -1,0 +1,58 @@
+#!/bin/sh
+# Stands in for a harness CLI in DevSpace's tests. Driven by the step files in
+# $FAKE_CLI_STATE; DevSpaceTestSupport/FakeCLI.swift writes them and explains
+# the format. When the directory is still empty, the steps are unpacked from
+# $FAKE_CLI_SCENARIO, one "<file> <base64>" per line.
+
+state=${FAKE_CLI_STATE:?FAKE_CLI_STATE is not set}
+
+mkdir -p "$state/steps" "$state/launches"
+if [ ! -f "$state/next" ]; then
+  # `next` is written last, so a second process never finds it before the steps.
+  printf '%s\n' "$FAKE_CLI_SCENARIO" | while read -r name data; do
+    [ -n "$name" ] && [ "$name" != next ] && printf '%s' "$data" | base64 -D > "$state/$name"
+  done
+  echo 1 > "$state/next"
+fi
+
+# A session is `acp …` (OpenCode) or `-p --output-format …` (Claude Code);
+# any other `-p` run is a one-shot title request.
+case "$1 $2" in
+  "--version "*) echo "0.0.0"; exit 0 ;;
+  "acp "*|"-p --output-format") ;;
+  *) cat "$state/title" 2>/dev/null; exit 0 ;;
+esac
+
+launch=$(( $(ls "$state/launches" | wc -l) + 1 ))
+{ pwd -P; printf '%s\n' "$@"; } > "$state/launches/.$launch"
+mv "$state/launches/.$launch" "$state/launches/$launch"
+
+request=0
+while IFS= read -r line; do
+  printf '%s\n' "$line" >> "$state/received"
+  wire=$(printf '%s' "$line" | sed 's#\\/#/#g')
+
+  case "$wire" in
+    *'"type":"control_request"'*)
+      id=$(printf '%s' "$wire" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+      printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{}}}\n' "$id"
+      continue ;;
+    *'"method":'*)
+      id=$(printf '%s' "$wire" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
+      [ -n "$id" ] && request=$id ;;
+  esac
+
+  step="$state/steps/$(cat "$state/next")"
+  [ -f "$step.trigger" ] || continue
+  case "$wire" in
+    *"$(cat "$step.trigger")"*) ;;
+    *) continue ;;
+  esac
+  echo $(( $(cat "$state/next") + 1 )) > "$state/next"
+
+  if [ -f "$step.exit" ]; then
+    cat "$step.stderr" >&2
+    exit "$(cat "$step.exit")"
+  fi
+  sed "s/__ID__/$request/g" "$step.reply"
+done

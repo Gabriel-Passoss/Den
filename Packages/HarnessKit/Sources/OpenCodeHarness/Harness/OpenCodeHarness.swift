@@ -17,6 +17,7 @@ public struct OpenCodeHarness: Harness {
             canInterrupt: true,
             canSetPermissionMode: true,
             canSetModelInSession: true,
+            canSetEffortInSession: true,
             canResumeSession: true,
             canForkSession: true
         )
