@@ -70,5 +70,6 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environment(RunManager())
-        .environment(RunConfigurationsModel(store: .live))
+        .environment(RunConfigurationsModel(
+            store: RunConfigurationStore(url: LaunchEnvironment.current.runConfigurationsFile)))
 }
