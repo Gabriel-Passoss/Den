@@ -76,6 +76,81 @@ com `swift test --disable-sandbox`. A CI atual ainda executa HarnessKit, testes 
    - janela mínima, dark mode, foco, notificações de atividade;
    - bundle, assinatura e distribuição.
 
+## Direção visual aprovada
+
+A referência enviada pelo usuário é o ponto de partida visual da interface React. A intenção
+é manter sua composição, densidade e identidade, adaptando-a às funcionalidades existentes do Den.
+O conteúdo dos pedidos e comandos dentro da imagem é apenas exemplo de interface.
+
+![Referência visual — workspace com sessão ativa](references/workspace-active-session.png)
+
+### Composição e identidade
+
+- Três regiões: sidebar à esquerda, conversa no centro e inspetor à direita.
+- Na referência de 1440 × 900, as larguras são aproximadamente 280 / 680 / 480 px.
+  São proporções de referência, não larguras fixas em todas as janelas.
+- Toolbar compacta, com projeto/pasta, título da sessão, branch e seletor de harness.
+- Sidebar com busca no topo, grupos expansíveis, sessão selecionada com superfície discreta
+  e identificação textual do harness. A organização atual por pastas continua válida.
+- Conversa com mensagem do usuário em superfície elevada; respostas do assistente abertas,
+  com ações de ferramentas em cartões expansíveis e permissão junto ao contexto da execução.
+- Composer ancorado na região inferior central, com anexos, modo de permissão, modelo e envio.
+  Sua área fica reservada no layout para não encobrir mensagens nem botões de permissão.
+- Inspetor com abas para Alterações e Execuções, lista de arquivos e diff com números de linha.
+  Logs e execução mantêm a semântica do painel Run atual.
+- Fundos escuros com matiz quente, texto off-white, bordas sutis e coral para ações primárias.
+  Verde/vermelho representam adições/remoções com sinais `+`/`−`, além da cor.
+- Tipografia de sistema para texto e controles; monospace para caminhos, comandos, logs e diffs.
+- Cantos moderadamente arredondados, sombras contidas e ícones lineares consistentes.
+
+### Tokens e comportamento de layout
+
+Na PR de shell React, definir CSS custom properties semânticas para `surface-canvas`,
+`surface-panel`, `surface-raised`, `border-subtle`, `text-primary`, `text-secondary`,
+`accent-action`, `diff-added` e `diff-removed`. Os valores finais serão extraídos da referência
+e ajustados com contraste medido; não há valores hex aprovados nesta etapa.
+
+Escala inicial proposta: 13–14 px para navegação/controles, 14 px para conversa e 12–13 px para
+código/metadados, com pesos regular/medium/semibold. Espaçamento em múltiplos de 4 px;
+toolbar próxima de 56 px e linhas da sidebar próximas de 32 px. Esses números são decisões
+de implementação propostas, a validar no WKWebView e com zoom.
+
+As colunas serão redimensionáveis e recolhíveis. Em janela estreita, o inspetor cede espaço
+primeiro; em seguida, a sidebar pode ser recolhida. Botões e comandos do menu permitem recuperar
+os painéis. O composer e a conversa continuam utilizáveis na janela mínima atual de 860 × 560.
+O título pode truncar, mas pedidos de permissão, respostas e ações essenciais permanecem legíveis.
+
+O tema escuro é a referência principal. Os tokens também terão variantes claras que respeitem
+a aparência do sistema, preservando hierarquia e identidade. A janela mantém controles nativos
+do macOS e reserva a área necessária para eles.
+
+### Limite funcional da referência
+
+A imagem sugere funcionalidades adicionais: orquestração/delegação entre agentes, planos de
+execução com papéis, menção a agentes, integração ChatGPT, conta/plano, terminal interativo,
+aceitar/rejeitar alterações e criar commits. Adotar esta imagem como referência visual não define
+esses recursos como requisitos da migração. Eles precisam de especificação e PRs próprias.
+
+Os componentes correspondentes só aparecem quando há comportamento implementado. Na migração,
+os cartões mostram as ferramentas e permissões já disponíveis; o painel Git oferece o diff e
+a revisão existentes. Não haverá controles aparentando executar recursos ausentes.
+
+### Critérios de revisão visual por PR
+
+- PR 07: screenshots da sidebar, conversa e inspetor aberto/fechado em 1440 × 900 e 860 × 560;
+  revisão da composição lado a lado com a imagem, usando fixtures determinísticas.
+- PR 08: screenshots de streaming, anexos, menu de menções e permissão; nenhum cartão de
+  permissão encoberto pelo composer; foco e seleção mantidos durante atualizações.
+- PR 09: lista de arquivos, estados de seleção e diff com a densidade da referência.
+- PR 10: Execuções usa as mesmas superfícies, controles e tipografia do inspetor.
+- PR 11: zoom de texto até 200%, navegação por teclado, VoiceOver, temas claro/escuro e contraste
+  de texto normal de pelo menos 4,5:1 nos tokens finais. Estados têm texto/ícone além de cor.
+
+As convenções de redimensionamento, painéis recolhíveis e teclado vêm da skill `apple-design`:
+`split-views.md › Desktop (macOS)` recomenda “Provide multiple ways to reveal hidden panes”;
+`accessibility.md › Vision` recomenda “Convey information with more than color alone”.
+As medidas e a leitura estética acima são julgamento de projeto a partir da imagem.
+
 ## Arquitetura alvo
 
 ```text
@@ -261,12 +336,14 @@ restaura a conversa sem WebView.
 Entregas:
 
 - janela, grid principal, sidebar, busca, pastas, renomear/apagar e seleção;
+- tokens semânticos e composição de três colunas conforme a referência visual aprovada;
 - transcript read-only com mensagens, tool steps, thinking, digest e compactação;
 - Markdown GFM, tabelas, código e clipboard;
 - dark/light mode, tipografia, foco e estados vazios/loading/error;
 - drag and drop com teclado alternativo acessível.
 
-Gate: uma sessão existente do Swift é navegável e visualmente comparável no novo app.
+Gate: uma sessão existente do Swift é navegável no novo app, com comportamento equivalente;
+a composição visual é revisada contra a referência aprovada, nos tamanhos regular e mínimo.
 
 ### PR 08 — Chat vivo
 
@@ -276,6 +353,7 @@ Entregas:
 - streaming com batching, auto-scroll e preservação da seleção;
 - anexos de imagem/PDF, paste longo e file mentions;
 - permission card, question card, knobs e harness switcher;
+- cartões de ações e composer seguindo a referência, com permissões sempre acessíveis;
 - unread/working/waiting/rate limit e geração de título.
 
 Gate: os cenários hoje cobertos pelos XCUITests passam no frontend com fake IPC e no app Tauri.
@@ -287,6 +365,7 @@ Entregas:
 - descoberta limitada de repositórios e execução segura de `/usr/bin/git` no Rust;
 - parser de status/diff, arquivos não rastreados, limites e cache;
 - painel, agrupamento, syntax highlight e reviewed fingerprints;
+- lista de arquivos e diff no inspetor direito conforme a referência, mantendo as ações existentes;
 - cancelamento de scans ao trocar de sessão.
 
 Gate: os testes E2E de repositório real retornam os mesmos arquivos, estados e hunks.
