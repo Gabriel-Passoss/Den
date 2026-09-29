@@ -27,9 +27,10 @@ final class ConversationUITests: XCTestCase {
     }
 
     @MainActor
-    private func launch() -> XCUIApplication {
+    private func launch(projectSetup: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["DEVSPACE_UI_TEST_ROOT"] = root.path
+        app.launchEnvironment["DEVSPACE_PROJECT_SETUP"] = projectSetup
         for cli in [claude!, openCode!] {
             app.launchEnvironment.merge(cli.launchEnvironment) { $1 }
         }
@@ -63,15 +64,20 @@ final class ConversationUITests: XCTestCase {
         app.outlines["Sidebar"].staticTexts[title]
     }
 
-    /// Opens a conversation from the empty window and sends its first turn.
     @MainActor
-    private func startConversation(_ text: String, in app: XCUIApplication) {
+    private func openComposer(in app: XCUIApplication) -> XCUIElement {
         require(app.staticTexts["Nenhuma conversa aberta"], in: app)
         app.buttons["Nova conversa"].click()
         let composer = app.textViews["Peça uma alteração…"]
         require(composer, in: app)
         composer.click()
-        composer.typeText(text + "\n")
+        return composer
+    }
+
+    /// Opens a conversation from the empty window and sends its first turn.
+    @MainActor
+    private func startConversation(_ text: String, in app: XCUIApplication) {
+        openComposer(in: app).typeText(text + "\n")
     }
 
     // MARK: - Conversation
@@ -123,6 +129,60 @@ final class ConversationUITests: XCTestCase {
         row.click()
 
         require(app.staticTexts["OK"], in: app)
+    }
+
+    // MARK: - Mentions
+
+    private let bigProject = """
+        mkdir -p frontend/src scalemed-backend/src
+        : > scalemed-backend/pom.xml
+        i=0
+        while [ $i -lt 4100 ]; do
+          : > frontend/src/f$i; : > scalemed-backend/src/f$i
+          i=$((i + 1))
+        done
+        """
+
+    private let backendWithWorktree = """
+        java=scalemed-core/src/main/java/br/com/scalemed/indicators
+        for copy in scalemed-backend worktrees/NS-1/backend; do
+          mkdir -p $copy/$java $copy/src
+          : > $copy/$java/IndicatorsRepository.java
+        done
+        mkdir -p scalemed-backend/.git scalemed-backend/target/classes
+        echo "gitdir: $(pwd -P)/scalemed-backend/.git/worktrees/backend" > worktrees/NS-1/backend/.git
+        i=0
+        while [ $i -lt 4100 ]; do
+          : > scalemed-backend/src/f$i; : > scalemed-backend/target/classes/f$i.class
+          : > worktrees/NS-1/backend/src/f$i
+          i=$((i + 1))
+        done
+        """
+
+    @MainActor
+    func testMentionsReachEveryFolderOfABigProject() throws {
+        let app = launch(projectSetup: bigProject)
+        let composer = openComposer(in: app)
+
+        composer.typeText("@frontend")
+        require(app.staticTexts["frontend"], in: app)
+        composer.typeKey("a", modifierFlags: .command)
+        composer.typeText("@scalemed")
+        require(app.staticTexts["scalemed-backend"], in: app)
+
+        composer.typeText("\t")
+        XCTAssertEqual(composer.value as? String, "@scalemed-backend/")
+    }
+
+    @MainActor
+    func testMentionsReachADeepSourceBesideBuildOutputAndAWorktree() throws {
+        let app = launch(projectSetup: backendWithWorktree)
+        let composer = openComposer(in: app)
+
+        composer.typeText("@IndicatorsRepo")
+
+        require(text(containing: "scalemed-backend/scalemed-core/src/main/java", in: app), in: app)
+        XCTAssertFalse(text(containing: "worktrees/NS-1/backend", in: app).exists)
     }
 
     // MARK: - Sidebar
