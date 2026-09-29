@@ -15,22 +15,21 @@ struct WorkspaceHarness {
 @MainActor
 func withWorkspace(seed: (UserDefaults) -> Void = { _ in },
                    _ body: (WorkspaceHarness) async throws -> Void) async throws {
-    let suite = "DevSpaceTests." + UUID().uuidString
-    guard let defaults = UserDefaults(suiteName: suite) else {
-        fatalError("could not create suite \(suite)")
-    }
+    let scratch = ScratchDefaults()
+    let defaults = scratch.defaults
     let root = FileManager.default.temporaryDirectory
         .appending(path: "DevSpaceTests-" + UUID().uuidString)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer {
-        defaults.removePersistentDomain(forName: suite)
+        scratch.remove()
         try? FileManager.default.removeItem(at: root)
     }
 
     seed(defaults)
     let store = FileTranscriptStore(root: root)
     let model = WorkspaceModel(store: store, defaults: defaults,
-                               cache: SessionCache(defaults: defaults))
+                               cache: SessionCache(defaults: defaults),
+                               attachmentsRoot: root.appending(path: "attachments"))
     try await body(WorkspaceHarness(model: model, defaults: defaults, store: store))
 }
 

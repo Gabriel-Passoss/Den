@@ -27,6 +27,7 @@ public actor ACPChannel {
     private var outstandingInbound: Set<String> = []
     private var nextRequestID = 0
     private var liveness: Liveness = .notStarted
+    private var closedBy: (any Error)?
 
     private enum Liveness { case notStarted, running, closed }
 
@@ -53,7 +54,7 @@ public actor ACPChannel {
                     await self?.markClosed()
                     continuation.finish()
                 } catch {
-                    await self?.markClosed()
+                    await self?.markClosed(by: error)
                     continuation.finish(throwing: error)
                 }
             }
@@ -91,18 +92,24 @@ public actor ACPChannel {
         }
     }
 
-    private func markClosed() {
+    /// `cause` is why the CLI went away, such as its exit status and stderr.
+    /// Requests waiting on it, and any sent after, fail with that instead of a
+    /// bare `channelClosed`.
+    private func markClosed(by cause: (any Error)? = nil) {
         liveness = .closed
+        closedBy = cause
         let waiting = pending
         pending.removeAll()
-        for (_, continuation) in waiting { continuation.resume(throwing: ChannelError.channelClosed) }
+        for (_, continuation) in waiting {
+            continuation.resume(throwing: cause ?? ChannelError.channelClosed)
+        }
         outstandingInbound.removeAll()
     }
 
     private func requireRunning() throws {
         switch liveness {
         case .notStarted: throw ChannelError.notStarted
-        case .closed: throw ChannelError.channelClosed
+        case .closed: throw closedBy ?? ChannelError.channelClosed
         case .running: break
         }
     }

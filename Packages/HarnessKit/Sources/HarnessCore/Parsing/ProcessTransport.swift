@@ -133,6 +133,30 @@ public actor ProcessTransport {
         case alreadyStarted
     }
 
+    /// The CLI ended without being asked to: a failing exit status, or a
+    /// signal it did not get from `terminate()`. It is how the stream ends
+    /// then, so the reason reaches whoever reads it instead of looking like a
+    /// clean end of output.
+    public struct ExitFailure: Error, Equatable, CustomStringConvertible {
+        public let status: Int32
+        public let standardError: String
+        public let signaled: Bool
+
+        public init(status: Int32, standardError: String, signaled: Bool = false) {
+            self.status = status
+            self.standardError = standardError
+            self.signaled = signaled
+        }
+
+        public var description: String {
+            let detail = standardError.trimmingCharacters(in: .whitespacesAndNewlines)
+            let head = signaled
+                ? "o CLI foi encerrado pelo sinal \(status)"
+                : "o CLI saiu com código \(status)"
+            return detail.isEmpty ? head : head + ": " + String(detail.suffix(500))
+        }
+    }
+
     private let framingLimit: Int
     private let terminationGracePeriod: Duration
     private let killGracePeriod: Duration
@@ -141,6 +165,8 @@ public actor ProcessTransport {
     private var io: StreamIO?
 
     private let syncStandardInput = Mutex<FileHandle?>(nil)
+
+    private let stopRequested = Mutex(false)
 
     public init(
         framingLimit: Int = 8 * 1024 * 1024,
@@ -193,10 +219,19 @@ public actor ProcessTransport {
                 }
             )
 
-            process.terminationHandler = { _ in
+            process.terminationHandler = { ended in
                 do {
                     for line in try io.finishReading() { continuation.yield(line) }
-                    continuation.finish()
+                    let signaled = ended.terminationReason == .uncaughtSignal
+                    let stopped = self.stopRequested.withLock { $0 }
+                    guard signaled || ended.terminationStatus != 0, !stopped else {
+                        continuation.finish()
+                        return
+                    }
+                    continuation.finish(throwing: ExitFailure(
+                        status: ended.terminationStatus,
+                        standardError: io.collectedStandardError,
+                        signaled: signaled))
                 } catch {
                     continuation.finish(throwing: error)
                 }
@@ -238,6 +273,7 @@ public actor ProcessTransport {
     }
 
     public func terminate() async {
+        stopRequested.withLock { $0 = true }
         guard let process, process.isRunning else { return }
         process.terminate()
         if await waitForExit(process, within: terminationGracePeriod) { return }

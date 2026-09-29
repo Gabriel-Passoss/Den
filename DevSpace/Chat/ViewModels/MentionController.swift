@@ -20,15 +20,14 @@ import Observation
     func matches(prompt: String) -> [MentionCandidate] {
         guard !dismissed, let query = query(in: prompt) else { return [] }
         guard !query.isEmpty else { return Array(fileIndex.prefix(8)) }
-        let lowered = query.lowercased()
-        let ranked = fileIndex.compactMap { candidate -> (MentionCandidate, Int)? in
-            let name = (candidate.path as NSString).lastPathComponent.lowercased()
-            if name.hasPrefix(lowered) { return (candidate, 0) }
-            if name.contains(lowered) { return (candidate, 1) }
-            if candidate.path.lowercased().contains(lowered) { return (candidate, 2) }
-            return nil
+        let needle = Array(MentionCandidate.searchable(query).utf8)
+        var ranks: [[MentionCandidate]] = [[], [], []]
+        for candidate in fileIndex {
+            guard let rank = candidate.rank(for: needle), ranks[rank].count < 8 else { continue }
+            ranks[rank].append(candidate)
+            if ranks[0].count == 8 { break }
         }
-        return ranked.sorted { $0.1 < $1.1 }.prefix(8).map(\.0)
+        return Array(ranks.joined().prefix(8))
     }
 
     func accept(_ candidate: MentionCandidate, in chat: ChatModel) {
@@ -48,25 +47,29 @@ import Observation
         }.value
     }
 
-    nonisolated static func indexFiles(under root: URL) -> [MentionCandidate] {
+    nonisolated static func indexFiles(under root: URL, limit: Int = 25_000) -> [MentionCandidate] {
         let skip = ProjectScan.skippedFolders
         let base = canonical(root)
-        guard let enumerator = FileManager.default.enumerator(
-            at: base,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]) else { return [] }
-
         var results: [MentionCandidate] = []
-        for case let url as URL in enumerator {
-            if results.count >= 4000 { break }
-            let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?
-                .isDirectory ?? false
-            if isDirectory, skip.contains(url.lastPathComponent) {
-                enumerator.skipDescendants()
-                continue
+        var folders: [(url: URL, path: String)] = [(base, "")]
+        var next = 0
+        while next < folders.count, results.count < limit {
+            let folder = folders[next]
+            next += 1
+            let children = (try? FileManager.default.contentsOfDirectory(
+                at: folder.url,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles])) ?? []
+            for url in children.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+                if results.count >= limit { break }
+                let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?
+                    .isDirectory ?? false
+                if isDirectory, skip.contains(url.lastPathComponent)
+                    || isWorktree(url, ofARepoUnder: base) { continue }
+                let path = folder.path + url.lastPathComponent
+                results.append(MentionCandidate(path: path, isDirectory: isDirectory))
+                if isDirectory { folders.append((url, path + "/")) }
             }
-            guard let relative = relativePath(of: url, under: base) else { continue }
-            results.append(MentionCandidate(path: relative, isDirectory: isDirectory))
         }
         return results.sorted {
             let a = $0.path.filter { $0 == "/" }.count
@@ -82,9 +85,20 @@ import Observation
         return URL(fileURLWithPath: path, isDirectory: true)
     }
 
-    nonisolated private static func relativePath(of url: URL, under root: URL) -> String? {
-        guard url.path.hasPrefix(root.path) else { return nil }
-        let relative = url.path.dropFirst(root.path.count).drop(while: { $0 == "/" })
-        return relative.isEmpty ? nil : String(relative)
+    nonisolated private static func isWorktree(_ folder: URL, ofARepoUnder root: URL) -> Bool {
+        let marker = folder.appending(path: ".git")
+        var isFolder: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: marker.path, isDirectory: &isFolder),
+              !isFolder.boolValue,
+              let text = try? String(contentsOf: marker, encoding: .utf8),
+              let line = text.split(separator: "\n").first, line.hasPrefix("gitdir: ")
+        else { return false }
+        let target = String(line.dropFirst("gitdir: ".count))
+        let gitdir = target.hasPrefix("/") ? URL(fileURLWithPath: target)
+                                           : folder.appending(path: target)
+        let resolved = gitdir.standardizedFileURL.path
+        guard let marked = resolved.range(of: "/.git/worktrees/") else { return false }
+        let repo = canonical(URL(fileURLWithPath: String(resolved[..<marked.lowerBound]))).path
+        return repo == root.path || repo.hasPrefix(root.path + "/")
     }
 }
