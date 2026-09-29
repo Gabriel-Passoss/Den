@@ -48,8 +48,6 @@ import Foundation
 
 @Test func matchesFindAccentsHoweverTheFileSystemSpellsThem() {
     let controller = MentionController()
-    // APFS keeps a name the way it was created, often decomposed, while the
-    // keyboard types composed characters.
     controller.fileIndex = [MentionCandidate(path: "docs/relato\u{301}rio.md", isDirectory: false)]
 
     #expect(controller.matches(prompt: "@Relató").map(\.path) == ["docs/relato\u{301}rio.md"])
@@ -98,8 +96,6 @@ import Foundation
         .appending(path: "DevSpaceTests-" + UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
 
-    // What `git worktree add` and `git submodule add` leave: a `.git` file
-    // pointing into the repo's own `.git` folder.
     let files = FileManager.default
     func checkout(_ folder: String, gitdir: String) throws {
         try files.createDirectory(at: root.appending(path: folder),
@@ -120,7 +116,6 @@ import Foundation
         "backend/App.java", "backend/lib",
         "backend/lib/App.java",
     ])
-    // Opened on its own, a worktree is the project, whatever repo it came from.
     #expect(MentionController.indexFiles(under: root.appending(path: "worktrees")).map(\.path)
             == ["one", "two", "one/App.java", "two/App.java"])
 }
@@ -130,8 +125,6 @@ import Foundation
         .appending(path: "DevSpaceTests-" + UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
 
-    // Each folder alone holds more than the limit, so a walk that finishes one
-    // folder before starting the next never reaches the other.
     let files = FileManager.default
     for folder in ["frontend", "backend"] {
         try files.createDirectory(at: root.appending(path: "\(folder)/src"),
