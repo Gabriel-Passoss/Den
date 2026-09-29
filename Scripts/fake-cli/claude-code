@@ -1,5 +1,5 @@
 #!/bin/sh
 # The Claude Code CLI as the UI tests' app sees it.
-FAKE_CLI_STATE="$DEVSPACE_UI_TEST_ROOT/cli/claude-code" \
+FAKE_CLI_STATE="$DEN_UI_TEST_ROOT/cli/claude-code" \
 FAKE_CLI_SCENARIO="$FAKE_CLI_SCENARIO_CLAUDE_CODE" \
 exec "$(dirname "$0")/fake-cli" "$@"
