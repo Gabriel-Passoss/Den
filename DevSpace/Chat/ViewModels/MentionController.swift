@@ -49,8 +49,7 @@ import Observation
     }
 
     nonisolated static func indexFiles(under root: URL) -> [MentionCandidate] {
-        let skip: Set<String> = ["node_modules", ".git", ".build", "DerivedData",
-                                 ".next", "dist", "build", "Pods", ".venv", "vendor"]
+        let skip = ProjectScan.skippedFolders
         let base = canonical(root)
         guard let enumerator = FileManager.default.enumerator(
             at: base,
