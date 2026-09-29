@@ -5,10 +5,12 @@ import HarnessCore
 /// the real places. In Debug builds, UI tests set `DEVSPACE_UI_TEST_ROOT` so a
 /// run touches none of the user's sessions, attachments or preferences, and
 /// under that root `DEVSPACE_CLI_<harness id>` runs a fake CLI in place of the
-/// real one. This file is the app's only test hook.
+/// real one and `DEVSPACE_PROJECT_SETUP` is a shell script that fills the
+/// project folder. This file is the app's only test hook.
 struct LaunchEnvironment {
     static let rootKey = "DEVSPACE_UI_TEST_ROOT"
     static let cliKeyPrefix = "DEVSPACE_CLI_"
+    static let projectSetupKey = "DEVSPACE_PROJECT_SETUP"
     static let testDefaultsSuite = "DevSpace.UITests"
 
     let sessionsRoot: URL
@@ -51,8 +53,24 @@ struct LaunchEnvironment {
         if !FileManager.default.fileExists(atPath: sessionsRoot.path) {
             defaults.removePersistentDomain(forName: Self.testDefaultsSuite)
         }
+
+        // The runner cannot write where the app reads, so a test that needs
+        // files in the project sends a script, run once when the folder is new.
+        let isNewProject = !FileManager.default.fileExists(atPath: workingDirectory.path)
         try? FileManager.default.createDirectory(at: workingDirectory,
                                                  withIntermediateDirectories: true)
+        if isNewProject, let setup = environment[Self.projectSetupKey] {
+            Self.run(setup, in: workingDirectory)
+        }
+    }
+
+    private static func run(_ script: String, in directory: URL) {
+        let shell = Process()
+        shell.executableURL = URL(fileURLWithPath: "/bin/sh")
+        shell.arguments = ["-c", script]
+        shell.currentDirectoryURL = directory
+        guard (try? shell.run()) != nil else { return }
+        shell.waitUntilExit()
     }
 }
 
