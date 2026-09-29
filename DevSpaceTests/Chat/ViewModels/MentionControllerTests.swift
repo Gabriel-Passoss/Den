@@ -37,6 +37,24 @@ import Foundation
     #expect(controller.matches(prompt: "@").count == 8)
 }
 
+@Test func matchesKeepTheIndexOrderWithinARank() {
+    let controller = MentionController()
+    controller.fileIndex = [MentionCandidate(path: "files/notes.md", isDirectory: false)]
+        + (0..<12).map { MentionCandidate(path: "src/file-\($0).txt", isDirectory: false) }
+
+    #expect(controller.matches(prompt: "@file").map(\.path)
+            == (0..<8).map { "src/file-\($0).txt" })
+}
+
+@Test func matchesFindAccentsHoweverTheFileSystemSpellsThem() {
+    let controller = MentionController()
+    // APFS keeps a name the way it was created, often decomposed, while the
+    // keyboard types composed characters.
+    controller.fileIndex = [MentionCandidate(path: "docs/relato\u{301}rio.md", isDirectory: false)]
+
+    #expect(controller.matches(prompt: "@Relató").map(\.path) == ["docs/relato\u{301}rio.md"])
+}
+
 @Test func indexFilesSkipsVendoredAndHiddenEntries() throws {
     let root = FileManager.default.temporaryDirectory
         .appending(path: "DevSpaceTests-" + UUID().uuidString)
@@ -55,6 +73,80 @@ import Foundation
     let candidates = MentionController.indexFiles(under: root)
     #expect(candidates.map(\.path) == ["Sub", "a.swift", "Sub/b.swift"])
     #expect(candidates.first?.isDirectory == true)
+}
+
+@Test func indexFilesSkipBuildOutput() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "DevSpaceTests-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let files = FileManager.default
+    for folder in ["src", "target/classes", "out", "coverage"] {
+        try files.createDirectory(at: root.appending(path: folder),
+                                  withIntermediateDirectories: true)
+    }
+    try Data().write(to: root.appending(path: "src/App.java"))
+    try Data().write(to: root.appending(path: "target/classes/App.class"))
+    try Data().write(to: root.appending(path: "out/App.class"))
+    try Data().write(to: root.appending(path: "coverage/lcov.info"))
+
+    #expect(MentionController.indexFiles(under: root).map(\.path) == ["src", "src/App.java"])
+}
+
+@Test func indexFilesSkipOtherCheckoutsOfARepoInTheProject() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "DevSpaceTests-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    // What `git worktree add` and `git submodule add` leave: a `.git` file
+    // pointing into the repo's own `.git` folder.
+    let files = FileManager.default
+    func checkout(_ folder: String, gitdir: String) throws {
+        try files.createDirectory(at: root.appending(path: folder),
+                                  withIntermediateDirectories: true)
+        try Data().write(to: root.appending(path: "\(folder)/App.java"))
+        try "gitdir: \(gitdir)\n".write(to: root.appending(path: "\(folder)/.git"),
+                                        atomically: true, encoding: .utf8)
+    }
+    try files.createDirectory(at: root.appending(path: "backend/.git"),
+                              withIntermediateDirectories: true)
+    try Data().write(to: root.appending(path: "backend/App.java"))
+    try checkout("worktrees/one", gitdir: root.appending(path: "backend/.git/worktrees/one").path)
+    try checkout("worktrees/two", gitdir: "../../backend/.git/worktrees/two")
+    try checkout("backend/lib", gitdir: "../.git/modules/lib")
+
+    #expect(MentionController.indexFiles(under: root).map(\.path) == [
+        "backend", "worktrees",
+        "backend/App.java", "backend/lib",
+        "backend/lib/App.java",
+    ])
+    // Opened on its own, a worktree is the project, whatever repo it came from.
+    #expect(MentionController.indexFiles(under: root.appending(path: "worktrees")).map(\.path)
+            == ["one", "two", "one/App.java", "two/App.java"])
+}
+
+@Test func indexFilesCutTheDeepestEntriesWhenTheLimitIsReached() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "DevSpaceTests-" + UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    // Each folder alone holds more than the limit, so a walk that finishes one
+    // folder before starting the next never reaches the other.
+    let files = FileManager.default
+    for folder in ["frontend", "backend"] {
+        try files.createDirectory(at: root.appending(path: "\(folder)/src"),
+                                  withIntermediateDirectories: true)
+        for number in 0..<10 {
+            try Data().write(to: root.appending(path: "\(folder)/src/f\(number).ts"))
+        }
+    }
+
+    let candidates = MentionController.indexFiles(under: root, limit: 6)
+    #expect(candidates.map(\.path) == [
+        "backend", "frontend",
+        "backend/src", "frontend/src",
+        "backend/src/f0.ts", "backend/src/f1.ts",
+    ])
 }
 
 @Test func acceptRewritesThePromptTail() {
