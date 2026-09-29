@@ -87,7 +87,7 @@ public actor ControlChannel {
     }
 
     static let refusalMessage =
-        "DevSpace não reconheceu este control_request e não consegue atendê-lo"
+        "Den não reconheceu este control_request e não consegue atendê-lo"
 
     private func refuse(_ requestID: String, _ raw: JSONValue) -> UnrecognizedControl {
         do {
@@ -131,7 +131,7 @@ public actor ControlChannel {
         case .running: break
         }
         nextRequestNumber += 1
-        let id = "devspace-\(nextRequestNumber)"
+        let id = "den-\(nextRequestNumber)"
         let data = try request.requestData(requestID: id)
 
         let timeout = Task { [requestTimeout] in

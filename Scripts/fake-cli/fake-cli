@@ -1,6 +1,6 @@
 #!/bin/sh
-# Stands in for a harness CLI in DevSpace's tests. Driven by the step files in
-# $FAKE_CLI_STATE; DevSpaceTestSupport/FakeCLI.swift writes them and explains
+# Stands in for a harness CLI in Den's tests. Driven by the step files in
+# $FAKE_CLI_STATE; DenTestSupport/FakeCLI.swift writes them and explains
 # the format. When the directory is still empty, the steps are unpacked from
 # $FAKE_CLI_SCENARIO, one "<file> <base64>" per line.
 

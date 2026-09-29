@@ -145,7 +145,7 @@ public actor OpenCodeSession: HarnessSession {
     }
 
     static let refusalMessage =
-        "DevSpace não reconheceu este método e não consegue atendê-lo"
+        "Den não reconheceu este método e não consegue atendê-lo"
 
     private func refuse(_ id: JSONValue, method: String, raw: JSONValue) async {
         let replied = (try? await channel.refuse(id, Self.refusalMessage)) != nil

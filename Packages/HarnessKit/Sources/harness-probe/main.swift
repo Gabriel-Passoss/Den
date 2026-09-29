@@ -352,7 +352,7 @@ case "permission":
             ⚠ nenhum pedido chegou. Isso NÃO prova que o roteamento está quebrado: \
             o CLI só encaminha quando as regras dele avaliam para "ask". Confira \
             `permissions.allow`, hooks de PreToolUse, e o `defaultMode` das suas \
-            configurações antes de suspeitar do DevSpace.
+            configurações antes de suspeitar do Den.
             """)
         }
     } catch {

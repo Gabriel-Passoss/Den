@@ -86,7 +86,7 @@ public enum ClaudeLaunch {
 
         var environment = ProcessInfo.processInfo.environment
 
-        environment["CLAUDE_CODE_ENTRYPOINT"] = "devspace"
+        environment["CLAUDE_CODE_ENTRYPOINT"] = "den"
 
         return ProcessTransport.Launch(
             executable: installation.executable,
