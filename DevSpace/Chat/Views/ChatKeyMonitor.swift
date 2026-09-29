@@ -20,12 +20,6 @@ struct ZoomedImage: Identifiable, Equatable {
         remove()
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
-            if event.keyCode == 36, event.modifierFlags.contains(.shift),
-               let editor = NSApp.keyWindow?.firstResponder as? NSTextView,
-               editor.isFieldEditor {
-                editor.insertNewlineIgnoringFieldEditor(nil)
-                return nil
-            }
             let slashMatches = slash.matches(prompt: chat.prompt,
                                                   catalog: chat.catalog)
             if !slashMatches.isEmpty {

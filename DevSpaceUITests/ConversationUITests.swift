@@ -68,7 +68,7 @@ final class ConversationUITests: XCTestCase {
     private func startConversation(_ text: String, in app: XCUIApplication) {
         require(app.staticTexts["Nenhuma conversa aberta"], in: app)
         app.buttons["Nova conversa"].click()
-        let composer = app.textFields["Peça uma alteração…"]
+        let composer = app.textViews["Peça uma alteração…"]
         require(composer, in: app)
         composer.click()
         composer.typeText(text + "\n")
