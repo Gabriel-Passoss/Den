@@ -50,7 +50,7 @@ final class WorkspaceModel {
     private static let legacyFoldersKey = "Den.folders"
     private static let legacyNamesKey = "Den.folderNames"
 
-    static func live(_ environment: LaunchEnvironment = .current) -> WorkspaceModel {
+    static func live(_ environment: any AppEnvironment) -> WorkspaceModel {
         let root = environment.sessionsRoot
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let workspace = WorkspaceModel(store: FileTranscriptStore(root: root),
