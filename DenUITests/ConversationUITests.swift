@@ -134,27 +134,27 @@ final class ConversationUITests: XCTestCase {
     // MARK: - Mentions
 
     private let bigProject = """
-        mkdir -p frontend/src scalemed-backend/src
-        : > scalemed-backend/pom.xml
+        mkdir -p admin-web/src orders-api/src
+        : > orders-api/pom.xml
         i=0
         while [ $i -lt 4100 ]; do
-          : > frontend/src/f$i; : > scalemed-backend/src/f$i
+          : > admin-web/src/f$i; : > orders-api/src/f$i
           i=$((i + 1))
         done
         """
 
     private let backendWithWorktree = """
-        java=scalemed-core/src/main/java/br/com/scalemed/indicators
-        for copy in scalemed-backend worktrees/NS-1/backend; do
+        java=orders-domain/src/main/java/com/example/orders
+        for copy in orders-api worktrees/feature-1/orders-api; do
           mkdir -p $copy/$java $copy/src
-          : > $copy/$java/IndicatorsRepository.java
+          : > $copy/$java/OrderRepository.java
         done
-        mkdir -p scalemed-backend/.git scalemed-backend/target/classes
-        echo "gitdir: $(pwd -P)/scalemed-backend/.git/worktrees/backend" > worktrees/NS-1/backend/.git
+        mkdir -p orders-api/.git orders-api/target/classes
+        echo "gitdir: $(pwd -P)/orders-api/.git/worktrees/orders-api" > worktrees/feature-1/orders-api/.git
         i=0
         while [ $i -lt 4100 ]; do
-          : > scalemed-backend/src/f$i; : > scalemed-backend/target/classes/f$i.class
-          : > worktrees/NS-1/backend/src/f$i
+          : > orders-api/src/f$i; : > orders-api/target/classes/f$i.class
+          : > worktrees/feature-1/orders-api/src/f$i
           i=$((i + 1))
         done
         """
@@ -164,14 +164,14 @@ final class ConversationUITests: XCTestCase {
         let app = launch(projectSetup: bigProject)
         let composer = openComposer(in: app)
 
-        composer.typeText("@frontend")
-        require(app.staticTexts["frontend"], in: app)
+        composer.typeText("@admin-web")
+        require(app.staticTexts["admin-web"], in: app)
         composer.typeKey("a", modifierFlags: .command)
-        composer.typeText("@scalemed")
-        require(app.staticTexts["scalemed-backend"], in: app)
+        composer.typeText("@orders")
+        require(app.staticTexts["orders-api"], in: app)
 
         composer.typeText("\t")
-        XCTAssertEqual(composer.value as? String, "@scalemed-backend/")
+        XCTAssertEqual(composer.value as? String, "@orders-api/")
     }
 
     @MainActor
@@ -179,10 +179,10 @@ final class ConversationUITests: XCTestCase {
         let app = launch(projectSetup: backendWithWorktree)
         let composer = openComposer(in: app)
 
-        composer.typeText("@IndicatorsRepo")
+        composer.typeText("@OrderRepo")
 
-        require(text(containing: "scalemed-backend/scalemed-core/src/main/java", in: app), in: app)
-        XCTAssertFalse(text(containing: "worktrees/NS-1/backend", in: app).exists)
+        require(text(containing: "orders-api/orders-domain/src/main/java", in: app), in: app)
+        XCTAssertFalse(text(containing: "worktrees/feature-1/orders-api", in: app).exists)
     }
 
     // MARK: - Sidebar

@@ -7,7 +7,7 @@ private let bigFolderSize = 4100
 
 private func makeBigProject(in project: URL) throws {
     let files = FileManager.default
-    for folder in ["frontend/src", "scalemed-backend/src"] {
+    for folder in ["admin-web/src", "orders-api/src"] {
         try files.createDirectory(at: project.appending(path: folder),
                                   withIntermediateDirectories: true)
         for number in 0..<bigFolderSize {
@@ -15,7 +15,7 @@ private func makeBigProject(in project: URL) throws {
                              contents: nil)
         }
     }
-    files.createFile(atPath: project.appending(path: "scalemed-backend/pom.xml").path,
+    files.createFile(atPath: project.appending(path: "orders-api/pom.xml").path,
                      contents: nil)
 }
 
@@ -27,11 +27,11 @@ private func git(_ arguments: [String], in directory: URL) async throws {
 }
 
 private let deepSource =
-    "scalemed-backend/scalemed-core/src/main/java/br/com/scalemed/indicators/IndicatorsRepository.java"
+    "orders-api/orders-domain/src/main/java/com/example/orders/OrderRepository.java"
 
 private func makeBackendWithWorktree(in project: URL) async throws {
     let files = FileManager.default
-    let backend = project.appending(path: "scalemed-backend")
+    let backend = project.appending(path: "orders-api")
     for folder in ["src", "target/classes"] {
         try files.createDirectory(at: backend.appending(path: folder),
                                   withIntermediateDirectories: true)
@@ -48,8 +48,8 @@ private func makeBackendWithWorktree(in project: URL) async throws {
     try await git(["init", "-q", "-b", "main"], in: backend)
     try await git(["add", "."], in: backend)
     try await git(["commit", "-q", "-m", "initial"], in: backend)
-    try await git(["worktree", "add", "-q", "-b", "ns-1",
-                   project.appending(path: "worktrees/NS-1/backend").path], in: backend)
+    try await git(["worktree", "add", "-q", "-b", "feature-1",
+                   project.appending(path: "worktrees/feature-1/orders-api").path], in: backend)
 }
 
 @Test func aDeepSourceBesideBuildOutputAndAWorktreeCanBeMentioned() async throws {
@@ -59,7 +59,7 @@ private func makeBackendWithWorktree(in project: URL) async throws {
         let mentions = MentionController()
         await mentions.loadIndex(under: chat.workingDirectory)
 
-        chat.prompt = "@IndicatorsRepo"
+        chat.prompt = "@OrderRepo"
         #expect(mentions.matches(prompt: chat.prompt).map(\.path) == [deepSource])
         #expect(!mentions.fileIndex.contains { $0.path.contains("/target/") })
     }
@@ -72,7 +72,7 @@ private func makeBackendWithWorktree(in project: URL) async throws {
         let mentions = MentionController()
         await mentions.loadIndex(under: chat.workingDirectory)
 
-        for folder in ["frontend", "scalemed-backend"] {
+        for folder in ["admin-web", "orders-api"] {
             chat.prompt = "@" + folder
             #expect(mentions.matches(prompt: chat.prompt).first?.path == folder)
         }
@@ -87,17 +87,17 @@ private func makeBackendWithWorktree(in project: URL) async throws {
         let mentions = MentionController()
         await mentions.loadIndex(under: chat.workingDirectory)
 
-        chat.prompt = "leia @scalemed"
+        chat.prompt = "leia @orders"
         let folder = try #require(mentions.matches(prompt: chat.prompt).first)
         mentions.accept(folder, in: chat)
         chat.prompt += "pom"
         let file = try #require(mentions.matches(prompt: chat.prompt).first)
         mentions.accept(file, in: chat)
-        #expect(chat.prompt == "leia @scalemed-backend/pom.xml ")
+        #expect(chat.prompt == "leia @orders-api/pom.xml ")
 
         await chat.send(text: chat.prompt)
         await settle(within: processPatience) { !chat.isBusy }
 
-        #expect(e2e.claude.received.contains { $0.contains("leia @scalemed-backend/pom.xml") })
+        #expect(e2e.claude.received.contains { $0.contains("leia @orders-api/pom.xml") })
     }
 }
