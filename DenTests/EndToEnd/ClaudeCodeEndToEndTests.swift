@@ -89,7 +89,7 @@ private func argument(after flag: String, in launch: FakeCLI.Launch?) -> String?
         await settle(within: processPatience) { chat.title == "Saudação curta" }
 
         let listed = e2e.relaunched()
-        await listed.refresh()
+        await refresh(listed) { listed.summaries.map(\.title) == ["Saudação curta"] }
         #expect(listed.summaries.map(\.title) == ["Saudação curta"])
     }
 }
