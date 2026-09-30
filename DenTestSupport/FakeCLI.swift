@@ -130,7 +130,7 @@ nonisolated final class FakeCLI {
         return step
     }
 
-    private static let scripts = repository.appending(path: "Scripts/fake-cli")
+    private static let scripts = testResources
 }
 
 extension FakeCLI {
@@ -151,7 +151,7 @@ extension FakeCLI {
 /// fixtures. Replaying them holds the app to what the CLIs actually emit.
 nonisolated enum RecordedSession {
     static func claude(_ name: String) throws -> [String] {
-        try lines(at: "ClaudeHarnessTests/Fixtures/\(name).ndjson")
+        try lines(of: name)
     }
 
     /// The recorded Write permission, cut where the CLI stops to wait for the
@@ -164,15 +164,16 @@ nonisolated enum RecordedSession {
     }
 
     static func openCode(_ name: String) throws -> [String] {
-        try lines(at: "OpenCodeHarnessTests/Fixtures/\(name).ndjson")
+        try lines(of: name)
     }
 
-    private static func lines(at path: String) throws -> [String] {
-        let file = repository.appending(path: "Packages/HarnessKit/Tests/" + path)
+    private static func lines(of name: String) throws -> [String] {
+        let file = testResources.appending(path: name + ".ndjson")
         return try String(contentsOf: file, encoding: .utf8)
             .split(separator: "\n").map(String.init)
     }
 }
 
-nonisolated private let repository = URL(filePath: #filePath)
-    .deletingLastPathComponent().deletingLastPathComponent()
+nonisolated private final class TestBundle {}
+
+nonisolated private let testResources = Bundle(for: TestBundle.self).resourceURL!

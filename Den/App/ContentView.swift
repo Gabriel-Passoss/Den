@@ -2,11 +2,15 @@ import SwiftUI
 import HarnessCore
 
 struct ContentView: View {
-    @State private var workspace = WorkspaceModel.live()
+    @State private var workspace: WorkspaceModel
 
     @State private var columns = NavigationSplitViewVisibility.all
 
     @State private var gitChanges = GitChangesModel()
+
+    init(environment: any AppEnvironment) {
+        _workspace = State(initialValue: WorkspaceModel.live(environment))
+    }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
@@ -68,8 +72,10 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    let environment = DevEnvironment()
+    ContentView(environment: environment)
         .environment(RunManager())
         .environment(RunConfigurationsModel(
-            store: RunConfigurationStore(url: LaunchEnvironment.current.runConfigurationsFile)))
+            store: RunConfigurationStore(url: environment.runConfigurationsFile)))
+        .defaultAppStorage(environment.defaults)
 }
