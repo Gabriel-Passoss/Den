@@ -18,9 +18,7 @@ struct EndToEnd {
     let project: URL
     let attachments: URL
 
-    fileprivate let store: FileTranscriptStore
-    fileprivate let defaults: UserDefaults
-    fileprivate let registry: HarnessRegistry
+    fileprivate let environment: TestEnvironment
     fileprivate let opened = Opened()
 
     /// Opens a conversation the way the "Nova conversa" button does, and waits
@@ -36,10 +34,7 @@ struct EndToEnd {
     /// A second workspace over the same disk and defaults: what the next app
     /// launch sees.
     func relaunched() -> WorkspaceModel {
-        let workspace = WorkspaceModel(store: store, defaults: defaults,
-                                       cache: SessionCache(defaults: defaults),
-                                       registry: registry, attachmentsRoot: attachments)
-        workspace.workingDirectory = project
+        let workspace = WorkspaceModel.live(environment)
         opened.workspaces.append(workspace)
         return workspace
     }
@@ -61,21 +56,17 @@ func withEndToEnd(_ body: (EndToEnd) async throws -> Void) async throws {
     let defaults = scratch.defaults
     let root = FileManager.default.temporaryDirectory
         .appending(path: "DenTests-" + UUID().uuidString)
-    let project = root.appending(path: "project")
-    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
     let claude = try FakeCLI()
     let openCode = try FakeCLI()
 
-    let store = FileTranscriptStore(root: root.appending(path: "sessions"))
-    let registry = HarnessRegistry.standard.pinning([
-        claudeCodeID: claude.executable,
-        openCodeID: openCode.executable,
-    ])
-    let attachments = root.appending(path: "attachments")
-    let workspace = WorkspaceModel(store: store, defaults: defaults,
-                                   cache: SessionCache(defaults: defaults),
-                                   registry: registry, attachmentsRoot: attachments)
-    workspace.workingDirectory = project
+    let environment = TestEnvironment(root: root, defaults: defaults,
+                                      registry: HarnessRegistry.standard.pinning([
+                                          claudeCodeID: claude.executable,
+                                          openCodeID: openCode.executable,
+                                      ]))
+    let project = environment.workingDirectory
+    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+    let workspace = WorkspaceModel.live(environment)
 
     defer {
         scratch.remove()
@@ -85,8 +76,8 @@ func withEndToEnd(_ body: (EndToEnd) async throws -> Void) async throws {
     }
 
     let e2e = EndToEnd(workspace: workspace, claude: claude, openCode: openCode,
-                       project: project, attachments: attachments,
-                       store: store, defaults: defaults, registry: registry)
+                       project: project, attachments: environment.attachmentsRoot,
+                       environment: environment)
     e2e.opened.workspaces.append(workspace)
     var failure: (any Error)?
     do { try await body(e2e) } catch { failure = error }

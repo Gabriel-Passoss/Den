@@ -75,6 +75,7 @@ private func argument(after flag: String, in launch: FakeCLI.Launch?) -> String?
         #expect(turn.contains(#""media_type":"image/png""#))
         #expect(turn.contains(Data([0x89, 0x50]).base64EncodedString()))
         #expect(chat.lines.first?.images.count == 1)
+        #expect((try? FileManager.default.contentsOfDirectory(atPath: e2e.attachments.path))?.count == 1)
     }
 }
 
