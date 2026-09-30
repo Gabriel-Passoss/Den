@@ -29,6 +29,38 @@ private func scratchRoot() -> URL {
     #expect(environment.defaults != .standard)
 }
 
+@MainActor
+@Test func aRelaunchOnTheSameRootKeepsThePreferences() throws {
+    let root = scratchRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let launch = [UITestEnvironment.rootKey: root.path]
+    let first = try #require(UITestEnvironment(launch))
+    defer { first.defaults.removeObject(forKey: "DenTests.relaunch") }
+    try FileManager.default.createDirectory(at: first.sessionsRoot,
+                                            withIntermediateDirectories: true)
+    first.defaults.set("kept", forKey: "DenTests.relaunch")
+
+    let relaunched = try #require(UITestEnvironment(launch))
+
+    #expect(relaunched.defaults.string(forKey: "DenTests.relaunch") == "kept")
+}
+
+@MainActor
+@Test func aFreshRootStartsWithNoPreferences() throws {
+    let used = scratchRoot()
+    let fresh = scratchRoot()
+    defer {
+        try? FileManager.default.removeItem(at: used)
+        try? FileManager.default.removeItem(at: fresh)
+    }
+    let first = try #require(UITestEnvironment([UITestEnvironment.rootKey: used.path]))
+    first.defaults.set("stale", forKey: "DenTests.freshRoot")
+
+    let next = try #require(UITestEnvironment([UITestEnvironment.rootKey: fresh.path]))
+
+    #expect(next.defaults.object(forKey: "DenTests.freshRoot") == nil)
+}
+
 @Test func aProjectSetupFillsTheProjectOnlyTheFirstTime() throws {
     let root = scratchRoot()
     defer { try? FileManager.default.removeItem(at: root) }
