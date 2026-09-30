@@ -11,6 +11,16 @@ let openCodeID = HarnessID(rawValue: "opencode")
 let processPatience: Duration = .seconds(10)
 
 @MainActor
+func refresh(_ workspace: WorkspaceModel, until reached: @MainActor () -> Bool) async {
+    let deadline = ContinuousClock.now + processPatience
+    while ContinuousClock.now < deadline {
+        await workspace.refresh()
+        if reached() { return }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+}
+
+@MainActor
 struct EndToEnd {
     let workspace: WorkspaceModel
     let claude: FakeCLI

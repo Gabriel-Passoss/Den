@@ -163,7 +163,7 @@ private func sent(_ cli: FakeCLI, _ method: String) -> [String] {
         #expect(prompt.contains("E agora?"))
 
         let listed = e2e.relaunched()
-        await listed.refresh()
+        await refresh(listed) { listed.summaries.first?.harnesses == [claudeCodeID, openCodeID] }
         #expect(listed.summaries.first?.harnesses == [claudeCodeID, openCodeID])
     }
 }
