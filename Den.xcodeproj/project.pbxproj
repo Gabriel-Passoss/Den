@@ -57,6 +57,24 @@
 			path = DenUITests;
 			sourceTree = "<group>";
 		};
+		BE7E570000000000000000C0 /* fake-cli */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = "fake-cli";
+			path = "Scripts/fake-cli";
+			sourceTree = "<group>";
+		};
+		BE7E570000000000000000C1 /* ClaudeHarnessFixtures */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = ClaudeHarnessFixtures;
+			path = Packages/HarnessKit/Tests/ClaudeHarnessTests/Fixtures;
+			sourceTree = "<group>";
+		};
+		BE7E570000000000000000C2 /* OpenCodeHarnessFixtures */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = OpenCodeHarnessFixtures;
+			path = Packages/HarnessKit/Tests/OpenCodeHarnessTests/Fixtures;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +107,9 @@
 				BE7E570000000000000000A2 /* DenTests */,
 				BE7E570000000000000000B0 /* DenTestSupport */,
 				BE7E570000000000000000B2 /* DenUITests */,
+				BE7E570000000000000000C0 /* fake-cli */,
+				BE7E570000000000000000C1 /* ClaudeHarnessFixtures */,
+				BE7E570000000000000000C2 /* OpenCodeHarnessFixtures */,
 				BE5BD8D6305B606D00035C7F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -145,6 +166,9 @@
 			fileSystemSynchronizedGroups = (
 				BE7E570000000000000000A2 /* DenTests */,
 				BE7E570000000000000000B0 /* DenTestSupport */,
+				BE7E570000000000000000C0 /* fake-cli */,
+				BE7E570000000000000000C1 /* ClaudeHarnessFixtures */,
+				BE7E570000000000000000C2 /* OpenCodeHarnessFixtures */,
 			);
 			name = DenTests;
 			packageProductDependencies = (
@@ -170,6 +194,9 @@
 			fileSystemSynchronizedGroups = (
 				BE7E570000000000000000B2 /* DenUITests */,
 				BE7E570000000000000000B0 /* DenTestSupport */,
+				BE7E570000000000000000C0 /* fake-cli */,
+				BE7E570000000000000000C1 /* ClaudeHarnessFixtures */,
+				BE7E570000000000000000C2 /* OpenCodeHarnessFixtures */,
 			);
 			name = DenUITests;
 			productName = DenUITests;
