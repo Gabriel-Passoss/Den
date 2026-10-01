@@ -75,8 +75,12 @@ struct ChatComposer: View {
                     .help("Tokens no contexto agora")
                     .padding(.trailing, 2)
             }
-            ForEach(chat.knobs.filter { $0.category != .mode }) {
-                KnobBadge(knob: $0, chat: chat, compact: density != .full)
+            ForEach(chat.knobs.filter { $0.category != .mode }) { knob in
+                if knob.category == .effort, EffortPicker.fits(knob) {
+                    EffortPicker(knob: knob, chat: chat, showsLabel: density != .compact)
+                } else {
+                    KnobBadge(knob: knob, chat: chat, compact: density != .full)
+                }
             }
             Button(action: attachFiles) {
                 Image(systemName: "paperclip")
