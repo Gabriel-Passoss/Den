@@ -66,14 +66,8 @@ struct ChatComposer: View {
                 KnobBadge(knob: $0, chat: chat, compact: density != .full)
             }
             Spacer(minLength: 6)
-            if density == .full, let context = chat.contextLabel {
-                Text(context)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(Theme.textTertiary)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .help("Tokens no contexto agora")
-                    .padding(.trailing, 2)
+            if chat.contextTokens > 0 || chat.contextWindow != nil {
+                ContextRing(chat: chat, showsLabel: density != .compact)
             }
             ForEach(chat.knobs.filter { $0.category != .mode }) { knob in
                 if knob.category == .effort, EffortPicker.fits(knob) {

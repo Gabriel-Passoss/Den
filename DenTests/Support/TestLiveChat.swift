@@ -9,6 +9,7 @@ struct LiveChatHarness {
     let harness: FakeHarness
     let others: [FakeHarness]
     let attachments: URL
+    let store: FileTranscriptStore
 
     var session: FakeSession { harness.session }
     var log: HarnessLog { harness.log }
@@ -34,14 +35,15 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
     }
 
     let attachments = root.appending(path: "attachments")
-    let chat = ChatModel(store: FileTranscriptStore(root: root),
+    let store = FileTranscriptStore(root: root)
+    let chat = ChatModel(store: store,
                          workingDirectory: root,
                          harness: harness.id,
                          cache: SessionCache(defaults: defaults),
                          registry: HarnessRegistry(harnesses: [harness] + others),
                          attachmentsRoot: attachments)
     try await body(LiveChatHarness(chat: chat, harness: harness, others: others,
-                                   attachments: attachments))
+                                   attachments: attachments, store: store))
 }
 
 /// The update stream is consumed by a detached task, so assertions about events

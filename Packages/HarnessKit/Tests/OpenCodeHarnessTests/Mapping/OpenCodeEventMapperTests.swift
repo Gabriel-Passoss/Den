@@ -140,8 +140,15 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     let out = subject.map(update: update(
         #"{"sessionUpdate":"usage_update","used":19818,"size":200000,"cost":{"amount":0.12}}"#))
 
-    #expect(out.events == [.contextUsage(tokens: 19818)])
+    #expect(out.events == [.contextUsage(tokens: 19818, window: 200_000)])
     #expect(out.entries.isEmpty)
+}
+
+@Test func aUsageUpdateWithoutASizeLeavesTheWindowUnknown() throws {
+    var subject = mapper()
+    let out = subject.map(update: update(#"{"sessionUpdate":"usage_update","used":19818}"#))
+
+    #expect(out.events == [.contextUsage(tokens: 19818, window: nil)])
 }
 
 @Test func theBoundaryCarriesTheContextWhenAFreshUsageArrives() throws {

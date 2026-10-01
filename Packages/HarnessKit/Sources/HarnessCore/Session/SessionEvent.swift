@@ -21,7 +21,7 @@ public enum SessionEvent: Sendable, Equatable {
 
     case notice(subtype: String, text: String)
 
-    case contextUsage(tokens: Int)
+    case contextUsage(tokens: Int, window: Int? = nil)
 
     case catalogUpdated(CommandCatalog)
 

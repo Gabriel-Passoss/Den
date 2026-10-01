@@ -113,9 +113,9 @@ nonisolated final class FakeCLI {
     var received: [String] {
         guard let text = try? String(contentsOf: state.appending(path: "received"),
                                      encoding: .utf8) else { return [] }
-        return text.split(separator: "\n").map {
-            $0.replacingOccurrences(of: #"\/"#, with: "/")
-        }
+        return text.split(separator: "\n")
+            .map { $0.replacingOccurrences(of: #"\/"#, with: "/") }
+            .filter { !$0.contains(#""subtype":"get_context_usage""#) }
     }
 
     func remove() {

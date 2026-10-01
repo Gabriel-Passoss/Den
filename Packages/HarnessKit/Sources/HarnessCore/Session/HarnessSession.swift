@@ -12,5 +12,11 @@ public protocol HarnessSession: Actor {
 
     func knobs() async -> [HarnessKnob]
 
+    func contextUsage() async -> ContextUsage?
+
     func stop() async
+}
+
+extension HarnessSession {
+    public func contextUsage() async -> ContextUsage? { nil }
 }

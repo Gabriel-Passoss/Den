@@ -115,3 +115,43 @@ private func segment(
     #expect(summary.usage.inputTokens == 150)
     #expect(summary.entryCount == 347)
 }
+
+private let measuredContext = ContextUsage(
+    usedTokens: 27_352, windowTokens: 200_000,
+    slices: [ContextSlice(category: .messages, tokens: 27_352)])
+
+private func decodedSegment(_ json: String) throws -> Segment {
+    try JSONDecoder().decode(Segment.self, from: Data(json.utf8))
+}
+
+private let savedBeforeContext = """
+    {"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","harness":"harness-a",
+     "harnessSessionID":"abc","model":"algum-modelo","entries":[],
+     "usage":{"inputTokens":0,"outputTokens":0,"cacheReadTokens":0,"cacheCreationTokens":0,"costUSD":0}}
+    """
+
+@Test func aSegmentKeepsTheContextLastMeasuredInIt() throws {
+    var kept = segment(harnessA)
+    kept.context = measuredContext
+    let decoded = try JSONDecoder().decode(Segment.self, from: JSONEncoder().encode(kept))
+    #expect(decoded == kept)
+}
+
+@Test func aSegmentWithoutAMeasurementSavesNoContext() throws {
+    let data = try JSONEncoder().encode(segment(harnessA))
+    #expect(!String(decoding: data, as: UTF8.self).contains("context"))
+}
+
+@Test func aSegmentSavedBeforeContextWasKeptStillLoads() throws {
+    let decoded = try decodedSegment(savedBeforeContext)
+    #expect(decoded.harnessSessionID == "abc")
+    #expect(decoded.context == nil)
+}
+
+@Test func anUnreadableContextNeverCostsTheSegment() throws {
+    let damaged = savedBeforeContext.replacingOccurrences(
+        of: #""entries":[],"#, with: #""entries":[],"context":{"usedTokens":"many"},"#)
+    let decoded = try decodedSegment(damaged)
+    #expect(decoded.harnessSessionID == "abc")
+    #expect(decoded.context == nil)
+}
