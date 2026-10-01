@@ -13,10 +13,10 @@ nonisolated enum ReplySuggestion {
             .map(\.element)
             .joined(separator: "\n")
         return prose.split(whereSeparator: \.isNewline)
-            .map { $0.replacing(/`[^`]*`/, with: "").trimmingCharacters(in: .whitespaces) }
+            .map { $0.replacing(#/`[^`]*`/#, with: "").trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
             .suffix(3)
-            .contains { $0.contains(/\?(?=[\s)"”*_.]|$)/) }
+            .contains { $0.contains(#/\?(?=[\s)"”*_.]|$)/#) }
     }
 
     static func instruction(request: String, reply: String) -> String {
