@@ -70,6 +70,27 @@ final class ChatModel {
 
     var pendingQuestion: QuestionPrompt?
 
+    private(set) var suggestedReply: String?
+
+    private var suggestionTurn = 0
+
+    var visibleSuggestion: String? {
+        guard prompt.isEmpty, pendingAttachments.isEmpty, pendingPastes.isEmpty,
+              !isBusy else { return nil }
+        return suggestedReply
+    }
+
+    func acceptSuggestion() async {
+        guard let reply = visibleSuggestion else { return }
+        dismissSuggestion()
+        await send(text: reply)
+    }
+
+    func dismissSuggestion() {
+        suggestionTurn += 1
+        suggestedReply = nil
+    }
+
     var branch: String?
 
     var catalog: CommandCatalog = .empty {
@@ -323,6 +344,7 @@ final class ChatModel {
         let text = ([typed] + pasted).filter { !$0.isEmpty }.joined(separator: "\n\n")
         let attached = pendingAttachments
         guard !text.isEmpty || !attached.isEmpty else { return }
+        dismissSuggestion()
         prompt = ""
         if !keepingPastes { pendingPastes = [] }
         pendingAttachments = []
@@ -361,6 +383,7 @@ final class ChatModel {
     func answerQuestion(_ selections: [String: [String]]) async {
         guard let prompt = pendingQuestion, let session else { return }
         pendingQuestion = nil
+        dismissSuggestion()
         var input = prompt.request.input
         if case .object(var members) = input {
             members["answers"] = .object(selections.mapValues {
@@ -393,6 +416,7 @@ final class ChatModel {
     func dismissQuestion() async {
         guard let prompt = pendingQuestion, let session else { return }
         pendingQuestion = nil
+        dismissSuggestion()
         do {
             try await session.resolve(prompt.id, .deny(
                 message: "o usuário dispensou a pergunta", interrupt: false))
@@ -529,6 +553,7 @@ final class ChatModel {
     }
 
     func stop() async {
+        dismissSuggestion()
         consumer?.cancel()
         consumer = nil
         await session?.stop()
@@ -581,6 +606,27 @@ final class ChatModel {
         return try? await runner.run(found.executable, arguments)
     }
 
+    private func suggestReply() {
+        dismissSuggestion()
+        guard pending == nil, pendingQuestion == nil,
+              let replyIndex = lines.lastIndex(where: { $0.role == .assistant }),
+              let requestIndex = lines.lastIndex(where: { $0.role == .user }),
+              requestIndex < replyIndex,
+              ReplySuggestion.isAsking(lines[replyIndex].text) else { return }
+        let instruction = ReplySuggestion.instruction(
+            request: lines[requestIndex].text, reply: lines[replyIndex].text)
+        let turn = suggestionTurn
+        Task { [weak self] in
+            guard let output = await self?.runQuickPrompt(instruction) else { return }
+            self?.offer(ReplySuggestion.parse(output), turn: turn)
+        }
+    }
+
+    private func offer(_ suggestion: String?, turn: Int) {
+        guard turn == suggestionTurn, !isBusy else { return }
+        suggestedReply = suggestion
+    }
+
     private func applyGeneratedTitle(_ generated: String) async {
         guard !userRenamed else { return }
         title = generated
@@ -603,6 +649,7 @@ final class ChatModel {
                 Task { await persistMetadata() }
             case .turnStarted:
                 resetStreaming()
+                dismissSuggestion()
             case .textDelta(_, let text):
                 appendStreaming(text)
             case .notice(let subtype, let text):
@@ -741,6 +788,7 @@ final class ChatModel {
                 append(.notice, "o turno falhou no harness"
                        + (result.stopReason.map { " (\($0))" } ?? ""), at: moment)
             }
+            if persist, !result.isError { suggestReply() }
         case .contextCompacted(let compaction):
             compactingSince = nil
             if compaction.tokensAfter > 0 { contextTokens = compaction.tokensAfter }
