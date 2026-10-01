@@ -24,4 +24,6 @@ struct ChatLine: Identifiable {
     var verb: CanonicalTool?
 
     var title: String?
+
+    var harness: HarnessID?
 }

@@ -167,7 +167,11 @@ final class ChatModel {
         restorePreferences()
         loadKnobs()
         catalog = cache.rememberedCatalog(for: workingDirectory, harness: harness)
-        for entry in session.allEntries { render(entry, persist: false) }
+        for segment in session.segments {
+            writingHarness = segment.harness
+            for entry in segment.entries { render(entry, persist: false) }
+        }
+        writingHarness = nil
         segmentStart = session.segments.dropLast().reduce(0) { $0 + $1.entries.count }
         if let measured = session.segments.last?.context {
             contextUsage = measured
@@ -767,8 +771,11 @@ final class ChatModel {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         lines.append(ChatLine(id: UUID(), role: role, text: trimmed,
-                          timestamp: moment, verb: verb, title: title))
+                          timestamp: moment, verb: verb, title: title,
+                          harness: writingHarness ?? harness))
     }
+
+    private var writingHarness: HarnessID?
 
     // MARK: - System notices arriving as user messages
 

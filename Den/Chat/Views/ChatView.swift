@@ -251,7 +251,9 @@ struct ChatView: View {
     private var transcript: some View {
         let blocks = chat.blocks
         let starts = Self.turnStarts(in: blocks)
-        let tailStartsTurn = blocks.last.map(Self.isUserBlock) ?? true
+        let tailStartsTurn = blocks.last.map {
+            Self.isUserBlock($0) || Self.harness(of: $0) != chat.harness
+        } ?? true
         let lastID = blocks.last?.id
         return ScrollView {
                 LazyVStack(alignment: .leading, spacing: 20) {
@@ -264,13 +266,15 @@ struct ChatView: View {
                             TranscriptRow(line: line, expanded: $expanded,
                                           onZoom: zoom).id(line.id)
                         case .line(let line):
-                            AssistantTurn(chat: chat, showsHeader: starts.contains(line.id),
+                            AssistantTurn(harness: line.harness ?? chat.harness,
+                                          showsHeader: starts.contains(line.id),
                                           moment: line.timestamp) {
                                 TranscriptRow(line: line, expanded: $expanded, onZoom: zoom)
                             }
                             .id(line.id)
                         case .collapsed(let id, let lines):
-                            AssistantTurn(chat: chat, showsHeader: starts.contains(id),
+                            AssistantTurn(harness: Self.harness(of: block) ?? chat.harness,
+                                          showsHeader: starts.contains(id),
                                           moment: lines.first?.timestamp) {
                                 ToolSteps(id: id, lines: lines, expanded: $expanded,
                                           isLive: id == lastID && chat.isBusy
@@ -283,14 +287,16 @@ struct ChatView: View {
                     if let since = chat.compactingSince {
                         CompactionProgressCard(since: since).id("compacting")
                     } else if !chat.streaming.isEmpty {
-                        AssistantTurn(chat: chat, showsHeader: tailStartsTurn, moment: nil) {
+                        AssistantTurn(harness: chat.harness, showsHeader: tailStartsTurn,
+                                      moment: nil) {
                             MessageBubble(text: chat.streaming, moment: nil,
                                           style: .assistant, markdown: true)
                         }
                         .id("streaming")
                     } else if chat.isBusy, chat.pending == nil,
                               chat.pendingQuestion == nil {
-                        AssistantTurn(chat: chat, showsHeader: tailStartsTurn, moment: nil) {
+                        AssistantTurn(harness: chat.harness, showsHeader: tailStartsTurn,
+                                      moment: nil) {
                             ThinkingRow(chat: chat)
                                 .padding(.vertical, 4)
                         }
@@ -374,15 +380,25 @@ struct ChatView: View {
         return false
     }
 
+    static func harness(of block: ChatBlock) -> HarnessID? {
+        switch block {
+        case .line(let line): line.harness
+        case .collapsed(_, let lines): lines.lazy.compactMap(\.harness).first
+        }
+    }
+
     static func turnStarts(in blocks: [ChatBlock]) -> Set<UUID> {
         var starts = Set<UUID>()
         var afterUser = true
+        var previous: HarnessID?
         for block in blocks {
             if isUserBlock(block) {
                 afterUser = true
             } else {
-                if afterUser { starts.insert(block.id) }
+                let author = harness(of: block)
+                if afterUser || author != previous { starts.insert(block.id) }
                 afterUser = false
+                previous = author
             }
         }
         return starts
@@ -441,7 +457,7 @@ struct ChatView: View {
 }
 
 struct AssistantTurn<Content: View>: View {
-    let chat: ChatModel
+    let harness: HarnessID
     let showsHeader: Bool
     let moment: Date?
     @ViewBuilder var content: () -> Content
@@ -450,7 +466,7 @@ struct AssistantTurn<Content: View>: View {
         HStack(alignment: .top, spacing: 12) {
             Group {
                 if showsHeader {
-                    HarnessBadge(harness: chat.harness, size: 28)
+                    HarnessBadge(harness: harness, size: 28)
                 } else {
                     Color.clear
                 }
@@ -460,7 +476,7 @@ struct AssistantTurn<Content: View>: View {
             VStack(alignment: .leading, spacing: 8) {
                 if showsHeader {
                     HStack(spacing: 6) {
-                        Text(chat.harnessName)
+                        Text(HarnessBadge.name(for: harness))
                             .fontWeight(.medium)
                         if let moment {
                             Text("·")
