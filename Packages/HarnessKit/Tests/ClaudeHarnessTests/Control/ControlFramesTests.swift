@@ -188,3 +188,10 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(decoded["request"]?["subtype"] == .string("set_permission_mode"))
     #expect(decoded["request"]?["mode"] == .string("acceptEdits"))
 }
+
+@Test func encodesTheContextUsageRequestAskingForTheFullDetail() throws {
+    let data = try OutboundControlRequest.getContextUsage.requestData(requestID: "out-3")
+    let decoded = try JSONDecoder().decode(JSONValue.self, from: data)
+    #expect(decoded["request"]?["subtype"] == .string("get_context_usage"))
+    #expect(decoded["request"]?["detail"] == .string("full"))
+}

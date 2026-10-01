@@ -89,6 +89,11 @@ public actor ClaudeSession: HarnessSession {
         _ = try await channel.send(.setPermissionMode(mode))
     }
 
+    public func contextUsage() async -> ContextUsage? {
+        guard let response = try? await channel.send(.getContextUsage) else { return nil }
+        return ClaudeContextUsage.parse(response)
+    }
+
     static func userTurn(text: String, attachments: [MediaAttachment]) -> JSONValue {
         let content: JSONValue
         if attachments.isEmpty {

@@ -15,27 +15,56 @@ struct TranscriptRow: View {
             userBubble(line)
 
         case .assistant:
-            assistantBubble(line.text, at: line.timestamp)
+            MessageBubble(text: line.text, moment: line.timestamp,
+                          style: .assistant, markdown: true)
 
         case .thinking:
-            HStack(alignment: .top, spacing: 7) {
-                Image(systemName: "brain").font(.system(size: 10)).foregroundStyle(.tertiary)
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "brain")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(width: 14)
+                    .padding(.top, 2)
                 Text(MessageBubble.clipped(line.text))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 13))
                     .italic()
+                    .foregroundStyle(Theme.textMuted)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
         case .tool:
-            chip(icon: icon(for: line.verb), text: line.text, mono: true)
+            step(line)
 
         case .toolResult:
-            chip(icon: "arrow.turn.down.right", text: line.text, mono: true, dim: true)
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "arrow.turn.down.right")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Theme.textFaint)
+                    .frame(width: 14)
+                    .padding(.top, 2)
+                Text(MessageBubble.clipped(line.text))
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundStyle(line.text.hasPrefix("falhou")
+                                     ? Theme.removed : Theme.textTertiary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
 
         case .notice:
-            chip(icon: "info.circle", text: line.text, mono: false, dim: true)
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 11))
+                    .frame(width: 14)
+                    .padding(.top, 1)
+                Text(MessageBubble.clipped(line.text))
+                    .font(.system(size: 12.5))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.textTertiary)
 
         case .compaction:
             CompactionMark(text: line.text)
@@ -53,9 +82,9 @@ struct TranscriptRow: View {
 
     private func userBubble(_ line: ChatLine) -> some View {
         HStack(spacing: 0) {
-            Spacer(minLength: 64)
+            Spacer(minLength: 96)
             MessageBubble(text: line.text, moment: line.timestamp,
-                          tint: AnyShapeStyle(Color.accentColor.opacity(0.22)),
+                          style: .user,
                           images: line.images, files: line.files, onZoom: onZoom,
                           isOpen: expanded.contains(line.id),
                           onToggle: LongText.isLong(line.text) ? { toggle(line.id) } : nil)
@@ -72,41 +101,41 @@ struct TranscriptRow: View {
         }
     }
 
-    private func assistantBubble(_ text: String, at moment: Date?) -> some View {
-        HStack(spacing: 0) {
-            MessageBubble(text: text, moment: moment,
-                          tint: AnyShapeStyle(.quaternary.opacity(0.4)), markdown: true)
-            Spacer(minLength: 64)
-        }
-    }
-
-    private func chip(icon: String, text: String, mono: Bool, dim: Bool = false) -> some View {
-        HStack(alignment: .top, spacing: 7) {
-            Image(systemName: icon)
-                .font(.system(size: 10))
-                .foregroundStyle(dim ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
-                .frame(width: 13)
-            Text(MessageBubble.clipped(text))
-                .font(.system(size: 11, design: mono ? .monospaced : .default))
-                .foregroundStyle(dim ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+    private func step(_ line: ChatLine) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: Self.icon(for: line.verb))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.textMuted)
+                .frame(width: 14)
+            Text("\(Text(Self.verb(for: line.verb)).foregroundStyle(Theme.textMuted)) \(Text(MessageBubble.clipped(line.text)).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.text))")
+                .font(.system(size: 13))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private func icon(for verb: CanonicalTool?) -> String {
+    static func icon(for verb: CanonicalTool?) -> String {
         switch verb {
         case .read: "doc.text"
-        case .write: "square.and.pencil"
+        case .write: "plus.square"
         case .edit: "pencil"
         case .execute: "terminal"
         case .search: "magnifyingglass"
         case .fetch: "globe"
         case nil: "wrench.and.screwdriver"
+        }
+    }
+
+    static func verb(for verb: CanonicalTool?) -> String {
+        switch verb {
+        case .read: "Leu"
+        case .write: "Criou"
+        case .edit: "Editou"
+        case .execute: "Executou"
+        case .search: "Buscou"
+        case .fetch: "Acessou"
+        case nil: "Usou"
         }
     }
 }

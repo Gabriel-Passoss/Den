@@ -40,8 +40,9 @@ struct MarkdownTableView: View {
         .scrollBounceBehavior(.basedOnSize)
         .frame(height: content.height > 0 ? min(content.height, Self.maxHeight) : nil)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary, lineWidth: 1))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(Theme.borderCard, lineWidth: 1))
         .padding(.vertical, 2)
         .onGeometryChange(for: CGFloat.self) { proxy in
             (proxy.size.width / 4).rounded() * 4
@@ -63,7 +64,7 @@ struct MarkdownTableView: View {
                              fixedWidths: fixedWidths, header: true)
                     }
                 }
-                Divider().gridCellColumns(columns)
+                Rectangle().fill(Theme.border).frame(height: 1).gridCellColumns(columns)
             }
             ForEach(Array(table.rows.enumerated()), id: \.offset) { index, cells in
                 GridRow {
@@ -74,7 +75,7 @@ struct MarkdownTableView: View {
                 }
                 .background(index.isMultiple(of: 2)
                             ? AnyShapeStyle(.clear)
-                            : AnyShapeStyle(.quaternary.opacity(0.22)))
+                            : AnyShapeStyle(Theme.raised))
             }
         }
     }
@@ -84,7 +85,7 @@ struct MarkdownTableView: View {
                       fixedWidths: Bool, header: Bool) -> some View {
         let isCompact = compact.contains(column)
         InlineCode.text(column < cells.count ? cells[column] : AttributedString(""),
-                        size: header ? 11 : 12, weight: header ? .semibold : .regular)
+                        size: header ? 12 : 13, weight: header ? .semibold : .regular)
             .foregroundStyle(header ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
             .multilineTextAlignment(Self.textAlignment(table.alignments, at: column))
             .fixedSize(horizontal: false, vertical: true)

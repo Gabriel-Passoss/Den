@@ -21,8 +21,10 @@ actor FakeSession: HarnessSession {
     private(set) var appliedKnobs: [(id: String, value: String?)] = []
     private(set) var interrupts = 0
     private(set) var stops = 0
+    private(set) var usageRequests = 0
 
     private var offered: [HarnessKnob] = []
+    private var offeredUsage: ContextUsage?
     private var stream: AsyncStream<SessionUpdate>.Continuation?
 
     var sendFailure: HarnessFailure?
@@ -30,6 +32,7 @@ actor FakeSession: HarnessSession {
     var resolveFailure: HarnessFailure?
 
     func offer(knobs: [HarnessKnob]) { offered = knobs }
+    func offer(usage: ContextUsage?) { offeredUsage = usage }
     func failSend(_ failure: HarnessFailure?) { sendFailure = failure }
     func failApply(_ failure: HarnessFailure?) { applyFailure = failure }
     func failResolve(_ failure: HarnessFailure?) { resolveFailure = failure }
@@ -63,6 +66,11 @@ actor FakeSession: HarnessSession {
     }
 
     func knobs() async -> [HarnessKnob] { offered }
+
+    func contextUsage() async -> ContextUsage? {
+        usageRequests += 1
+        return offeredUsage
+    }
 
     func stop() async {
         stops += 1

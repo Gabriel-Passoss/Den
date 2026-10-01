@@ -50,7 +50,8 @@ public struct OpenCodeEventMapper: Sendable {
             latestCost = update["cost"]?["amount"]?.doubleValue ?? latestCost
             guard let used = update["used"]?.intValue, used > 0 else { return .empty }
             contextTokens = used
-            return MappedOutput(events: [.contextUsage(tokens: used)])
+            return MappedOutput(events: [.contextUsage(tokens: used,
+                                                       window: update["size"]?.intValue)])
 
         case "available_commands_update":
             let names = update["availableCommands"]?.arrayValue?

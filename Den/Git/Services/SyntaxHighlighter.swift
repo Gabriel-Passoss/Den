@@ -54,12 +54,12 @@ nonisolated enum SyntaxHighlighter {
 
     // MARK: - Colors
 
-    private static let keywordColor = Color.pink
-    private static let stringColor = Color.orange
-    private static let numberColor = Color.purple
-    private static let typeColor = Color.teal
-    private static let commentColor = Color.secondary
-    private static let attributeColor = Color.indigo
+    static let keywordColor = Color(hex: 0xB4A8FF)
+    static let stringColor = Color(hex: 0xB5CE8A)
+    static let numberColor = Color(hex: 0xF2B482)
+    static let typeColor = Color(hex: 0x7FD1D9)
+    static let commentColor = Color(hex: 0x6B7385)
+    static let attributeColor = Color(hex: 0xE0B45F)
 
     static func highlight(_ line: String, language: Language) -> AttributedString {
         let chars = Array(line)

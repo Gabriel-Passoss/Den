@@ -8,7 +8,7 @@ struct SlashCommandList: View {
     var choose: (SlashCommand) -> Void
     var back: () -> Void
 
-    private static let rowHeight: CGFloat = 22
+    private static let rowHeight: CGFloat = 28
     private static let rowSpacing: CGFloat = 1
     private static let visibleRows = 8
 
@@ -28,9 +28,9 @@ struct SlashCommandList: View {
                             .font(.system(size: 10, weight: .semibold))
                         Spacer(minLength: 0)
                     }
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 2)
+                    .foregroundStyle(Theme.textTertiary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -62,32 +62,29 @@ struct SlashCommandList: View {
             let isSelected = index == selection
             HStack(spacing: 7) {
                 Image(systemName: command.icon)
-                    .font(.system(size: 10))
-                    .frame(width: 14)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.white)
+                    .font(.system(size: 11))
+                    .frame(width: 16)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(Theme.accent)
                                                 : AnyShapeStyle(command.tint))
                 Text(command.title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
                     .lineLimit(1)
                 Text(command.detail)
-                    .font(.system(size: 10))
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.8))
-                                                : AnyShapeStyle(.secondary))
+                    .font(.system(size: 12))
+                    .foregroundStyle(isSelected ? Theme.textSecondary : Theme.textTertiary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if command.group != nil {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.8))
-                                                    : AnyShapeStyle(.tertiary))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 10)
             .frame(height: Self.rowHeight)
-            .background(isSelected ? AnyShapeStyle(Color.accentColor)
-                                   : AnyShapeStyle(.clear),
-                        in: RoundedRectangle(cornerRadius: 5))
-            .foregroundStyle(isSelected ? .white : .primary)
+            .background(isSelected ? Theme.hoverRaised : .clear,
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .foregroundStyle(isSelected ? Theme.text : Theme.textSecondary)
             .contentShape(Rectangle())
             .onTapGesture { choose(command) }
             .id(command.id)

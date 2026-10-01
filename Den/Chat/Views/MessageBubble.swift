@@ -2,9 +2,11 @@ import SwiftUI
 import HarnessCore
 
 struct MessageBubble: View {
+    enum Style { case user, assistant }
+
     let text: String
     let moment: Date?
-    let tint: AnyShapeStyle
+    var style: Style = .assistant
     var markdown: Bool = false
     var images: [Data] = []
     var files: [String] = []
@@ -12,30 +14,53 @@ struct MessageBubble: View {
     var isOpen = true
     var onToggle: (() -> Void)?
 
+    @State private var hovering = false
+
     var body: some View {
+        switch style {
+        case .assistant:
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+        case .user:
+            HStack(alignment: .bottom, spacing: 8) {
+                timestamp
+                    .opacity(hovering ? 1 : 0)
+                    .padding(.bottom, 2)
+                content
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(Theme.bubble, in: UnevenRoundedRectangle(
+                        topLeadingRadius: 16, bottomLeadingRadius: 16,
+                        bottomTrailingRadius: 4, topTrailingRadius: 16, style: .continuous))
+            }
+            .onHover { hovering = $0 }
+        }
+    }
+
+    private var content: some View {
         let sizes = images.map { ImageCache.displaySize(for: $0) }
         let contentWidth = sizes.map(\.width).max()
-        return VStack(alignment: .center, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 8) {
             ForEach(files, id: \.self) { name in
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     Image(systemName: "doc.fill")
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.accent)
                     Text(name)
-                        .font(.system(size: 12))
+                        .font(.system(size: 12.5))
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
                 .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.vertical, 7)
+                .background(Theme.hoverRaised, in: RoundedRectangle(cornerRadius: 8))
             }
             ForEach(Array(images.enumerated()), id: \.offset) { index, data in
                 if let image = ImageCache.decodedImage(data) {
                     Image(nsImage: image)
                         .resizable()
                         .frame(width: sizes[index].width, height: sizes[index].height)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                         .onTapGesture {
                             onZoom(data)
                         }
@@ -45,50 +70,38 @@ struct MessageBubble: View {
             Group {
                 if let onToggle, !markdown {
                     collapsible(onToggle)
-                } else {
-                    HStack(alignment: .lastTextBaseline, spacing: 8) {
-                        if markdown {
-                            MarkdownText(text: visibleText)
-                        } else if !text.isEmpty {
-                            plainText(visibleText)
-                        }
-                        timestamp
-                    }
+                } else if markdown {
+                    MarkdownText(text: visibleText)
+                } else if !text.isEmpty {
+                    plainText(visibleText)
                 }
             }
             .frame(minWidth: images.isEmpty ? nil : max(contentWidth ?? 0, 220),
                    alignment: .leading)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(tint, in: RoundedRectangle(cornerRadius: 13))
     }
 
     private func collapsible(_ onToggle: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             plainText(isOpen ? visibleText : LongText.preview(text))
                 .lineLimit(isOpen ? nil : LongText.previewLines)
                 .mask(LinearGradient(colors: isOpen ? [.black, .black]
                                                     : [.black, .black, .black.opacity(0.2)],
                                      startPoint: .top, endPoint: .bottom))
-            HStack(spacing: 8) {
-                Button(action: onToggle) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .semibold))
-                            .rotationEffect(.degrees(isOpen ? 180 : 0))
-                        Text(isOpen ? "Recolher"
-                                    : "Mostrar tudo · \(LongText.lineLabel(LongText.lineCount(text)))")
-                    }
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .contentShape(Rectangle())
+            Button(action: onToggle) {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .rotationEffect(.degrees(isOpen ? 180 : 0))
+                    Text(isOpen ? "Recolher"
+                                : "Mostrar tudo · \(LongText.lineLabel(LongText.lineCount(text)))")
                 }
-                .buttonStyle(.plain)
-                .help(isOpen ? "Recolher mensagem" : "Mostrar a mensagem inteira")
-                Spacer(minLength: 0)
-                timestamp
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.accent)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help(isOpen ? "Recolher mensagem" : "Mostrar a mensagem inteira")
         }
     }
 
@@ -96,7 +109,9 @@ struct MessageBubble: View {
 
     private func plainText(_ string: String) -> some View {
         Text(string)
-            .font(.system(size: 13))
+            .font(.system(size: 14))
+            .lineSpacing(2)
+            .foregroundStyle(Theme.text)
             .multilineTextAlignment(.leading)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
@@ -106,8 +121,9 @@ struct MessageBubble: View {
     private var timestamp: some View {
         if let moment {
             Text(moment, format: .dateTime.hour().minute())
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11))
+                .monospacedDigit()
+                .foregroundStyle(Theme.textTertiary)
         }
     }
 

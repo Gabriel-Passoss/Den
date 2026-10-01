@@ -25,6 +25,18 @@ struct HarnessBadge: View {
         .clipShape(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
     }
 
+    static func menuIcon(for harness: HarnessID, size: CGFloat = 16) -> Image {
+        guard let asset = asset(for: harness), let source = NSImage(named: asset) else {
+            return Image(systemName: "circle.fill")
+        }
+        let icon = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
+            NSBezierPath(roundedRect: rect, xRadius: size * 0.27, yRadius: size * 0.27).addClip()
+            source.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+            return true
+        }
+        return Image(nsImage: icon)
+    }
+
     nonisolated static func asset(for harness: HarnessID) -> String? {
         let name = "Harness" + name(for: harness).replacingOccurrences(of: " ", with: "")
         return NSImage(named: name) == nil ? nil : name

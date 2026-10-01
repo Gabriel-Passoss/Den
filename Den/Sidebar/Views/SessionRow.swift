@@ -4,31 +4,30 @@ import HarnessCore
 struct SessionRow: View {
     let summary: SessionSummary
     let indicator: WorkspaceModel.SessionIndicator?
+    var isSelected = false
     var select: () -> Void
     var rename: (String) -> Void
     var unfile: (() -> Void)? = nil
     var delete: () -> Void = {}
 
     @State private var isEditing = false
-
-    private static let trailingInset: CGFloat = 6
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 8) {
             HarnessBadge(harness: summary.harnesses.last, size: 18)
 
-            VStack(alignment: .leading, spacing: 1) {
-                if isEditing {
-                    InlineRenameField(initial: summary.title, commit: rename) {
-                        isEditing = false
-                    }
-                } else {
-                    Text(summary.title).lineLimit(1).truncationMode(.tail)
+            if isEditing {
+                InlineRenameField(initial: summary.title, commit: rename) {
+                    isEditing = false
                 }
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                .font(.system(size: 13))
+            } else {
+                Text(summary.title)
+                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                    .foregroundStyle(isSelected ? Theme.text : Theme.text.opacity(0.88))
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
 
             Spacer(minLength: 4)
@@ -41,9 +40,11 @@ struct SessionRow: View {
                     .accessibilityLabel(Self.label(for: indicator))
             }
         }
-        .padding(.trailing, Self.trailingInset)
-        .padding(.vertical, 2)
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .hoverFill(hovering, selected: isSelected)
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .simultaneousGesture(TapGesture().onEnded {
             guard !isEditing else { return }
             select()
@@ -59,29 +60,24 @@ struct SessionRow: View {
             Divider()
             Button("Apagar sessão…", role: .destructive, action: delete)
         }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     static func color(for indicator: WorkspaceModel.SessionIndicator) -> Color {
         switch indicator {
-        case .unread: .green
-        case .working: .yellow
-        case .waiting: .purple
-        case .rateLimited: .red
+        case .unread: Theme.added
+        case .working: Theme.accent
+        case .waiting: Theme.waiting
+        case .rateLimited: Theme.removed
         }
     }
 
     static func label(for indicator: WorkspaceModel.SessionIndicator) -> String {
         switch indicator {
         case .unread: "Resposta nova"
-        case .working: "Trabalhando"
+        case .working: "Pensando"
         case .waiting: "Aguardando sua decisão"
         case .rateLimited: "Tokens esgotados"
         }
-    }
-
-    private var subtitle: String {
-        let when = summary.updatedAt.formatted(.relative(presentation: .named))
-        guard let current = summary.harnesses.last else { return when }
-        return "\(HarnessBadge.name(for: current)) · \(when)"
     }
 }
