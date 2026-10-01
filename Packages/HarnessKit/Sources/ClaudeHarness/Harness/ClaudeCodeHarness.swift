@@ -23,8 +23,9 @@ public struct ClaudeCodeHarness: Harness {
         ))
     }
 
-    public func titleArguments(for instruction: String) -> [String]? {
-        ["-p", instruction, "--model", "haiku"]
+    public func quickPromptArguments(for instruction: String) -> [String]? {
+        ["-p", instruction, "--model", "haiku",
+         "--safe-mode", "--tools", "", "--no-session-persistence"]
     }
 
     public func makeSession(installation: HarnessInstallation,

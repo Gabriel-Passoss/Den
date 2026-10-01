@@ -550,7 +550,7 @@ final class ChatModel {
             + "ponto final) que resuma o pedido a seguir, na mesma língua dele. "
             + "Responda somente o título.\n\nPedido: \(text.prefix(600))"
 
-        guard let arguments = adapter.titleArguments(for: instruction) else { return }
+        guard let arguments = adapter.quickPromptArguments(for: instruction) else { return }
 
         Task { [weak self] in
             guard let installation = try? await adapter.discover() else { return }

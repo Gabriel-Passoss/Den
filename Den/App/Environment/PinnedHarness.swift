@@ -27,8 +27,8 @@ nonisolated struct PinnedHarness: Harness {
                          settings: settings)
     }
 
-    func titleArguments(for instruction: String) -> [String]? {
-        base.titleArguments(for: instruction)
+    func quickPromptArguments(for instruction: String) -> [String]? {
+        base.quickPromptArguments(for: instruction)
     }
 }
 
