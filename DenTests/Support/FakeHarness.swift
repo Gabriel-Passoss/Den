@@ -86,6 +86,7 @@ struct FakeHarness: Harness {
     var declaredCapabilities = HarnessCapabilities()
     var declaredKnobs: [HarnessKnob] = []
     var discoveryFailure: HarnessFailure?
+    var quickPrompt: [String]?
 
     init(id: String = "fake", displayName: String = "Fake",
          session: FakeSession = FakeSession(), log: HarnessLog = HarnessLog()) {
@@ -115,5 +116,9 @@ struct FakeHarness: Harness {
         log.lastSettings = settings
         log.lastWorkingDirectory = workingDirectory
         return session
+    }
+
+    func quickPromptArguments(for instruction: String) -> [String]? {
+        quickPrompt.map { $0 + [instruction] }
     }
 }

@@ -100,6 +100,8 @@ final class ChatModel {
     private let cache: SessionCache
     private let registry: HarnessRegistry
     private let attachmentsRoot: URL
+    private let runner: any CommandRunner
+    private var installation: HarnessInstallation?
     private var session: (any HarnessSession)?
     private var consumer: Task<Void, Never>?
     private var hasTitle = false
@@ -124,8 +126,10 @@ final class ChatModel {
     init(store: FileTranscriptStore, workingDirectory: URL,
          harness: HarnessID? = nil, cache: SessionCache = .standard,
          registry: HarnessRegistry = .standard,
-         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
+         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot,
+         runner: any CommandRunner = SystemCommandRunner()) {
         self.store = store
+        self.runner = runner
         self.cache = cache
         self.registry = registry
         self.attachmentsRoot = attachmentsRoot
@@ -147,8 +151,10 @@ final class ChatModel {
     init(store: FileTranscriptStore, restoring session: Session,
          cache: SessionCache = .standard,
          registry: HarnessRegistry = .standard,
-         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
+         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot,
+         runner: any CommandRunner = SystemCommandRunner()) {
         self.store = store
+        self.runner = runner
         self.cache = cache
         self.registry = registry
         self.attachmentsRoot = attachmentsRoot
@@ -226,6 +232,7 @@ final class ChatModel {
         status = "procurando o \(adapter.displayName)…"
         do {
             let installation = try await adapter.discover()
+            self.installation = installation
             capabilities = adapter.capabilities(for: installation)
 
             let resumable = capabilities.canResumeSession
@@ -498,6 +505,7 @@ final class ChatModel {
 
         let seed = HandoffSeed.make(entries)
         await stop()
+        installation = nil
 
         segments.append(Segment(harness: newHarness, harnessSessionID: "",
                                 model: "", seededBy: seed?.handoff))
@@ -545,24 +553,32 @@ final class ChatModel {
     }
 
     private func generateTitle(from text: String) {
-        guard let adapter = registry.harness(for: harness) else { return }
         let instruction = "Gere um título curto (3 a 5 palavras, sem aspas e sem "
             + "ponto final) que resuma o pedido a seguir, na mesma língua dele. "
             + "Responda somente o título.\n\nPedido: \(text.prefix(600))"
 
-        guard let arguments = adapter.quickPromptArguments(for: instruction) else { return }
-
         Task { [weak self] in
-            guard let installation = try? await adapter.discover() else { return }
-            guard let output = try? await SystemCommandRunner().run(
-                installation.executable, arguments
-            ) else { return }
+            guard let output = await self?.runQuickPrompt(instruction) else { return }
             let cleaned = output
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’"))
             guard !cleaned.isEmpty, cleaned.count <= 80, !cleaned.contains("\n") else { return }
             await self?.applyGeneratedTitle(cleaned)
         }
+    }
+
+    private func runQuickPrompt(_ instruction: String) async -> String? {
+        guard let adapter = registry.harness(for: harness),
+              let arguments = adapter.quickPromptArguments(for: instruction) else { return nil }
+        let found: HarnessInstallation
+        if let installation {
+            found = installation
+        } else if let discovered = try? await adapter.discover() {
+            found = discovered
+        } else {
+            return nil
+        }
+        return try? await runner.run(found.executable, arguments)
     }
 
     private func applyGeneratedTitle(_ generated: String) async {

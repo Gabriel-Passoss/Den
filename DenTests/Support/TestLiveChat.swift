@@ -20,6 +20,7 @@ struct LiveChatHarness {
 @MainActor
 func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
                   alongside others: [FakeHarness] = [],
+                  runner: any CommandRunner = SystemCommandRunner(),
                   _ body: (LiveChatHarness) async throws -> Void) async throws {
     var harness = FakeHarness()
     configure(&harness)
@@ -41,7 +42,8 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
                          harness: harness.id,
                          cache: SessionCache(defaults: defaults),
                          registry: HarnessRegistry(harnesses: [harness] + others),
-                         attachmentsRoot: attachments)
+                         attachmentsRoot: attachments,
+                         runner: runner)
     try await body(LiveChatHarness(chat: chat, harness: harness, others: others,
                                    attachments: attachments, store: store))
 }
