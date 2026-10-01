@@ -50,7 +50,7 @@ final class ChatModel {
 
     var contextFraction: Double? {
         guard let contextWindow, contextWindow > 0, contextTokens > 0 else { return nil }
-        return min(1, Double(contextTokens) / Double(contextWindow))
+        return ContextUsage.fraction(used: contextTokens, window: contextWindow)
     }
 
     var pending: PermissionRequest?

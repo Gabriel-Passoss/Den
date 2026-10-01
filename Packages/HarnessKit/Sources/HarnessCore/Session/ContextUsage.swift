@@ -114,8 +114,12 @@ public struct ContextUsage: Sendable, Equatable, Codable {
     }
 
     public var fraction: Double {
-        guard windowTokens > 0 else { return 0 }
-        return min(1, Double(usedTokens) / Double(windowTokens))
+        Self.fraction(used: usedTokens, window: windowTokens)
+    }
+
+    public static func fraction(used: Int, window: Int) -> Double {
+        guard window > 0 else { return 0 }
+        return min(1, Double(used) / Double(window))
     }
 }
 

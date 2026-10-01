@@ -1,6 +1,6 @@
 import Foundation
 
-enum ContextFormat {
+nonisolated enum ContextFormat {
 
     static func tokens(_ value: Int) -> String {
         switch value {
