@@ -26,16 +26,16 @@ struct RunFolderPicker: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.textTertiary)
                 TextField("Buscar pasta", text: $query, prompt: Text("Buscar pasta"))
                     .labelsHidden()
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            Divider()
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            Rectangle().fill(Theme.border).frame(height: 1)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if let pinned {
@@ -57,7 +57,7 @@ struct RunFolderPicker: View {
                     } else if filtered.isEmpty, !showsRoot {
                         Text("Nenhuma pasta encontrada")
                             .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.textTertiary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                     }
@@ -66,8 +66,9 @@ struct RunFolderPicker: View {
             }
             .frame(height: 220)
         }
-        .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
+        .background(Theme.field, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .strokeBorder(Theme.borderStrong, lineWidth: 1))
         .task(id: root.path) { await load() }
     }
 
@@ -79,31 +80,32 @@ struct RunFolderPicker: View {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
                     .opacity(isSelected ? 1 : 0)
                     .frame(width: 12)
                 Image(systemName: marker == nil ? "folder" : "diamond.fill")
                     .font(.system(size: marker == nil ? 11 : 8))
-                    .foregroundStyle(marker == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
+                    .foregroundStyle(marker == nil ? Theme.textTertiary : Theme.accent)
                     .frame(width: 14)
                 Text(title)
-                    .font(.system(size: 12))
+                    .font(.system(size: 12.5, design: .monospaced))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 8)
                 if missing {
                     Text("Não existe")
                         .font(.system(size: 11))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Theme.modified)
                 } else if let marker {
                     Text(marker)
                         .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.textTertiary)
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(isSelected ? AnyShapeStyle(.tint.opacity(0.15)) : AnyShapeStyle(.clear),
-                        in: RoundedRectangle(cornerRadius: 4))
+            .frame(height: 28)
+            .background(isSelected ? Theme.hoverRaised : .clear,
+                        in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

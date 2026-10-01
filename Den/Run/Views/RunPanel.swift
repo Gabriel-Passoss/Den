@@ -3,7 +3,6 @@ import SwiftUI
 
 struct RunPanel: View {
     let root: URL
-    var close: (() -> Void)?
 
     @Environment(RunManager.self) private var runs
     @Environment(RunConfigurationsModel.self) private var configurations
@@ -22,13 +21,11 @@ struct RunPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
             if items.isEmpty {
                 emptyState
             } else {
                 list
-                Divider()
-                logSection
+                terminal
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -41,50 +38,47 @@ struct RunPanel: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 7) {
-            Text("Execução")
-                .font(.system(size: 12, weight: .semibold))
-            Text(root.lastPathComponent)
+        HStack(spacing: 8) {
+            Image(systemName: "folder")
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.textTertiary)
+            Text(root.lastPathComponent)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .help(root.path)
             Spacer()
             Button { editor = .new } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .iconLabel(size: 26)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.denGhost(radius: 7))
             .help("Nova configuração")
             .accessibilityLabel("Nova configuração")
-            if let close {
-                Button(action: close) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Recolher painel (⌥⌘9)")
-                .accessibilityLabel("Recolher painel de execução")
-            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.leading, 16)
+        .padding(.trailing, 10)
+        .frame(height: 44)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
 
     // MARK: - Content
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "play.rectangle")
-                .font(.system(size: 26))
-                .foregroundStyle(.tertiary)
+        VStack(spacing: 10) {
+            Image(systemName: "terminal")
+                .font(.system(size: 24))
+                .foregroundStyle(Theme.textFaint)
             Text("Nenhuma configuração neste projeto")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            Button("Configurar…") { editor = .new }
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textTertiary)
+            Button { editor = .new } label: {
+                Text("Configurar…").pillLabel()
+            }
+            .buttonStyle(.denSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -108,44 +102,75 @@ struct RunPanel: View {
             }
             .padding(6)
         }
-        .frame(height: min(CGFloat(items.count) * 32 + 12, 220))
+        .frame(height: min(CGFloat(items.count) * 34 + 12, 220))
     }
 
     @ViewBuilder
-    private var logSection: some View {
+    private var terminal: some View {
         if let id = shownID, let item = items.first(where: { $0.id == id }) {
             let instance = runs.instance(for: id)
-            HStack(spacing: 10) {
-                Text(item.name)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if let instance {
-                    Button("Copiar") { copy(instance) }
-                        .help("Copiar o log inteiro")
-                    Button("Limpar") { instance.clearLog() }
-                        .help("Limpar o log")
-                    Button { followRequest += 1 } label: {
-                        Image(systemName: "arrow.down.to.line")
+            VStack(spacing: 0) {
+                HStack(spacing: 4) {
+                    HStack(spacing: 7) {
+                        Circle()
+                            .fill(RunConfigurationRow.color(for: instance?.state.indicator ?? .idle))
+                            .frame(width: 7, height: 7)
+                        Text(item.name)
+                            .lineLimit(1)
                     }
-                    .help("Ir para o fim")
-                    .accessibilityLabel("Ir para o fim do log")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 10)
+                    .frame(height: 28)
+                    .background(Theme.terminalBar, in: RoundedRectangle(cornerRadius: 6))
+                    Spacer()
+                    if let instance {
+                        terminalButton("doc.on.doc", label: "Copiar o log inteiro") { copy(instance) }
+                        terminalButton("eraser", label: "Limpar o log") { instance.clearLog() }
+                        terminalButton("arrow.down.to.line", label: "Ir para o fim do log") {
+                            followRequest += 1
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 40)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Theme.terminalBar).frame(height: 1)
+                }
+                if let instance {
+                    LogView(instance: instance, followRequest: followRequest)
+                        .padding(.horizontal, 6)
+                } else {
+                    VStack(spacing: 6) {
+                        Text(item.command?.command ?? item.name)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                        Text("Clique em \(Image(systemName: "play.fill")) para executar")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textFaint)
+                    }
+                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
-            .font(.system(size: 11))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            if let instance {
-                LogView(instance: instance, followRequest: followRequest)
-            } else {
-                Text("Clique em \(Image(systemName: "play.fill")) para executar")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            .background(Theme.terminal)
+            .overlay(alignment: .top) { Rectangle().fill(Theme.border).frame(height: 1) }
         }
+    }
+
+    private func terminalButton(_ symbol: String, label: String,
+                                action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textMuted)
+                .iconLabel(size: 28)
+        }
+        .buttonStyle(.denGhost(radius: 6))
+        .help(label)
+        .accessibilityLabel(label)
     }
 
     // MARK: - Actions

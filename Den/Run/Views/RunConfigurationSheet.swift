@@ -39,52 +39,87 @@ struct RunConfigurationSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Form {
-                Section {
-                    TextField("Nome", text: $name, prompt: Text("API"))
-                    if attempted, let nameProblem {
-                        message(nameProblem == .empty ? "Dê um nome à configuração"
-                                                      : "Já existe uma configuração com esse nome",
-                                color: .red)
-                    }
-                    TextField("Comando", text: $command, prompt: Text("npm run dev"), axis: .vertical)
-                        .lineLimit(1...4)
-                        .font(.system(size: 12, design: .monospaced))
-                    if attempted, commandMissing {
-                        message("Informe o comando", color: .red)
-                    }
-                } header: {
-                    Text(editingID == nil ? "Nova configuração" : "Editar configuração")
-                }
-                Section {
-                    RunFolderPicker(root: root, selection: $directory)
-                } header: {
-                    Text("Pasta")
-                } footer: {
-                    Text("O comando roda no seu shell, a partir da pasta escolhida.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 18) {
+            Text(editingID == nil ? "Nova configuração" : "Editar configuração")
+                .font(.system(size: 17, weight: .semibold))
+
+            field("Nome") {
+                TextField("Nome", text: $name, prompt: Text("API"))
+                    .labelsHidden()
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .modifier(FieldChrome())
+                if attempted, let nameProblem {
+                    message(nameProblem == .empty ? "Dê um nome à configuração"
+                                                  : "Já existe uma configuração com esse nome")
                 }
             }
-            .formStyle(.grouped)
-            HStack {
+
+            field("Comando") {
+                TextField("Comando", text: $command, prompt: Text("npm run dev"), axis: .vertical)
+                    .labelsHidden()
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...4)
+                    .font(.system(size: 13, design: .monospaced))
+                    .modifier(FieldChrome())
+                if attempted, commandMissing {
+                    message("Informe o comando")
+                }
+            }
+
+            field("Pasta") {
+                RunFolderPicker(root: root, selection: $directory)
+                Text("O comando roda no seu shell, a partir da pasta escolhida.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            HStack(spacing: 8) {
                 Spacer()
-                Button("Cancelar", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(editingID == nil ? "Criar" : "Salvar") { save() }
-                    .keyboardShortcut(.defaultAction)
+                Button(role: .cancel) { dismiss() } label: {
+                    Text("Cancelar").pillLabel()
+                }
+                .buttonStyle(.denSecondary)
+                .keyboardShortcut(.cancelAction)
+                Button { save() } label: {
+                    Text(editingID == nil ? "Criar" : "Salvar").pillLabel()
+                }
+                .buttonStyle(.denPrimary)
+                .keyboardShortcut(.defaultAction)
             }
-            .padding([.horizontal, .bottom], 20)
         }
+        .padding(22)
         .frame(width: 480)
+        .background(Theme.panel)
+        .foregroundStyle(Theme.text)
+        .tint(Theme.accent)
         .onAppear(perform: load)
     }
 
-    private func message(_ text: String, color: Color) -> some View {
+    private func field(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textTertiary)
+            content()
+        }
+    }
+
+    private struct FieldChrome: ViewModifier {
+        func body(content: Content) -> some View {
+            content
+                .padding(.horizontal, 11)
+                .padding(.vertical, 9)
+                .background(Theme.field, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(Theme.borderStrong, lineWidth: 1))
+        }
+    }
+
+    private func message(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11))
-            .foregroundStyle(color)
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.removed)
     }
 
     private func load() {

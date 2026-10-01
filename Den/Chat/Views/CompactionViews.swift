@@ -36,12 +36,12 @@ struct CompactionProgressCard: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(12)
-        .frame(maxWidth: 420, alignment: .leading)
-        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
+        .padding(14)
+        .frame(maxWidth: 440, alignment: .leading)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.accentColor.opacity(0.25), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Theme.accent.opacity(0.3), lineWidth: 1)
         )
         .onAppear {
             phase = 0
@@ -57,7 +57,7 @@ struct CompactionProgressCard: View {
             let full = geometry.size.width
             let highlight = max(56, full * 0.36)
             Capsule()
-                .fill(.quaternary.opacity(0.7))
+                .fill(Theme.hoverRaised)
                 .overlay(alignment: .leading) {
                     Capsule()
                         .fill(LinearGradient(
@@ -94,10 +94,11 @@ struct CompactionMark: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(.quaternary.opacity(0.4), in: Capsule())
+            .foregroundStyle(Theme.textTertiary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Theme.raised, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
             rule
         }
         .frame(maxWidth: .infinity)
@@ -106,7 +107,7 @@ struct CompactionMark: View {
 
     private var rule: some View {
         Rectangle()
-            .fill(.quaternary)
+            .fill(Theme.border)
             .frame(height: 1)
     }
 }
@@ -128,12 +129,12 @@ struct DigestRow: View {
                     Image(systemName: mono ? "terminal" : "text.quote")
                         .font(.system(size: 10))
                     Text(title)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12.5, weight: .medium))
                     Spacer(minLength: 0)
                 }
-                .foregroundStyle(.tertiary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .foregroundStyle(Theme.textMuted)
+                .padding(.horizontal, 12)
+                .frame(height: 38)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -142,12 +143,13 @@ struct DigestRow: View {
 
             if isOpen {
                 body(of: text)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 9)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 12)
             }
         }
-        .background(.quaternary.opacity(isOpen ? 0.18 : 0),
-                    in: RoundedRectangle(cornerRadius: 9))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(Theme.borderCard, lineWidth: 1))
     }
 
     @ViewBuilder
@@ -155,8 +157,8 @@ struct DigestRow: View {
         let shown = String(text.prefix(20_000))
         if mono {
             Text(shown)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(Theme.textSecondary)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
