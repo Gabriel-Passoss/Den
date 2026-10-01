@@ -74,8 +74,7 @@ struct InspectorView: View {
             .foregroundStyle(selected ? Theme.text : Theme.textTertiary)
             .padding(.horizontal, 12)
             .frame(height: 32)
-            .background(selected ? Theme.hover : .clear,
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .hoverFill(selected: selected)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -70,9 +70,6 @@ struct KnobBadge: View {
             }
             Chevron(size: 8)
         }
-        .font(.system(size: 12.5))
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .contentShape(Rectangle())
+        .chipLabel()
     }
 }

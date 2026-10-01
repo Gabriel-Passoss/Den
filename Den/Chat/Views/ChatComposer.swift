@@ -302,10 +302,8 @@ struct ChatComposer: View {
                 }
                 Chevron(size: 8)
             }
-            .font(.system(size: 12.5))
             .foregroundStyle(Theme.textSecondary)
-            .padding(.horizontal, 10)
-            .frame(height: 30)
+            .chipLabel()
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(Theme.borderStrong, lineWidth: 1))
         }

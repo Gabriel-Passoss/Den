@@ -128,16 +128,25 @@ struct SidebarToggle: View {
 
     var body: some View {
         if chrome.sidebarHidden {
-            Button(action: chrome.showSidebar) {
-                Image(systemName: "sidebar.left")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.textMuted)
-                    .iconLabel()
-            }
-            .buttonStyle(.denGhost)
-            .help("Mostrar barra lateral")
-            .accessibilityLabel("Mostrar barra lateral")
+            SidebarButton(title: "Mostrar barra lateral", action: chrome.showSidebar)
         }
+    }
+}
+
+struct SidebarButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.textMuted)
+                .iconLabel()
+        }
+        .buttonStyle(.denGhost)
+        .help(title)
+        .accessibilityLabel(title)
     }
 }
 

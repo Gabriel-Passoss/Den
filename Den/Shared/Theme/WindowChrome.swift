@@ -158,14 +158,20 @@ struct TopBar<Content: View>: View {
             .padding(.trailing, 14)
             .frame(height: Theme.headerHeight)
             .frame(maxWidth: .infinity)
-            .background {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(WindowDragGesture())
-                    .onTapGesture(count: 2) { NSApp.keyWindow?.performZoom(nil) }
-            }
+            .windowDragArea()
             .overlay(alignment: .bottom) {
                 Rectangle().fill(Theme.border).frame(height: 1)
             }
+    }
+}
+
+extension View {
+    func windowDragArea() -> some View {
+        background {
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(WindowDragGesture())
+                .onTapGesture(count: 2) { NSApp.keyWindow?.performZoom(nil) }
+        }
     }
 }

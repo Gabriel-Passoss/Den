@@ -135,6 +135,18 @@ struct PillLabel: ViewModifier {
     }
 }
 
+struct ChipLabel: ViewModifier {
+    var horizontalPadding: CGFloat = 10
+
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 12.5))
+            .padding(.horizontal, horizontalPadding)
+            .frame(height: 30)
+            .contentShape(Rectangle())
+    }
+}
+
 struct IconLabel: ViewModifier {
     var size: CGFloat = 30
 
@@ -150,7 +162,22 @@ extension View {
 
     func iconLabel(size: CGFloat = 30) -> some View { modifier(IconLabel(size: size)) }
 
-    func hoverFill(_ hovering: Bool, selected: Bool = false, radius: CGFloat = 8) -> some View {
+    func chipLabel(horizontalPadding: CGFloat = 10) -> some View {
+        modifier(ChipLabel(horizontalPadding: horizontalPadding))
+    }
+
+    func onKeyboardShortcut(_ key: KeyEquivalent, modifiers: EventModifiers,
+                            perform action: @escaping () -> Void) -> some View {
+        background {
+            Button("", action: action)
+                .keyboardShortcut(key, modifiers: modifiers)
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
+    func hoverFill(_ hovering: Bool = false, selected: Bool = false, radius: CGFloat = 8) -> some View {
         background(selected ? Theme.hover : hovering ? Theme.hover.opacity(0.7) : .clear,
                    in: RoundedRectangle(cornerRadius: radius, style: .continuous))
     }

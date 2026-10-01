@@ -133,17 +133,8 @@ struct ChatView: View {
             HarnessSwitcher(chat: chat)
             panelToggle
         }
-        .background {
-            Group {
-                Button("") { toggle(.changes) }
-                    .keyboardShortcut("0", modifiers: [.option, .command])
-                Button("") { toggle(.run) }
-                    .keyboardShortcut("9", modifiers: [.option, .command])
-            }
-            .opacity(0)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
+        .onKeyboardShortcut("0", modifiers: [.option, .command]) { toggle(.changes) }
+        .onKeyboardShortcut("9", modifiers: [.option, .command]) { toggle(.run) }
     }
 
     private func breadcrumb(folder: Bool, branch: Bool) -> some View {

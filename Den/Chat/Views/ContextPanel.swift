@@ -192,8 +192,7 @@ private struct Disclosure<Label: View, Content: View>: View {
                 }
                 .padding(.horizontal, 6)
                 .frame(height: 26)
-                .background(hovering ? Theme.hover : .clear,
-                            in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .hoverFill(hovering, radius: 6)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

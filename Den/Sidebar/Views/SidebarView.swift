@@ -76,25 +76,12 @@ struct SidebarView: View {
             }
             .help("Nova sessão ou nova pasta")
             .accessibilityLabel("Nova")
-            Button(action: collapse) {
-                Image(systemName: "sidebar.left")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.textMuted)
-                    .iconLabel()
-            }
-            .buttonStyle(.denGhost)
-            .help("Recolher barra lateral")
-            .accessibilityLabel("Recolher barra lateral")
+            SidebarButton(title: "Recolher barra lateral", action: collapse)
         }
         .padding(.leading, lightsInset + 6)
         .padding(.trailing, 10)
         .frame(height: Theme.headerHeight)
-        .background {
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(WindowDragGesture())
-                .onTapGesture(count: 2) { NSApp.keyWindow?.performZoom(nil) }
-        }
+        .windowDragArea()
     }
 
     private var search: some View {
@@ -130,13 +117,7 @@ struct SidebarView: View {
             .strokeBorder(searchFocused ? Theme.accent.opacity(0.55) : .clear, lineWidth: 1))
         .padding(.horizontal, 12)
         .padding(.bottom, 10)
-        .background {
-            Button("") { searchFocused = true }
-                .keyboardShortcut("f", modifiers: [.command, .shift])
-                .opacity(0)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
+        .onKeyboardShortcut("f", modifiers: [.command, .shift]) { searchFocused = true }
     }
 
     // MARK: - List

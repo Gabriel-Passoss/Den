@@ -29,12 +29,8 @@ struct EffortPicker: View {
                 }
                 Chevron(size: 8)
             }
-            .font(.system(size: 12.5))
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(hovering || isOpen ? Theme.hover : .clear,
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(Rectangle())
+            .chipLabel()
+            .hoverFill(hovering, selected: isOpen)
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

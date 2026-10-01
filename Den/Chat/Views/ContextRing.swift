@@ -22,11 +22,8 @@ struct ContextRing: View {
                         .fixedSize()
                 }
             }
-            .padding(.horizontal, 8)
-            .frame(height: 30)
-            .background(hovering || showsDetails ? Theme.hover : .clear,
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(Rectangle())
+            .chipLabel(horizontalPadding: 8)
+            .hoverFill(hovering, selected: showsDetails)
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }

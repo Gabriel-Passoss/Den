@@ -301,8 +301,7 @@ struct GitChangesPanel: View {
             }
             .padding(.trailing, 4)
         }
-        .background(isSelected ? Theme.hover : .clear,
-                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .hoverFill(selected: isSelected, radius: 7)
     }
 
     private func groupRow(dir: String, files: [GitChangesModel.FileChange],
