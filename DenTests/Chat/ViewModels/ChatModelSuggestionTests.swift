@@ -5,15 +5,13 @@ import HarnessCore
 
 private let suggestion = "Sim, inclua a rotação."
 
-private func assistant(_ text: String) -> SessionUpdate {
-    .entry(TranscriptEntry(timestamp: Date(), kind: .assistantText(text), raw: .null))
-}
-
-private func endOfTurn(isError: Bool = false) -> SessionUpdate {
-    .entry(TranscriptEntry(
-        timestamp: Date(),
-        kind: .turnResult(TurnResult(usage: .zero, stopReason: "end_turn", isError: isError)),
-        raw: .null))
+private func withSuggestingChat(quickPrompt: [String]? = ["one-shot"],
+                                _ body: (LiveChatHarness, FakeCommandRunner) async throws -> Void)
+async throws {
+    let runner = FakeCommandRunner()
+    try await withLiveChat(configure: { $0.quickPrompt = quickPrompt }, runner: runner) { live in
+        try await body(live, runner)
+    }
 }
 
 private func suggestionCalls(_ runner: FakeCommandRunner) async -> [FakeCommandRunner.Call] {
@@ -21,9 +19,9 @@ private func suggestionCalls(_ runner: FakeCommandRunner) async -> [FakeCommandR
     return calls.filter { $0.arguments.last?.contains(ReplySuggestion.none) == true }
 }
 
-private func waitForSuggestionCalls(_ runner: FakeCommandRunner, count: Int = 1) async {
+private func waitForSuggestionCall(_ runner: FakeCommandRunner) async {
     for _ in 0..<400 {
-        if await suggestionCalls(runner).count >= count { return }
+        if await !suggestionCalls(runner).isEmpty { return }
         try? await Task.sleep(for: .milliseconds(5))
     }
     Issue.record("the quick prompt for a suggestion never ran")
@@ -35,18 +33,21 @@ private func expectNoSuggestionCall(_ runner: FakeCommandRunner,
     #expect(await suggestionCalls(runner).isEmpty, sourceLocation: sourceLocation)
 }
 
-private func finishTurn(_ live: LiveChatHarness, request: String = "crie um backup",
-                        reply: String = "Quer que eu inclua a rotação?",
-                        isError: Bool = false) async {
-    await live.chat.send(text: request)
-    await live.session.emit(assistant(reply))
-    await live.session.emit(endOfTurn(isError: isError))
-    await settle { !live.chat.isBusy }
+private func expectNoSuggestion(_ live: LiveChatHarness,
+                                sourceLocation: SourceLocation = #_sourceLocation) async {
+    try? await Task.sleep(for: .milliseconds(200))
+    #expect(live.chat.suggestedReply == nil, sourceLocation: sourceLocation)
 }
 
-private func withSuggestingChat(_ runner: FakeCommandRunner,
-                                _ body: (LiveChatHarness) async throws -> Void) async throws {
-    try await withLiveChat(configure: { $0.quickPrompt = ["one-shot"] }, runner: runner, body)
+private func finishTurn(_ live: LiveChatHarness, request: String = "crie um backup",
+                        reply: String = "Quer que eu inclua a rotação?",
+                        isError: Bool = false,
+                        beforeEnd: () async -> Void = {}) async {
+    await live.chat.send(text: request)
+    await live.session.emit(assistant(reply))
+    await beforeEnd()
+    await live.session.emit(endOfTurn(isError: isError))
+    await settle { !live.chat.isBusy }
 }
 
 private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) async {
@@ -56,9 +57,8 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func theTitleComesFromTheHarnessQuickPrompt() async throws {
-    let runner = FakeCommandRunner()
-    await runner.answer(with: "Backup dos projetos")
-    try await withLiveChat(configure: { $0.quickPrompt = ["one-shot"] }, runner: runner) { live in
+    try await withSuggestingChat { live, runner in
+        await runner.answer(with: "Backup dos projetos")
         await live.chat.send(text: "crie um script de backup")
 
         await settle { live.chat.title == "Backup dos projetos" }
@@ -70,8 +70,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func aQuestionAtTheEndOfATurnBecomesASuggestedReply() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await suggested(live, runner)
 
         #expect(live.chat.suggestedReply == suggestion)
@@ -84,32 +83,25 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func aReplyWithoutAQuestionSuggestsNothing() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await finishTurn(live, reply: "Feito. Os testes passaram.")
         await expectNoSuggestionCall(runner)
-        #expect(live.chat.suggestedReply == nil)
     }
 }
 
 @Test func aFailedTurnSuggestsNothing() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await finishTurn(live, isError: true)
         await expectNoSuggestionCall(runner)
     }
 }
 
 @Test func aPendingPermissionSuggestsNothing() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
-        await live.chat.send(text: "crie um backup")
-        await live.session.emit(assistant("Quer que eu inclua a rotação?"))
-        await live.session.emit(.permission(PermissionRequest(id: "p-1", toolName: "Write")))
-        await settle { live.chat.pending != nil }
-        await live.session.emit(endOfTurn())
-        await settle { !live.chat.isBusy }
-
+    try await withSuggestingChat { live, runner in
+        await finishTurn(live) {
+            await live.session.emit(.permission(PermissionRequest(id: "p-1", toolName: "Write")))
+            await settle { live.chat.pending != nil }
+        }
         await expectNoSuggestionCall(runner)
     }
 }
@@ -122,40 +114,30 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
             "header": .string("Rota"),
             "options": .array([.object(["label": .string("A")])]),
         ])])]))))
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
-        await live.chat.send(text: "crie um backup")
-        await live.session.emit(assistant("Quer que eu inclua a rotação?"))
-        live.chat.pendingQuestion = prompt
-        await live.session.emit(endOfTurn())
-        await settle { !live.chat.isBusy }
-
+    try await withSuggestingChat { live, runner in
+        await finishTurn(live) { live.chat.pendingQuestion = prompt }
         await expectNoSuggestionCall(runner)
     }
 }
 
 @Test func aHarnessWithoutAQuickPromptSuggestsNothing() async throws {
-    let runner = FakeCommandRunner()
-    try await withLiveChat(runner: runner) { live in
+    try await withSuggestingChat(quickPrompt: nil) { live, runner in
         await finishTurn(live)
-        try? await Task.sleep(for: .milliseconds(200))
+        await expectNoSuggestion(live)
         #expect(await runner.calls.isEmpty)
-        #expect(live.chat.suggestedReply == nil)
     }
 }
 
 @Test func aTurnWithoutTextOfItsOwnSuggestsNothing() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await suggested(live, runner)
 
         await live.chat.send(text: "sim")
         await live.session.emit(endOfTurn())
         await settle { !live.chat.isBusy }
 
-        try? await Task.sleep(for: .milliseconds(200))
+        await expectNoSuggestion(live)
         #expect(await suggestionCalls(runner).count == 1)
-        #expect(live.chat.suggestedReply == nil)
     }
 }
 
@@ -181,71 +163,57 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
                          registry: HarnessRegistry(harnesses: [harness]),
                          runner: runner)
 
-    try? await Task.sleep(for: .milliseconds(200))
-    #expect(await runner.calls.isEmpty)
     #expect(chat.suggestedReply == nil)
+    #expect(await runner.calls.isEmpty)
 }
 
-@Test func aSuggestionArrivingAfterTheUserRepliedIsDropped() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+nonisolated enum Overruling: CaseIterable {
+    case userReplies, userDismisses
+}
+
+@Test(arguments: Overruling.allCases)
+func aSuggestionArrivingAfterItWasOverruledIsDropped(_ overruling: Overruling) async throws {
+    try await withSuggestingChat { live, runner in
         await runner.answer(with: suggestion)
         await runner.hold()
         await finishTurn(live)
-        await waitForSuggestionCalls(runner)
+        await waitForSuggestionCall(runner)
 
-        await live.chat.send(text: "não, sem rotação")
+        switch overruling {
+        case .userReplies:
+            await live.chat.send(text: "não, sem rotação")
+            await live.session.emit(endOfTurn())
+            await settle { !live.chat.isBusy }
+        case .userDismisses:
+            live.chat.dismissSuggestion()
+        }
         await runner.release()
 
-        try? await Task.sleep(for: .milliseconds(200))
-        #expect(live.chat.suggestedReply == nil)
+        await expectNoSuggestion(live)
     }
 }
 
-@Test func dismissingWhileInFlightDropsTheLateSuggestion() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
-        await runner.answer(with: suggestion)
-        await runner.hold()
-        await finishTurn(live)
-        await waitForSuggestionCalls(runner)
-
-        live.chat.dismissSuggestion()
-        await runner.release()
-
-        try? await Task.sleep(for: .milliseconds(200))
-        #expect(live.chat.suggestedReply == nil)
-    }
+nonisolated enum UnusableOutput: CaseIterable {
+    case failure, noneMarker
 }
 
-@Test func aFailingQuickPromptLeavesNoSuggestionAndNoNotice() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
-        await runner.fail(HarnessFailure(reason: "claude missing"))
+@Test(arguments: UnusableOutput.allCases)
+func anUnusableQuickPromptLeavesNoSuggestionAndNoNotice(_ output: UnusableOutput) async throws {
+    try await withSuggestingChat { live, runner in
+        switch output {
+        case .failure: await runner.fail(HarnessFailure(reason: "claude missing"))
+        case .noneMarker: await runner.answer(with: ReplySuggestion.none)
+        }
         await finishTurn(live)
-        await waitForSuggestionCalls(runner)
+        await waitForSuggestionCall(runner)
 
-        try? await Task.sleep(for: .milliseconds(200))
-        #expect(live.chat.suggestedReply == nil)
+        await expectNoSuggestion(live)
         #expect(live.chat.lines.filter { $0.role == .notice }.isEmpty)
     }
 }
 
-@Test func theNoneMarkerLeavesNoSuggestion() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
-        await runner.answer(with: "NENHUMA")
-        await finishTurn(live)
-        await waitForSuggestionCalls(runner)
-
-        try? await Task.sleep(for: .milliseconds(200))
-        #expect(live.chat.suggestedReply == nil)
-    }
-}
-
 @Test func acceptingSendsTheSuggestionAsTheUsersReply() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await suggested(live, runner)
 
         await live.chat.acceptSuggestion()
@@ -257,8 +225,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func acceptingTwiceSendsOnce() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await suggested(live, runner)
 
         let first = Task { await live.chat.acceptSuggestion() }
@@ -271,8 +238,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func dismissingClearsWithoutSending() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await suggested(live, runner)
         let sentBefore = await live.session.sent.count
 
@@ -285,8 +251,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func typingHidesTheSuggestionAndClearingBringsItBack() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await suggested(live, runner)
 
         live.chat.prompt = "n"
@@ -299,8 +264,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func aPendingAttachmentHidesTheSuggestion() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await suggested(live, runner)
 
         live.chat.attach(imageData: Data([0x89, 0x50]))
@@ -310,8 +274,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func aNewTurnStartingClearsTheSuggestion() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await suggested(live, runner)
 
         await live.session.emit(.event(.turnStarted))
@@ -321,8 +284,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func stoppingClearsTheSuggestion() async throws {
-    let runner = FakeCommandRunner()
-    try await withSuggestingChat(runner) { live in
+    try await withSuggestingChat { live, runner in
         await suggested(live, runner)
 
         await live.chat.stop()

@@ -8,15 +8,6 @@ private let reported = ContextUsage(
     slices: [ContextSlice(category: .messages, tokens: 27_352),
              ContextSlice(category: .freeSpace, tokens: 172_648)])
 
-private func assistant(_ text: String) -> SessionUpdate {
-    .entry(TranscriptEntry(timestamp: Date(), kind: .assistantText(text), raw: .null))
-}
-
-private let endOfTurn = SessionUpdate.entry(TranscriptEntry(
-    timestamp: Date(),
-    kind: .turnResult(TurnResult(usage: .zero, stopReason: "end_turn", isError: false)),
-    raw: .null))
-
 @Test func aWindowReportedWithTheUsageFillsTheRing() async throws {
     try await withLiveChat { live in
         await live.chat.start()
@@ -90,7 +81,7 @@ private let endOfTurn = SessionUpdate.entry(TranscriptEntry(
         await settle { live.chat.isLive }
         let before = await live.session.usageRequests
 
-        await live.session.emit(endOfTurn)
+        await live.session.emit(endOfTurn())
 
         var after = before
         let deadline = ContinuousClock.now + .seconds(1)

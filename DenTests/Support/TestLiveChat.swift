@@ -65,3 +65,14 @@ func settle(within patience: Duration = .seconds(1),
     Issue.record("the stream never reached the expected state",
                  sourceLocation: sourceLocation)
 }
+
+func assistant(_ text: String) -> SessionUpdate {
+    .entry(TranscriptEntry(timestamp: Date(), kind: .assistantText(text), raw: .null))
+}
+
+func endOfTurn(isError: Bool = false) -> SessionUpdate {
+    .entry(TranscriptEntry(
+        timestamp: Date(),
+        kind: .turnResult(TurnResult(usage: .zero, stopReason: "end_turn", isError: isError)),
+        raw: .null))
+}
