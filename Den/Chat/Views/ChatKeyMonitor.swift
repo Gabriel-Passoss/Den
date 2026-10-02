@@ -79,6 +79,18 @@ struct ZoomedImage: Identifiable, Equatable {
                 }
                 return nil
             }
+            if chat.visibleSuggestion != nil, event.window?.firstResponder is PromptTextView {
+                if event.keyCode == 124,
+                   event.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift]) {
+                    stickToBottom()
+                    Task { await chat.acceptSuggestion() }
+                    return nil
+                }
+                if event.keyCode == 53 {
+                    chat.dismissSuggestion()
+                    return nil
+                }
+            }
             if event.keyCode == 53, chat.isBusy {
                 if escArmed {
                     escDisarm?.cancel()

@@ -24,16 +24,21 @@ struct ChatComposer: View {
 
             ComposerTextView(text: $chat.prompt, focusRequested: $focusRequested,
                              placeholder: Self.placeholder,
+                             ghost: chat.visibleSuggestion ?? "",
                              onSubmit: submit,
                              onPaste: { chat.capturePaste($0) })
                 .overlay(alignment: .topLeading) {
-                    if chat.prompt.isEmpty {
+                    if let suggestion = chat.visibleSuggestion {
+                        suggestedReply(suggestion)
+                            .transition(.opacity)
+                    } else if chat.prompt.isEmpty {
                         Text(Self.placeholder)
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.textTertiary)
                             .allowsHitTesting(false)
                     }
                 }
+                .animation(.easeOut(duration: 0.2), value: chat.visibleSuggestion)
                 .padding(.horizontal, 8)
                 .padding(.top, 6)
                 .padding(.bottom, 4)
@@ -195,6 +200,36 @@ struct ChatComposer: View {
         chat.prompt = ""
         stickToBottom()
         Task { await chat.send(text: text) }
+    }
+
+    private func suggestedReply(_ suggestion: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(suggestion)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textTertiary)
+                .lineLimit(ComposerTextView.ghostMaxLines)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .allowsHitTesting(false)
+                .accessibilityLabel("Resposta sugerida: \(suggestion). Seta para a direita envia.")
+                .accessibilityIdentifier("suggested-reply")
+            Button(action: acceptSuggestion) {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 22, height: 18)
+                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .strokeBorder(Theme.borderStrong, lineWidth: 1))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Enviar resposta sugerida (→)")
+            .accessibilityLabel("Enviar resposta sugerida")
+        }
+    }
+
+    private func acceptSuggestion() {
+        stickToBottom()
+        Task { await chat.acceptSuggestion() }
     }
 
     private var pendingAttachmentRow: some View {

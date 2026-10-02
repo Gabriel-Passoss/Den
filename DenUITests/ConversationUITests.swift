@@ -116,6 +116,27 @@ final class ConversationUITests: XCTestCase {
     }
 
     @MainActor
+    func testAQuestionGetsASuggestedReplyThatTheRightArrowSends() throws {
+        let question = try RecordedSession.claude("hello").map {
+            $0.replacingOccurrences(of: #""text":"OK""#, with: #""text":"Quer que eu continue?""#)
+        }
+        try claude.on(FakeCLI.userTurn, reply: question)
+        try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
+        try claude.answerSuggestions(with: "Sim, pode continuar.")
+        let app = launch()
+
+        startConversation("Faça a primeira parte.", in: app)
+        require(app.staticTexts["Quer que eu continue?"], in: app)
+        require(app.staticTexts["suggested-reply"], in: app)
+
+        app.typeKey(.rightArrow, modifierFlags: [])
+
+        require(app.staticTexts["OK"], in: app)
+        XCTAssertTrue(claude.received.contains { $0.contains("Sim, pode continuar.") })
+        XCTAssertFalse(app.staticTexts["suggested-reply"].exists)
+    }
+
+    @MainActor
     func testAConversationIsStillThereAfterTheAppRelaunches() throws {
         try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
         try claude.answerTitles(with: "Saudação curta")
