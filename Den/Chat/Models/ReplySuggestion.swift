@@ -3,7 +3,6 @@ import Foundation
 nonisolated enum ReplySuggestion {
     static let none = "NENHUMA"
     static let maxLength = 200
-    static let requestLimit = 600
     static let replyLimit = 1_500
 
     static func isAsking(_ reply: String) -> Bool {
@@ -13,9 +12,11 @@ nonisolated enum ReplySuggestion {
             .map(\.element)
             .joined(separator: "\n")
         return prose.split(whereSeparator: \.isNewline)
+            .reversed()
+            .lazy
             .map { $0.replacing(#/`[^`]*`/#, with: "").trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-            .suffix(3)
+            .prefix(3)
             .contains { $0.contains(#/\?(?=[\s)"”*_.]|$)/#) }
     }
 
@@ -28,20 +29,15 @@ nonisolated enum ReplySuggestion {
         do usuário, na mesma língua, sem aspas. Se não há pergunta para o usuário, \
         responda exatamente \(none).
 
-        Pedido do usuário: \(request.prefix(requestLimit))
+        Pedido do usuário: \(request.prefix(QuickPrompt.requestLimit))
 
         Última mensagem do assistente: \(reply.suffix(replyLimit))
         """
     }
 
     static func parse(_ output: String) -> String? {
-        let cleaned = output
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’"))
-            .trimmingCharacters(in: .whitespaces)
-        guard !cleaned.isEmpty, cleaned.count <= maxLength,
-              !cleaned.contains(where: \.isNewline) else { return nil }
-        let bare = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: ".")).uppercased()
-        return bare == none ? nil : cleaned
+        guard let line = QuickPrompt.oneLine(output, maxLength: maxLength) else { return nil }
+        let bare = line.trimmingCharacters(in: CharacterSet(charactersIn: ".")).uppercased()
+        return bare == none ? nil : line
     }
 }

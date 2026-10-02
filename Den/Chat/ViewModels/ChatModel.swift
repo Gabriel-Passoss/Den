@@ -82,7 +82,6 @@ final class ChatModel {
 
     func acceptSuggestion() async {
         guard let reply = visibleSuggestion else { return }
-        dismissSuggestion()
         await send(text: reply)
     }
 
@@ -383,7 +382,6 @@ final class ChatModel {
     func answerQuestion(_ selections: [String: [String]]) async {
         guard let prompt = pendingQuestion, let session else { return }
         pendingQuestion = nil
-        dismissSuggestion()
         var input = prompt.request.input
         if case .object(var members) = input {
             members["answers"] = .object(selections.mapValues {
@@ -416,7 +414,6 @@ final class ChatModel {
     func dismissQuestion() async {
         guard let prompt = pendingQuestion, let session else { return }
         pendingQuestion = nil
-        dismissSuggestion()
         do {
             try await session.resolve(prompt.id, .deny(
                 message: "o usuário dispensou a pergunta", interrupt: false))
@@ -580,30 +577,24 @@ final class ChatModel {
     private func generateTitle(from text: String) {
         let instruction = "Gere um título curto (3 a 5 palavras, sem aspas e sem "
             + "ponto final) que resuma o pedido a seguir, na mesma língua dele. "
-            + "Responda somente o título.\n\nPedido: \(text.prefix(600))"
+            + "Responda somente o título.\n\nPedido: \(text.prefix(QuickPrompt.requestLimit))"
 
-        Task { [weak self] in
-            guard let output = await self?.runQuickPrompt(instruction) else { return }
-            let cleaned = output
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’"))
-            guard !cleaned.isEmpty, cleaned.count <= 80, !cleaned.contains("\n") else { return }
-            await self?.applyGeneratedTitle(cleaned)
+        runQuickPrompt(instruction) { [weak self] output in
+            guard let title = QuickPrompt.oneLine(output, maxLength: 80) else { return }
+            Task { await self?.applyGeneratedTitle(title) }
         }
     }
 
-    private func runQuickPrompt(_ instruction: String) async -> String? {
-        guard let adapter = registry.harness(for: harness),
-              let arguments = adapter.quickPromptArguments(for: instruction) else { return nil }
-        let found: HarnessInstallation
-        if let installation {
-            found = installation
-        } else if let discovered = try? await adapter.discover() {
-            found = discovered
-        } else {
-            return nil
+    private func runQuickPrompt(_ instruction: String,
+                                then use: @escaping @MainActor (String) -> Void) {
+        guard let installation, let adapter = registry.harness(for: harness),
+              let arguments = adapter.quickPromptArguments(for: instruction) else { return }
+        let runner = runner
+        Task {
+            guard let output = try? await runner.run(installation.executable, arguments)
+            else { return }
+            use(output)
         }
-        return try? await runner.run(found.executable, arguments)
     }
 
     private func suggestReply() {
@@ -616,15 +607,10 @@ final class ChatModel {
         let instruction = ReplySuggestion.instruction(
             request: lines[requestIndex].text, reply: lines[replyIndex].text)
         let turn = suggestionTurn
-        Task { [weak self] in
-            guard let output = await self?.runQuickPrompt(instruction) else { return }
-            self?.offer(ReplySuggestion.parse(output), turn: turn)
+        runQuickPrompt(instruction) { [weak self] output in
+            guard let self, turn == suggestionTurn else { return }
+            suggestedReply = ReplySuggestion.parse(output)
         }
-    }
-
-    private func offer(_ suggestion: String?, turn: Int) {
-        guard turn == suggestionTurn, !isBusy else { return }
-        suggestedReply = suggestion
     }
 
     private func applyGeneratedTitle(_ generated: String) async {
