@@ -9,6 +9,8 @@ struct ComposerTextView: NSViewRepresentable {
     var ghost = ""
     var onSubmit: () -> Void
     var onPaste: (String) -> Bool
+    var onAcceptGhost: () -> Void = {}
+    var onDismissGhost: () -> Void = {}
 
     static let font = NSFont.systemFont(ofSize: 13)
     static let maxLines = 6
@@ -110,7 +112,12 @@ struct ComposerTextView: NSViewRepresentable {
             case #selector(NSResponder.insertTab(_:)):
                 textView.window?.selectNextKeyView(nil)
                 return true
+            case #selector(NSResponder.moveRight(_:)):
+                guard textView.string.isEmpty, !parent.ghost.isEmpty else { return false }
+                parent.onAcceptGhost()
+                return true
             case #selector(NSResponder.cancelOperation(_:)):
+                if !parent.ghost.isEmpty { parent.onDismissGhost() }
                 return true
             default:
                 return false

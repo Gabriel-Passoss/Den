@@ -26,7 +26,9 @@ struct ChatComposer: View {
                              placeholder: Self.placeholder,
                              ghost: chat.visibleSuggestion ?? "",
                              onSubmit: submit,
-                             onPaste: { chat.capturePaste($0) })
+                             onPaste: { chat.capturePaste($0) },
+                             onAcceptGhost: acceptSuggestion,
+                             onDismissGhost: chat.dismissSuggestion)
                 .overlay(alignment: .topLeading) {
                     if let suggestion = chat.visibleSuggestion {
                         suggestedReply(suggestion)
@@ -203,28 +205,28 @@ struct ChatComposer: View {
     }
 
     private func suggestedReply(_ suggestion: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text(suggestion)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.textTertiary)
-                .lineLimit(ComposerTextView.ghostMaxLines)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .allowsHitTesting(false)
-                .accessibilityLabel("Resposta sugerida: \(suggestion). Seta para a direita envia.")
-                .accessibilityIdentifier("suggested-reply")
-            Button(action: acceptSuggestion) {
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 22, height: 18)
-                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .strokeBorder(Theme.borderStrong, lineWidth: 1))
-                    .contentShape(Rectangle())
+        Text(suggestion)
+            .font(Font(ComposerTextView.font))
+            .foregroundStyle(Theme.textTertiary)
+            .lineLimit(ComposerTextView.ghostMaxLines)
+            .padding(.trailing, ComposerTextView.ghostTrailing)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .allowsHitTesting(false)
+            .accessibilityLabel("Resposta sugerida: \(suggestion). Seta para a direita envia.")
+            .accessibilityIdentifier("suggested-reply")
+            .overlay(alignment: .topTrailing) {
+                Button(action: acceptSuggestion) {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .iconLabel(size: 20)
+                        .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .strokeBorder(Theme.borderStrong, lineWidth: 1))
+                }
+                .buttonStyle(.denGhost(radius: 5))
+                .help("Enviar resposta sugerida (→)")
+                .accessibilityLabel("Enviar resposta sugerida")
             }
-            .buttonStyle(.plain)
-            .help("Enviar resposta sugerida (→)")
-            .accessibilityLabel("Enviar resposta sugerida")
-        }
     }
 
     private func acceptSuggestion() {
