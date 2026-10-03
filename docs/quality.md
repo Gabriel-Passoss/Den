@@ -10,6 +10,8 @@ Verificações que olham o código sem executá-lo. Rodam em cada commit (via
 |---|---|:-:|:-:|
 | Formatação Swift (o estilo da casa, sem reescrever o que já é deliberado) | SwiftFormat 0.63.1 — `.swiftformat` | ✓ corrige sozinho | ✓ |
 | Lint: falhas lógicas (`a == a`, force unwrap, `Task` que engole erro, observer descartado, `super` esquecido…), idiomas e limites de tamanho | SwiftLint 0.65.1 — `.swiftlint.yml` | ✓ | ✓ |
+| Sem comentários novos em Swift; só diretivas de ferramenta passam | SwiftLint, regra `no_comments` | ✓ | ✓ |
+| Fronteiras de módulo: HarnessKit sem framework de UI, harness concreto só em `Den/Harness`, `Den/Shared` sem `HarnessCore` | SwiftLint, regras customizadas em `.swiftlint.yml` | ✓ | ✓ |
 | Código duplicado (clone novo de ≥ 50 tokens e ≥ 5 linhas) | jscpd 5.4.0 — `.jscpd.json` | ✓ | ✓ |
 | Warnings do compilador viram erro (concorrência, deprecações, valores não usados, código inalcançável) | `swiftc` / `xcodebuild` — `Scripts/quality/build-strict` | | ✓ |
 | Código não usado: declarações, parâmetros, imports, propriedades só atribuídas | Periphery 3.8.0 — `.periphery.yml` e `Packages/HarnessKit/.periphery.yml` | | ✓ |
@@ -46,8 +48,17 @@ do jeito que os hooks esperam.
 - **SwiftFormat mexeu no arquivo**: o commit para, o arquivo fica corrigido;
   confira com `git diff`, rode `git add` e commite de novo.
 - **SwiftLint reclamou**: a mensagem diz a regra entre parênteses. Corrija; se
-  for falso positivo de verdade, desligue só ali, explicando o motivo:
-  `// swiftlint:disable:next force_unwrapping — o sufixo é uma constante`.
+  for falso positivo de verdade, desligue só ali, com a diretiva e nada mais:
+  `// swiftlint:disable:next force_unwrapping`.
+- **Comentário recusado** (`no_comments`): o código não leva comentários; nome
+  e estrutura carregam a intenção. Só diretivas de ferramenta passam
+  (`swiftlint:`, `swiftformat:`, `periphery:`, `jscpd:` e o
+  `swift-tools-version:` do manifesto do pacote), sem texto depois.
+- **Import recusado** (`headless_harnesskit`,
+  `concrete_harness_outside_registry`, `shared_knows_no_harness`): a
+  dependência cruza uma fronteira de módulo. O HarnessKit não conhece UI, o
+  app só fala com um harness concreto por `Den/Harness`, e `Den/Shared` não
+  conhece harness nenhum.
 - **jscpd achou um clone novo**: o relatório marca com `[NEW]` os dois trechos.
   Extraia o que é comum. Se a repetição for intencional, envolva o trecho com
   `// jscpd:ignore-start` e `// jscpd:ignore-end`.
@@ -76,7 +87,7 @@ registrado e não bloqueia; **qualquer coisa nova bloqueia**:
 
 | Arquivo | O que guarda |
 |---|---|
-| `.swiftlint-baseline.json` | violações do SwiftLint que já existiam (funções e arquivos longos, force unwraps, `master`/`slave` no PTY…) |
+| `.swiftlint-baseline.json` | violações do SwiftLint que já existiam (funções e arquivos longos, force unwraps, `master`/`slave` no PTY…) e os comentários que já estavam no código |
 | `.jscpd-baseline.json` | clones que já existiam (ex.: `ControlChannel` × `ACPChannel`, `ClaudeDiscovery` × `OpenCodeDiscovery`, vários testes) |
 | `.periphery-baseline.json` | o que o Periphery acha no app e não dá para apagar: `@State` usado só via `$`, exigência de protocolo que o app ainda não chama, propriedade lida só pelo `Equatable` sintetizado, e `RunInstance.configurationID` |
 
@@ -117,19 +128,16 @@ Coisas que também dá para verificar estaticamente e que ainda não estão liga
    `accessibility_trait_for_button` do SwiftLint acham hoje 49 imagens sem
    rótulo (ou sem `.accessibilityHidden(true)`, se forem decorativas) e 6 botões
    feitos com `onTapGesture`.
-3. **Regras de arquitetura** como `custom_rules` do SwiftLint, no espírito do
-   `ModuleBoundaryTests`: por exemplo, proibir `import SwiftUI`/`AppKit` dentro
-   de `Packages/HarnessKit` e `import ClaudeHarness` em `HarnessCore`.
-4. **Strings e localização**: `SWIFT_EMIT_LOC_STRINGS` está ligado no app; um
+3. **Strings e localização**: `SWIFT_EMIT_LOC_STRINGS` está ligado no app; um
    String Catalog com a verificação de chaves faltando/obsoletas do Xcode pegaria
    textos sem tradução.
-5. **Revisão de dependências e licenças** quando o projeto passar a ter pacotes
+4. **Revisão de dependências e licenças** quando o projeto passar a ter pacotes
    de terceiros (hoje não tem): `swift package show-dependencies` +
    verificação de licenças, e Dependabot para as GitHub Actions.
-6. **GitHub**: ligar *secret scanning* com *push protection* e exigir os jobs
+5. **GitHub**: ligar *secret scanning* com *push protection* e exigir os jobs
    `Quality` como status checks obrigatórios na proteção da `main`.
-7. **Cobertura de testes como gate** (não é estática, mas é barata): o
+6. **Cobertura de testes como gate** (não é estática, mas é barata): o
    `xcodebuild test` já pode gerar cobertura com `-enableCodeCoverage YES`, e o
    CI falharia se ela caísse.
-8. **Spell check** de identificadores e comentários com
+7. **Spell check** de identificadores e comentários com
    [typos](https://github.com/crate-ci/typos), que tem hook de pre-commit.

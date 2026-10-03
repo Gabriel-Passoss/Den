@@ -1,4 +1,5 @@
-# SwiftLint: correctness, idioms and size limits, checked on every commit and
+# SwiftLint: correctness, idioms, size limits and the house rules at the end
+# (no comments, module boundaries), checked on every commit and
 # in CI with --strict, so a warning fails too. Layout is SwiftFormat's job
 # (.swiftformat), and the rules here that would fight it are off.
 #
@@ -101,5 +102,35 @@ large_tuple:
   warning: 3
 nesting:
   type_level: 2 # e.g. TranscriptEntry.Kind.CodingKeys
+
+# House rules. Custom rules match the absolute path of a file, and the checkout
+# is itself called Den, so the patterns below rule out Packages by name instead
+# of trusting `Den/` to mean the app.
+custom_rules:
+  no_comments:
+    name: "No comments"
+    regex: '(//|/\*)(?!\s*(swiftlint|swiftformat|periphery|jscpd|swift-tools-version):)'
+    match_kinds: [comment, comment.mark, comment.url, doccomment, doccomment.field]
+    message: "Let names and structure carry the intent; only tool directives may be comments."
+    severity: error
+  headless_harnesskit:
+    name: "HarnessKit is headless"
+    included: ".*/Packages/HarnessKit/Sources/.*\\.swift"
+    regex: '^\s*(@\w+\s+)*import\s+((typealias|struct|class|enum|protocol|let|var|func)\s+)?(SwiftUI|AppKit|UIKit|Combine)\b'
+    message: "HarnessKit must not import a UI framework."
+    severity: error
+  concrete_harness_outside_registry:
+    name: "Concrete harnesses stay behind the registry"
+    included: ".*/(Den|DenTests|DenUITests|DenTestSupport)/.*\\.swift"
+    excluded: ".*/(Packages|Den/Harness)/.*"
+    regex: '^\s*(@\w+\s+)*import\s+((typealias|struct|class|enum|protocol|let|var|func)\s+)?(ClaudeHarness|OpenCodeHarness)\b'
+    message: "Only Den/Harness may import a concrete harness; everything else goes through HarnessCore."
+    severity: error
+  shared_knows_no_harness:
+    name: "Shared is harness-free"
+    included: ".*/Den/Shared/.*\\.swift"
+    regex: '^\s*(@\w+\s+)*import\s+((typealias|struct|class|enum|protocol|let|var|func)\s+)?HarnessCore\b'
+    message: "Den/Shared must not depend on HarnessCore."
+    severity: error
 
 reporter: xcode
