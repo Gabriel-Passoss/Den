@@ -56,13 +56,13 @@ nonisolated enum GitParsing {
 
     private static func state(staged: Character, unstaged: Character) -> GitFileState? {
         switch (staged, unstaged) {
-        case ("?", _): return .untracked
-        case ("!", _): return nil
-        case ("U", _), (_, "U"), ("A", "A"), ("D", "D"): return .conflicted
-        case ("R", _), ("C", _), (_, "R"), (_, "C"): return .renamed
-        case ("D", _), (_, "D"): return .deleted
-        case ("A", _): return .added
-        default: return .modified
+        case ("?", _): .untracked
+        case ("!", _): nil
+        case ("U", _), (_, "U"), ("A", "A"), ("D", "D"): .conflicted
+        case ("R", _), ("C", _), (_, "R"), (_, "C"): .renamed
+        case ("D", _), (_, "D"): .deleted
+        case ("A", _): .added
+        default: .modified
         }
     }
 
@@ -145,14 +145,14 @@ nonisolated enum GitParsing {
     }
 
     static func fingerprint(of texts: [String]) -> String {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
         for text in texts {
             for byte in text.utf8 {
                 hash ^= UInt64(byte)
-                hash &*= 0x100_0000_01b3
+                hash &*= 0x100_0000_01B3
             }
-            hash ^= 0x1e
-            hash &*= 0x100_0000_01b3
+            hash ^= 0x1E
+            hash &*= 0x100_0000_01B3
         }
         return String(hash, radix: 16)
     }

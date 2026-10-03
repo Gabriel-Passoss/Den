@@ -8,18 +8,18 @@ private let cwd = URL(fileURLWithPath: "/tmp/scratch")
 private let session = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
 private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-555555555555")!
 
-@Test func theLaunchCarriesTheFlagThatEnablesPermissionRouting() {
+@Test func theLaunchCarriesTheFlagThatEnablesPermissionRouting() throws {
     let launch = ClaudeLaunch.make(installation: install, workingDirectory: cwd, session: .fresh(sessionID: session))
     let args = launch.arguments
-    let i = try! #require(args.firstIndex(of: "--permission-prompt-tool"))
+    let i = try #require(args.firstIndex(of: "--permission-prompt-tool"))
     #expect(args[args.index(after: i)] == "stdio")
 }
 
-@Test func theLaunchUsesTheStreamingProtocolInBothDirections() {
+@Test func theLaunchUsesTheStreamingProtocolInBothDirections() throws {
     let args = ClaudeLaunch.make(installation: install, workingDirectory: cwd, session: .fresh(sessionID: session)).arguments
     #expect(args.contains("-p"))
     for pair in [("--output-format", "stream-json"), ("--input-format", "stream-json")] {
-        let i = try! #require(args.firstIndex(of: pair.0))
+        let i = try #require(args.firstIndex(of: pair.0))
         #expect(args[args.index(after: i)] == pair.1)
     }
     #expect(args.contains("--verbose"))
@@ -39,37 +39,37 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
 
 // MARK: - SessionStart
 
-@Test func freshEmitsANewSessionIDAndNothingElseSessionRelated() {
+@Test func freshEmitsANewSessionIDAndNothingElseSessionRelated() throws {
     let args = ClaudeLaunch.make(installation: install, workingDirectory: cwd, session: .fresh(sessionID: session)).arguments
-    let i = try! #require(args.firstIndex(of: "--session-id"))
+    let i = try #require(args.firstIndex(of: "--session-id"))
     #expect(args[args.index(after: i)] == "11111111-2222-3333-4444-555555555555")
     #expect(!args.contains("--resume"))
     #expect(!args.contains("--fork-session"))
 }
 
-@Test func resumeReusesTheOriginalIDAndEmitsNoSessionIDFlag() {
+@Test func resumeReusesTheOriginalIDAndEmitsNoSessionIDFlag() throws {
     let args = ClaudeLaunch.make(installation: install, workingDirectory: cwd, session: .resume(harnessSessionID: previousSession)).arguments
-    let i = try! #require(args.firstIndex(of: "--resume"))
+    let i = try #require(args.firstIndex(of: "--resume"))
     #expect(args[args.index(after: i)] == "99999999-8888-7777-6666-555555555555")
 
     #expect(!args.contains("--session-id"))
     #expect(!args.contains("--fork-session"))
 }
 
-@Test func forkResumesTheOldIDMarksForkSessionAndCarriesTheNewID() {
+@Test func forkResumesTheOldIDMarksForkSessionAndCarriesTheNewID() throws {
     let args = ClaudeLaunch.make(
         installation: install, workingDirectory: cwd,
         session: .fork(from: previousSession, newSessionID: session)
     ).arguments
-    let resumeIndex = try! #require(args.firstIndex(of: "--resume"))
+    let resumeIndex = try #require(args.firstIndex(of: "--resume"))
     #expect(args[args.index(after: resumeIndex)] == "99999999-8888-7777-6666-555555555555")
 
     #expect(args.contains("--fork-session"))
-    let sessionIndex = try! #require(args.firstIndex(of: "--session-id"))
+    let sessionIndex = try #require(args.firstIndex(of: "--session-id"))
     #expect(args[args.index(after: sessionIndex)] == "11111111-2222-3333-4444-555555555555")
 }
 
-@Test func theLaunchPassesModelPermissionModeAndEachAdditionalDirectory() {
+@Test func theLaunchPassesModelPermissionModeAndEachAdditionalDirectory() throws {
     let args = ClaudeLaunch.make(
         installation: install,
         workingDirectory: cwd,
@@ -82,10 +82,10 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
         ]
     ).arguments
 
-    let modelIndex = try! #require(args.firstIndex(of: "--model"))
+    let modelIndex = try #require(args.firstIndex(of: "--model"))
     #expect(args[args.index(after: modelIndex)] == "claude-opus-4-6")
 
-    let modeIndex = try! #require(args.firstIndex(of: "--permission-mode"))
+    let modeIndex = try #require(args.firstIndex(of: "--permission-mode"))
     #expect(args[args.index(after: modeIndex)] == "acceptEdits")
 
     let addDirIndices = args.indices.filter { args[$0] == "--add-dir" }
@@ -93,14 +93,14 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
     #expect(addDirIndices.map { args[args.index(after: $0)] } == ["/tmp/scratch/a", "/tmp/scratch/b"])
 }
 
-@Test func theLaunchPassesTheEffortLevel() {
+@Test func theLaunchPassesTheEffortLevel() throws {
     let args = ClaudeLaunch.make(
         installation: install,
         workingDirectory: cwd,
         session: .fresh(sessionID: session),
         effort: .xhigh
     ).arguments
-    let i = try! #require(args.firstIndex(of: "--effort"))
+    let i = try #require(args.firstIndex(of: "--effort"))
     #expect(args[args.index(after: i)] == "xhigh")
 }
 
@@ -111,7 +111,7 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
     #expect(!args.contains("--effort"))
 }
 
-@Test func everyPermissionModeReachesTheCLIWithItsVerifiedSpelling() throws {
+@Test func everyPermissionModeReachesTheCLIWithItsVerifiedSpelling() {
     let spellings = PermissionMode.allCases.map { mode -> String in
         let args = ClaudeLaunch.make(
             installation: install,

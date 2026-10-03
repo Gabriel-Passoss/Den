@@ -35,18 +35,18 @@ func errLine(_ message: String) {
 func describe(_ error: ClaudeDiscovery.DiscoveryError) -> String {
     switch error {
     case .notFound:
-        return """
+        """
         o binário `claude` não foi encontrado.
         Procurado pelo shell de login (`$SHELL -l -c 'command -v claude'`) e nos \
         caminhos conhecidos. Instale o Claude Code, ou garanta que ele está no \
         PATH do seu shell de login.
         """
     case .unreadableVersion(let raw):
-        return """
+        """
         `claude --version` respondeu algo que não dá para ler como versão: \(raw)
         """
     case .versionCommandFailed(let exitCode, let stderr):
-        return """
+        """
         `claude --version` saiu com código \(exitCode) — o binário está instalado \
         mas não está funcionando. Autenticação expirada, node ausente ou permissão \
         são as causas típicas (spec §5.3).

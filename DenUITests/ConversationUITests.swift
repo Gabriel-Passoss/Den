@@ -161,7 +161,7 @@ final class ConversationUITests: XCTestCase {
         """
 
     @MainActor
-    func testMentionsReachEveryFolderOfABigProject() throws {
+    func testMentionsReachEveryFolderOfABigProject() {
         let app = launch(projectSetup: bigProject)
         let composer = openComposer(in: app)
 
@@ -176,7 +176,7 @@ final class ConversationUITests: XCTestCase {
     }
 
     @MainActor
-    func testMentionsReachADeepSourceBesideBuildOutputAndAWorktree() throws {
+    func testMentionsReachADeepSourceBesideBuildOutputAndAWorktree() {
         let app = launch(projectSetup: backendWithWorktree)
         let composer = openComposer(in: app)
 

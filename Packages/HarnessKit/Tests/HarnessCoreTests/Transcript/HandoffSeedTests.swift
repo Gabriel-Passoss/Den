@@ -51,7 +51,7 @@ private let conversation: [TranscriptEntry] = [
     let seed = try #require(HandoffSeed.make(conversation))
 
     #expect(seed.isComplete)
-    #expect(seed.handoff == .replay(throughEntry: conversation.last!.id))
+    #expect(seed.handoff == .replay(throughEntry: try #require(conversation.last?.id)))
 }
 
 @Test func aConversationThatOverflowsKeepsTheRecentEndAndSaysSo() throws {

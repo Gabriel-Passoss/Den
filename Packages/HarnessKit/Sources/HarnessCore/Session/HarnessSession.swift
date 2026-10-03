@@ -17,6 +17,6 @@ public protocol HarnessSession: Actor {
     func stop() async
 }
 
-extension HarnessSession {
-    public func contextUsage() async -> ContextUsage? { nil }
+public extension HarnessSession {
+    func contextUsage() async -> ContextUsage? { nil }
 }

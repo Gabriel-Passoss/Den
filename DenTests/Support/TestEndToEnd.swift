@@ -53,7 +53,7 @@ struct EndToEnd {
 /// Every workspace a test opened, so their CLIs get stopped even when the
 /// test throws halfway.
 @MainActor
-fileprivate final class Opened {
+private final class Opened {
     var workspaces: [WorkspaceModel] = []
 }
 

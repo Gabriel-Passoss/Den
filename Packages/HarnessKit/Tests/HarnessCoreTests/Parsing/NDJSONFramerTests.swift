@@ -4,14 +4,14 @@ import Foundation
 
 @Test func deliversOneCompleteLine() throws {
     var framer = NDJSONFramer()
-    let lines = try framer.push(Data(#"{"a":1}"# .utf8) + Data("\n".utf8))
+    let lines = try framer.push(Data(#"{"a":1}"#.utf8) + Data("\n".utf8))
     #expect(lines.count == 1)
     #expect(String(decoding: lines[0], as: UTF8.self) == #"{"a":1}"#)
 }
 
 @Test func holdsALineSplitAcrossChunks() throws {
     var framer = NDJSONFramer()
-    #expect(try framer.push(Data(#"{"a":"# .utf8)).isEmpty)
+    #expect(try framer.push(Data(#"{"a":"#.utf8)).isEmpty)
     let lines = try framer.push(Data("1}\n".utf8))
     #expect(lines.map { String(decoding: $0, as: UTF8.self) } == [#"{"a":1}"#])
 }

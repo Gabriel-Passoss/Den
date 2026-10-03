@@ -71,9 +71,7 @@ struct ChatView: View {
         }
 
         .navigationTitle(chat.title)
-
         .focusedSceneValue(\.chat, chat)
-
         .task(id: "\(pane == .changes)|\(chat.workingDirectory.path)") {
             guard pane == .changes else { return }
             await gitChanges.load(directory: chat.workingDirectory)
@@ -337,14 +335,13 @@ struct ChatView: View {
                     distance: ScrollEdgeState.bucket(distance),
                     contentHeight: ScrollEdgeState.bucket(geometry.contentSize.height))
             } action: { old, new in
-                let follow: Bool
-                if new.isNearBottom {
-                    follow = true
+                let follow: Bool = if new.isNearBottom {
+                    true
                 } else if old.contentHeight == new.contentHeight,
                           new.distance > old.distance {
-                    follow = false
+                    false
                 } else {
-                    follow = nearBottom
+                    nearBottom
                 }
                 if nearBottom != follow { nearBottom = follow }
             }

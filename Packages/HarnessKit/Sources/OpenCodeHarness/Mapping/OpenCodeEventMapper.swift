@@ -52,7 +52,6 @@ public struct OpenCodeEventMapper: Sendable {
             contextTokens = used
             return MappedOutput(events: [.contextUsage(tokens: used,
                                                        window: update["size"]?.intValue)])
-
         case "available_commands_update":
             let names = update["availableCommands"]?.arrayValue?
                 .compactMap { $0["name"]?.stringValue } ?? []

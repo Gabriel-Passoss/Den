@@ -56,7 +56,6 @@ struct SlashCommandList: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    @ViewBuilder
     private var rows: some View {
         ForEach(Array(commands.enumerated()), id: \.element.id) { index, command in
             let isSelected = index == selection
