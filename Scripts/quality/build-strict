@@ -1,0 +1,22 @@
+#!/bin/sh
+# Builds HarnessKit, the app and every test target with warnings as errors, so
+# what the compiler already knows (concurrency, deprecations, unused values,
+# unreachable code) can't pile up. The app build leaves its index in
+# build/DerivedData for `Scripts/quality/unused-code --skip-build`.
+#
+# Arguments are passed on to xcodebuild as build settings; CI uses them to sign
+# ad hoc.
+set -eu
+cd "$(dirname "$0")/../.."
+
+swift build --package-path Packages/HarnessKit --build-tests -Xswiftc -warnings-as-errors
+
+for scheme in Den DenUITests; do
+    xcodebuild build-for-testing -quiet \
+        -project Den.xcodeproj -scheme "$scheme" \
+        -destination 'platform=macOS' \
+        -derivedDataPath build/DerivedData \
+        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+        COMPILER_INDEX_STORE_ENABLE=YES INDEX_ENABLE_DATA_STORE=YES \
+        "$@"
+done

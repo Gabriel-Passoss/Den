@@ -1,0 +1,8 @@
+# Periphery for HarnessKit, run by `Scripts/quality/unused-code`. The app is the
+# consumer of the public API, and it is not part of this package's index: keep
+# public declarations, and don't ask for them to be made internal. Unused
+# internal and private code is still reported.
+retain_public: true
+disable_redundant_public_analysis: true
+retain_codable_properties: true
+relative_results: true

@@ -1,0 +1,105 @@
+# SwiftLint: correctness, idioms and size limits, checked on every commit and
+# in CI with --strict, so a warning fails too. Layout is SwiftFormat's job
+# (.swiftformat), and the rules here that would fight it are off.
+#
+# Violations that were already in the code are recorded in
+# .swiftlint-baseline.json and reported only once they change; anything new
+# fails. docs/quality.md explains how to refresh it.
+
+included:
+  - Den
+  - DenTests
+  - DenUITests
+  - DenTestSupport
+  - Packages/HarnessKit/Sources
+  - Packages/HarnessKit/Tests
+excluded:
+  - "**/.build"
+  - Packages/HarnessKit/Tests/*/Fixtures
+
+disabled_rules:
+  # Layout SwiftFormat already decides, sometimes the other way.
+  - closure_parameter_position
+  - statement_position # `if a { … }` and `else { … }` on their own lines is fine
+  - trailing_comma # SwiftFormat adds one to every multi-line collection
+  # Reports a ternary inside a switch expression, which returns a value.
+  - void_function_in_ternary
+  # `String(decoding:as:)` is lossy on purpose: CLI output is shown, not parsed.
+  - optional_data_string_conversion
+
+opt_in_rules:
+  # Bugs and crashes waiting to happen.
+  - discarded_notification_center_observer
+  - fatal_error_message
+  - force_unwrapping
+  - identical_operands
+  - lower_acl_than_parent
+  - overridden_super_call
+  - override_in_extension
+  - private_swiftui_state
+  - prohibited_super_call
+  - unhandled_throwing_task
+  - unowned_variable_capture
+  - weak_delegate
+  - yoda_condition
+  # Tests that silently stop running or asserting.
+  - empty_xctest_method
+  - final_test_case
+  - test_case_accessibility
+  - xct_specific_matcher
+  # Simpler or faster ways to say the same thing.
+  - array_init
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - convenience_type
+  - discouraged_none_name
+  - empty_count
+  - explicit_init
+  - fallthrough
+  - first_where
+  - flatmap_over_map_reduce
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - redundant_nil_coalescing
+  - reduce_into
+  - return_value_from_void_function
+  - self_binding
+  - shorthand_optional_binding
+  - sorted_first_last
+  - static_operator
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - untyped_error_in_catch
+  # Text that reads one way and compiles another.
+  - invisible_character
+  - local_doc_comment
+
+# The code uses one-letter names in short closures and patterns (`a`, `b`, `i`).
+identifier_name:
+  min_length: 1
+  max_length: 50
+
+line_length:
+  warning: 160
+  ignores_urls: true
+
+# Size limits for new code. Code that was over them already is in the baseline.
+file_length:
+  warning: 500
+  ignore_comment_only_lines: true
+type_body_length:
+  warning: 300
+function_body_length:
+  warning: 60
+cyclomatic_complexity:
+  warning: 12
+  ignores_case_statements: true # a flat switch over cases reads as one decision
+large_tuple:
+  warning: 3
+nesting:
+  type_level: 2 # e.g. TranscriptEntry.Kind.CodingKeys
+
+reporter: xcode

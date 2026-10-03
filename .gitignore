@@ -1,5 +1,6 @@
-# Build
+# Build (build/ holds CI-style xcodebuild output: DerivedData, .xcresult)
 .build/
+build/
 
 # Tooling de agentes (skills reinstaláveis via skills-lock)
 .agents/
