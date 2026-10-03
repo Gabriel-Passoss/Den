@@ -9,6 +9,8 @@ private final class DragTracker: NSItemProvider {
 
 struct SidebarView: View {
     @Bindable var workspace: WorkspaceModel
+    @Environment(WorktreeModel.self) private var worktrees
+    @Environment(PullRequestMonitor.self) private var monitor
 
     @State private var collapsed: Set<String> = []
     @State private var dropTarget: String?
@@ -153,12 +155,13 @@ struct SidebarView: View {
             Button("Apagar", role: .destructive) {
                 if let summary = pendingDelete {
                     Task { await workspace.deleteSession(summary.id) }
+                    worktrees.forget(summary.id)
                 }
                 pendingDelete = nil
             }
             Button("Cancelar", role: .cancel) { pendingDelete = nil }
         } message: {
-            Text("A conversa e o histórico dela serão removidos permanentemente.")
+            Text(deleteMessage)
         }
         .overlay {
             if workspace.folderGroups.isEmpty, workspace.looseSessions.isEmpty {
@@ -172,6 +175,10 @@ struct SidebarView: View {
                     ContentUnavailableView.search(text: workspace.search)
                 }
             }
+        }
+        .onChange(of: workspace.summaries, initial: true) {
+            monitor.noteActivity(Dictionary(workspace.summaries.map { ($0.id, $0.updatedAt) },
+                                            uniquingKeysWith: { max($0, $1) }))
         }
     }
 
@@ -211,11 +218,40 @@ struct SidebarView: View {
         )
     }
 
+    private func badge(for summary: SessionSummary) -> TaskBadge? {
+        guard let worktree = worktrees.worktree(for: summary.id) else { return nil }
+        let found = monitor.pullRequests(for: summary.id).map(\.pullRequest)
+        guard let worst = PullRequestStatus.worst(found) else {
+            return TaskBadge(detail: "⑂ " + worktree.folderName)
+        }
+        let head = found.count == 1 ? "#\(worst.number)" : "\(found.count) PRs"
+        return TaskBadge(tone: PullRequestStatus.tone(worst),
+                         detail: "\(head) · \(PullRequestStatus.label(worst))")
+    }
+
+    private func hoverLines(for summary: SessionSummary) -> [PaneTip.Line] {
+        guard let worktree = worktrees.worktree(for: summary.id) else { return [] }
+        return monitor.pullRequests(for: summary.id).map { bar in
+            PaneTip.Line(color: PullRequestStatus.tone(bar.pullRequest).color,
+                         text: "\(bar.repo.name) #\(bar.pullRequest.number) · "
+                             + PullRequestStatus.label(bar.pullRequest))
+        } + [PaneTip.Line(color: nil, text: worktree.branch)]
+    }
+
+    private var deleteMessage: String {
+        var text = "A conversa e o histórico dela serão removidos permanentemente."
+        if let summary = pendingDelete, let worktree = worktrees.worktree(for: summary.id) {
+            text += " As worktrees em \(worktree.displayLocation) continuam no disco."
+        }
+        return text
+    }
+
     private func row(for summary: SessionSummary, in folderID: String?) -> some View {
         let inFolder = workspace.membership[summary.id.uuidString] != nil
         return SessionRow(
             summary: summary,
             indicator: workspace.indicator(for: summary.id),
+            task: badge(for: summary),
             select: { Task { await workspace.select(summary.id) } },
             rename: { name in
                 Task { await workspace.renameSession(summary.id, to: name) }
@@ -236,7 +272,8 @@ struct SidebarView: View {
             return PaneTip(title: summary.title,
                            detail: detail.joined(separator: " · "),
                            indicator: workspace.indicator(for: summary.id),
-                           anchor: anchor)
+                           anchor: anchor,
+                           lines: hoverLines(for: summary))
         }, update: { scheduleTip($0) })
         .opacity(dragging == summary.id ? 0 : 1)
         .onDrop(of: [.plainText], delegate: SessionDropDelegate(

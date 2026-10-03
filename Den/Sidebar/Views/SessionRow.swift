@@ -4,6 +4,7 @@ import HarnessCore
 struct SessionRow: View {
     let summary: SessionSummary
     let indicator: WorkspaceModel.SessionIndicator?
+    var task: TaskBadge? = nil
     var select: () -> Void
     var rename: (String) -> Void
     var unfile: (() -> Void)? = nil
@@ -15,7 +16,11 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            HarnessBadge(harness: summary.harnesses.last, size: 18)
+            if task != nil {
+                TaskGlyph(tone: task?.tone, harness: summary.harnesses.last)
+            } else {
+                HarnessBadge(harness: summary.harnesses.last, size: 18)
+            }
 
             VStack(alignment: .leading, spacing: 1) {
                 if isEditing {
@@ -81,6 +86,7 @@ struct SessionRow: View {
 
     private var subtitle: String {
         let when = summary.updatedAt.formatted(.relative(presentation: .named))
+        if let task { return "\(task.detail) · \(when)" }
         guard let current = summary.harnesses.last else { return when }
         return "\(HarnessBadge.name(for: current)) · \(when)"
     }

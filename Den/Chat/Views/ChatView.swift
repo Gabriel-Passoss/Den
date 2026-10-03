@@ -17,6 +17,9 @@ struct ChatView: View {
     @State private var lastOpenPane: InspectorPane = .changes
     @Environment(RunManager.self) private var runs
     @Environment(RunConfigurationsModel.self) private var runConfigurations
+    @Environment(WorktreeModel.self) private var worktrees
+    @Environment(PullRequestMonitor.self) private var monitor
+    @AppStorage(GitHubCLI.pathKey) private var ghPath = ""
     let gitChanges: GitChangesModel
 
     private struct ScrollEdgeState: Equatable {
@@ -99,6 +102,14 @@ struct ChatView: View {
         }
 
         .task(id: chat.sessionID) { await chat.loadBranch() }
+        .task(id: chat.sessionID) {
+            let id = chat.sessionID
+            monitor.appear(id)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3600))
+            }
+            monitor.disappear(id)
+        }
         .task(id: chat.workingDirectory) { await mentions.loadIndex(under: chat.workingDirectory) }
         .onChange(of: chat.prompt) {
             mentions.selection = 0
@@ -114,6 +125,8 @@ struct ChatView: View {
         .onChange(of: chat.isBusy) {
             if !chat.isBusy {
                 keys.disarmEsc()
+                worktrees.clearWarning(chat.sessionID)
+                monitor.turnEnded(chat.sessionID)
                 if pane == .changes {
                     let gitChanges = self.gitChanges
                     let directory = chat.workingDirectory
@@ -125,8 +138,10 @@ struct ChatView: View {
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)) { _ in
             let chat = self.chat
+            let monitor = self.monitor
             Task { @MainActor in
                 if chat.hasUnread { chat.hasUnread = false }
+                monitor.appBecameActive()
             }
         }
         .overlay { lightbox }
@@ -241,7 +256,12 @@ struct ChatView: View {
             .scrollPosition($scrollPosition)
             .scrollDisabled(tableLock.isLocked)
             .environment(tableLock)
-            .safeAreaInset(edge: .bottom, spacing: 0) { transientCards }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    taskBars
+                    transientCards
+                }
+            }
             .onScrollGeometryChange(for: ScrollEdgeState.self) { geometry in
                 let distance = geometry.contentSize.height
                     - (geometry.contentOffset.y + geometry.containerSize.height
@@ -297,6 +317,56 @@ struct ChatView: View {
             .onChange(of: typingVisible) { scrollToEnd() }
             .onChange(of: chat.compactingSince) { scrollToEnd() }
         .id(chat.sessionID)
+    }
+
+    @ViewBuilder
+    private var taskBars: some View {
+        let id = chat.sessionID
+        let bars = monitor.bars(for: id)
+        let setup = monitor.setupNeeded(for: id)
+        if setup != nil || !bars.isEmpty {
+            VStack(spacing: 6) {
+                if let setup {
+                    GitHubSetupBar(state: setup, choose: chooseGh,
+                                   retry: { Task { await monitor.reconfigure(path: ghPath.isEmpty ? nil : ghPath) } },
+                                   dismiss: { monitor.hideSetup(for: id) })
+                }
+                ForEach(bars) { bar in
+                    PullRequestBar(repo: bar.repo,
+                                   branch: worktrees.worktree(for: id)?.branch ?? "",
+                                   pullRequest: bar.pullRequest,
+                                   checkedAt: monitor.checkedAt(id, repo: bar.repo),
+                                   refresh: { monitor.refresh(id, repo: bar.repo) },
+                                   dismiss: {
+                                       withAnimation(.easeOut(duration: 0.2)) {
+                                           monitor.dismiss(id, repo: bar.repo)
+                                       }
+                                   })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .padding(.horizontal, 20)
+            .frame(maxWidth: 800)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 10)
+            .padding(.bottom, chat.pending == nil && chat.pendingQuestion == nil ? 6 : 0)
+            .background(.bar)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: bars.map(\.id))
+        }
+    }
+
+    private func chooseGh() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.prompt = "Usar"
+        panel.directoryURL = URL(fileURLWithPath: "/opt/homebrew/bin")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            guard await GitHubCLI.version(at: url.path) != nil else { return }
+            ghPath = url.path
+            await monitor.reconfigure(path: url.path)
+        }
     }
 
     @ViewBuilder

@@ -10,6 +10,7 @@ struct ChatComposer: View {
     var stickToBottom: () -> Void
 
     @State private var focusRequested = false
+    @Environment(WorktreeModel.self) private var worktrees
 
     private static let placeholder = "Peça uma alteração…"
 
@@ -37,9 +38,14 @@ struct ChatComposer: View {
 
             HStack(spacing: 8) {
                 ForEach(chat.knobs.filter { $0.category == .mode }) { KnobBadge(knob: $0, chat: chat) }
-                folderBadge
+                locationBadge
+                if worktrees.isOffered(chat), !worktrees.isCreating(chat.sessionID) {
+                    WorktreeChip(chat: chat)
+                }
                 ForEach(chat.knobs.filter { $0.category != .mode }) { KnobBadge(knob: $0, chat: chat) }
-                if chat.isBusy {
+                if let phase = worktrees.phase(for: chat.sessionID) {
+                    phaseLabel(phase)
+                } else if chat.isBusy {
                     ProgressView().controlSize(.mini)
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         Text(busyLabel(at: context.date))
@@ -57,6 +63,8 @@ struct ChatComposer: View {
                     }
                 } else if chat.pending != nil || chat.pendingQuestion != nil {
                     Text("Aguardando você").font(.system(size: 10)).foregroundStyle(.orange)
+                } else if let blocker = worktrees.blocker(for: chat) {
+                    Text(blocker).font(.system(size: 10)).foregroundStyle(.red).lineLimit(1)
                 } else if let status = visibleStatus {
                     Text(status)
                         .font(.system(size: 10))
@@ -64,6 +72,14 @@ struct ChatComposer: View {
                                          ? AnyShapeStyle(.secondary)
                                          : AnyShapeStyle(.orange))
                         .lineLimit(1)
+                }
+                if let warning = worktrees.warnings[chat.sessionID] {
+                    Text(warning)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(warning)
                 }
                 Spacer()
                 if let context = chat.contextLabel {
@@ -97,9 +113,10 @@ struct ChatComposer: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!chat.isBusy
-                          && chat.prompt.trimmingCharacters(in: .whitespaces).isEmpty
-                          && chat.pendingAttachments.isEmpty
-                          && chat.pendingPastes.isEmpty)
+                          && (chat.prompt.trimmingCharacters(in: .whitespaces).isEmpty
+                              && chat.pendingAttachments.isEmpty
+                              && chat.pendingPastes.isEmpty
+                              || !worktrees.canSend(chat)))
                 .help(chat.isBusy ? "Parar o que está rodando" : "Enviar mensagem")
             }
         }
@@ -111,6 +128,7 @@ struct ChatComposer: View {
         .padding(.bottom, 16)
         .frame(maxWidth: 800)
         .frame(maxWidth: .infinity)
+        .task(id: chat.workingDirectory) { await worktrees.prepare(chat) }
     }
 
     @ViewBuilder
@@ -159,10 +177,11 @@ struct ChatComposer: View {
     }
 
     private func submit() {
+        guard worktrees.canSend(chat) else { return }
         let text = chat.prompt
         chat.prompt = ""
         stickToBottom()
-        Task { await chat.send(text: text) }
+        Task { await worktrees.launch(chat, text: text) }
     }
 
     private var pendingAttachmentRow: some View {
@@ -252,6 +271,31 @@ struct ChatComposer: View {
         .buttonStyle(.plain)
         .padding(2)
         .help(help)
+    }
+
+    @ViewBuilder
+    private var locationBadge: some View {
+        if let worktree = worktrees.worktree(for: chat.sessionID) {
+            BranchBadge(worktree: worktree)
+        } else {
+            folderBadge.disabled(worktrees.isCreating(chat.sessionID))
+        }
+    }
+
+    @ViewBuilder
+    private func phaseLabel(_ phase: WorktreeModel.Phase) -> some View {
+        switch phase {
+        case .creating(let step):
+            ProgressView().controlSize(.mini)
+            Text(step).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+        case .failed(let message):
+            Text(message)
+                .font(.system(size: 10))
+                .foregroundStyle(.orange)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(message)
+        }
     }
 
     private var folderBadge: some View {

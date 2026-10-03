@@ -6,6 +6,12 @@ struct PaneTip: Equatable {
     let detail: String?
     let indicator: WorkspaceModel.SessionIndicator?
     let anchor: CGRect
+    var lines: [Line] = []
+
+    struct Line: Equatable {
+        let color: Color?
+        let text: String
+    }
 }
 
 struct PaneHoverCard: View {
@@ -21,6 +27,17 @@ struct PaneHoverCard: View {
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            }
+            ForEach(Array(tip.lines.enumerated()), id: \.offset) { _, line in
+                HStack(spacing: 5) {
+                    if let color = line.color {
+                        Circle().fill(color).frame(width: 6, height: 6)
+                    }
+                    Text(line.text)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             if let indicator = tip.indicator {
                 HStack(spacing: 5) {
