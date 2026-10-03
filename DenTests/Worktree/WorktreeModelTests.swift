@@ -23,6 +23,8 @@ private struct Bench {
 
 @MainActor
 private func withBench(maker: WorktreeMaker = WorktreeMaker(),
+                       suggester: BranchSuggester = BranchSuggester(),
+                       oneShot: [String]? = nil,
                        _ body: (Bench) async throws -> Void) async throws {
     let scratchDefaults = ScratchDefaults()
     let parent = try makeTree(["Área de trabalho/sessions"])
@@ -32,10 +34,12 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
     }
     let scratch = parent.appending(path: "Área de trabalho")
     let repo = try await makeRepository(at: scratch.appending(path: "api"), scratch: scratch)
-    let harness = FakeHarness()
+    var harness = FakeHarness()
+    harness.oneShotArguments = oneShot
     let worktrees = WorktreeModel(
         ledger: TaskLedger(store: TaskWorktreeStore(url: scratch.appending(path: "task-worktrees.json"))),
-        root: scratch.appending(path: "worktrees"), defaults: scratchDefaults.defaults, maker: maker)
+        root: scratch.appending(path: "worktrees"), defaults: scratchDefaults.defaults, maker: maker,
+        registry: HarnessRegistry(harnesses: [harness]), suggester: suggester)
     let bench = Bench(chat: ChatModel(store: FileTranscriptStore(root: scratch.appending(path: "sessions")),
                                       workingDirectory: repo.checkout, harness: harness.id,
                                       cache: SessionCache(defaults: scratchDefaults.defaults),
@@ -53,38 +57,46 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
     try await withBench { bench in
         #expect(bench.worktrees.isOffered(bench.chat))
         #expect(bench.worktrees.layout(for: bench.chat)?.repos.map(\.name) == ["api"])
-        #expect(bench.worktrees.prefix == "den/")
     }
 }
 
 @MainActor
-@Test func thePreviewFollowsTheMessageAndSkipsTakenNames() async throws {
+@Test func aNameAlreadyTakenGetsTheNextFreeSuffix() async throws {
     try await withBench { bench in
-        try await runGit(["branch", "den/fix-login"], in: bench.checkout)
-        await bench.worktrees.prepare(bench.chat)
-
-        #expect(bench.worktrees.branchName(for: bench.chat, message: "fix login") == "den/fix-login-2")
-        #expect(bench.worktrees.branchName(for: bench.chat, message: "outra coisa") == "den/outra-coisa")
-    }
-}
-
-@MainActor
-@Test func anEditedNameThatIsTakenOrInvalidBlocksTheSend() async throws {
-    try await withBench { bench in
-        try await runGit(["branch", "den/fix-login"], in: bench.checkout)
+        try await runGit(["branch", "feat/ajusta-o-login"], in: bench.checkout)
         await bench.worktrees.prepare(bench.chat)
         bench.worktrees.setEnabled(true, for: bench.chat)
 
-        await bench.worktrees.rename("den/fix-login", for: bench.chat)
-        #expect(bench.worktrees.blocker(for: bench.chat) == "Já existe em api")
-        #expect(!bench.worktrees.canSend(bench.chat))
+        await bench.worktrees.launch(bench.chat, text: "ajusta o login")
 
-        await bench.worktrees.rename("den/a..b", for: bench.chat)
-        #expect(bench.worktrees.blocker(for: bench.chat) == "Nome de branch inválido")
+        #expect(bench.worktrees.worktree(for: bench.chat.sessionID)?.branch == "feat/ajusta-o-login-2")
+    }
+}
 
-        await bench.worktrees.rename("den/livre", for: bench.chat)
-        #expect(bench.worktrees.blocker(for: bench.chat) == nil)
-        #expect(bench.worktrees.branchName(for: bench.chat, message: "qualquer") == "den/livre")
+@MainActor
+@Test func haikuNamesTheBranchWhenTheHarnessCanAsk() async throws {
+    var suggester = BranchSuggester()
+    suggester.run = { _, _, _ in ProcessOutcome(status: 0, stdout: Data("fix/patient-login\n".utf8), stderr: Data()) }
+    try await withBench(suggester: suggester, oneShot: ["-p"]) { bench in
+        bench.worktrees.setEnabled(true, for: bench.chat)
+
+        await bench.worktrees.launch(bench.chat, text: "NS-7 ajusta o login do paciente")
+
+        #expect(bench.worktrees.worktree(for: bench.chat.sessionID)?.branch == "fix/NS-7-patient-login")
+        #expect(bench.chat.workingDirectory.lastPathComponent == "fix-NS-7-patient-login")
+    }
+}
+
+@MainActor
+@Test func withoutAnAnswerTheNameComesFromTheMessage() async throws {
+    var suggester = BranchSuggester()
+    suggester.run = { _, _, _ in nil }
+    try await withBench(suggester: suggester, oneShot: ["-p"]) { bench in
+        bench.worktrees.setEnabled(true, for: bench.chat)
+
+        await bench.worktrees.launch(bench.chat, text: "ajusta o login")
+
+        #expect(bench.worktrees.worktree(for: bench.chat.sessionID)?.branch == "feat/ajusta-o-login")
     }
 }
 
@@ -95,11 +107,11 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
 
         await bench.worktrees.launch(bench.chat, text: "NS-7 ajusta o login")
 
-        let worktree = bench.scratch.appending(path: "worktrees/api/NS-7-ajusta-o-login")
+        let worktree = bench.scratch.appending(path: "worktrees/api/feat-NS-7-ajusta-o-login")
         #expect(bench.chat.workingDirectory.path == worktree.path)
         #expect(bench.harness.log.lastWorkingDirectory?.path == worktree.path)
         #expect(await bench.harness.session.sent.last?.text == "NS-7 ajusta o login")
-        #expect(bench.worktrees.worktree(for: bench.chat.sessionID)?.branch == "den/NS-7-ajusta-o-login")
+        #expect(bench.worktrees.worktree(for: bench.chat.sessionID)?.branch == "feat/NS-7-ajusta-o-login")
         #expect(!bench.worktrees.isOffered(bench.chat))
         #expect(bench.worktrees.phase(for: bench.chat.sessionID) == nil)
         let reopened = TaskLedger(store: TaskWorktreeStore(url: bench.scratch.appending(path: "task-worktrees.json")))
@@ -154,7 +166,7 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
         await bench.worktrees.launch(inherited, text: "segunda tarefa")
 
         #expect(inherited.workingDirectory.path
-                == bench.scratch.appending(path: "worktrees/api/segunda-tarefa").path)
+                == bench.scratch.appending(path: "worktrees/api/feat-segunda-tarefa").path)
         #expect(bench.worktrees.worktree(for: inherited.sessionID)?.repos.first?.original.path
                 == bench.checkout.path)
         await inherited.stop()
@@ -264,8 +276,8 @@ private func gatedMaker(_ gate: Gate) -> WorktreeMaker {
         #expect(await bench.harness.session.sent.isEmpty)
         #expect(bench.chat.workingDirectory.path == bench.checkout.path)
         #expect(!FileManager.default.fileExists(
-            atPath: bench.scratch.appending(path: "worktrees/api/ajusta-o-login").path))
-        #expect(!(await gitSucceeds(["show-ref", "--verify", "--quiet", "refs/heads/den/ajusta-o-login"],
+            atPath: bench.scratch.appending(path: "worktrees/api/feat-ajusta-o-login").path))
+        #expect(!(await gitSucceeds(["show-ref", "--verify", "--quiet", "refs/heads/feat/ajusta-o-login"],
                                     in: bench.checkout)))
     }
 }

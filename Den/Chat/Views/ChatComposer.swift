@@ -65,7 +65,7 @@ struct ChatComposer: View {
         HStack(spacing: 6) {
             locationChip(compact: density == .compact)
             if worktrees.isOffered(chat), !worktrees.isCreating(chat.sessionID) {
-                WorktreeChip(chat: chat, nameWidth: density == .full ? 240 : density == .medium ? 160 : 100)
+                WorktreeChip(chat: chat, compact: density == .compact)
             }
             ForEach(chat.knobs.filter { $0.category == .mode }) {
                 KnobBadge(knob: $0, chat: chat, compact: density != .full)

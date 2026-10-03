@@ -86,6 +86,7 @@ struct FakeHarness: Harness {
     var declaredCapabilities = HarnessCapabilities()
     var declaredKnobs: [HarnessKnob] = []
     var discoveryFailure: HarnessFailure?
+    var oneShotArguments: [String]?
 
     init(id: String = "fake", displayName: String = "Fake",
          session: FakeSession = FakeSession(), log: HarnessLog = HarnessLog()) {
@@ -93,6 +94,10 @@ struct FakeHarness: Harness {
         self.displayName = displayName
         self.session = session
         self.log = log
+    }
+
+    func titleArguments(for instruction: String) -> [String]? {
+        oneShotArguments.map { $0 + [instruction] }
     }
 
     func discover() async throws -> HarnessInstallation {

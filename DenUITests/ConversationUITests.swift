@@ -114,10 +114,10 @@ final class ConversationUITests: XCTestCase {
         require(app.staticTexts["OK"], in: app)
         let badge = element("worktree-branch", in: app)
         require(badge, in: app)
-        XCTAssertEqual(badge.label, "diga-apenas-ok-e-nada")
-        require(text(containing: "⑂ diga-apenas-ok-e-nada", in: app), in: app)
+        XCTAssertEqual(badge.label, "feat/saudacao-curta")
+        require(text(containing: "⑂ feat/saudacao-curta", in: app), in: app)
         XCTAssertTrue(claude.launches.last?.directory
-            .hasSuffix("/worktrees/project/diga-apenas-ok-e-nada") == true,
+            .hasSuffix("/worktrees/project/feat-saudacao-curta") == true,
             "launched in \(claude.launches.last?.directory ?? "nowhere")")
     }
 

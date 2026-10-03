@@ -2,89 +2,60 @@ import SwiftUI
 
 struct WorktreeChip: View {
     let chat: ChatModel
-    var nameWidth: CGFloat = 240
+    var compact = false
     @Environment(WorktreeModel.self) private var worktrees
-    @State private var editing = false
     @State private var picking = false
+    @State private var hovering = false
+    @State private var hoveringRepos = false
 
     var body: some View {
         let draft = worktrees.draft(for: chat)
-        Group {
-            if draft.isEnabled {
-                enabled(draft)
-            } else {
-                disabled
-            }
-        }
-        .accessibilityIdentifier("worktree-chip")
-    }
-
-    private var disabled: some View {
-        Button { worktrees.setEnabled(true, for: chat) } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.triangle.branch").font(.system(size: 12))
-                Text("Worktree")
-            }
-            .foregroundStyle(Theme.textTertiary)
-            .chipLabel()
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Theme.borderControl, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
-        }
-        .buttonStyle(.denGhost)
-        .fixedSize()
-        .help("Criar uma worktree para esta tarefa ao enviar")
-        .accessibilityLabel("Worktree")
-    }
-
-    private func enabled(_ draft: WorktreeModel.Draft) -> some View {
-        let tint = worktrees.blocker(for: chat) == nil ? Theme.accentSoft : Theme.removed
-        let name = worktrees.branchName(for: chat, message: chat.prompt)
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
-        return HStack(spacing: 6) {
-            Button { worktrees.setEnabled(false, for: chat) } label: {
-                Image(systemName: "arrow.triangle.branch").font(.system(size: 12))
+        HStack(spacing: 2) {
+            Button { worktrees.setEnabled(!draft.isEnabled, for: chat) } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: draft.isEnabled ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 14))
+                        .foregroundStyle(draft.isEnabled ? Theme.accent : Theme.textTertiary)
+                    if compact {
+                        Image(systemName: "arrow.triangle.branch").font(.system(size: 12))
+                    } else {
+                        Text("Worktree")
+                    }
+                }
+                .foregroundStyle(draft.isEnabled ? Theme.text : Theme.textSecondary)
+                .chipLabel(horizontalPadding: 8)
+                .hoverFill(hovering)
             }
             .buttonStyle(.plain)
-            .help("Não criar worktree")
-            .accessibilityLabel("Desligar worktree")
-            if editing {
-                InlineRenameField(initial: name,
-                                  commit: { typed in Task { await worktrees.rename(typed, for: chat) } },
-                                  done: { editing = false })
-                    .font(.system(size: 11.5, design: .monospaced))
-                    .frame(width: nameWidth)
-            } else {
-                Button { editing = true } label: {
+            .onHover { hovering = $0 }
+            .help("Criar uma worktree para esta tarefa ao enviar; o Den escolhe o nome da branch")
+            .accessibilityIdentifier("worktree-chip")
+            .accessibilityLabel("Worktree")
+            .accessibilityValue(draft.isEnabled ? "ligado" : "desligado")
+            .accessibilityAddTraits(draft.isEnabled ? [.isSelected] : [])
+
+            if draft.isEnabled, case .multiple(_, let repos) = worktrees.layout(for: chat) {
+                Button { picking.toggle() } label: {
                     HStack(spacing: 5) {
-                        Text(name)
-                            .font(.system(size: 11.5, design: .monospaced))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .frame(maxWidth: nameWidth)
-                        Image(systemName: "pencil").font(.system(size: 9))
-                    }
-                }
-                .buttonStyle(.plain)
-                .help("Editar o nome da branch")
-                .accessibilityLabel(name)
-            }
-            if case .multiple(_, let repos) = worktrees.layout(for: chat) {
-                Button { picking = true } label: {
-                    HStack(spacing: 4) {
-                        Text("· \(draft.chosen.count) repos")
+                        Text(draft.chosen.count == 1 ? "1 repo" : "\(draft.chosen.count) repos")
+                            .monospacedDigit()
                         Chevron(size: 8)
                     }
+                    .foregroundStyle(draft.chosen.isEmpty ? Theme.removed : Theme.textSecondary)
+                    .chipLabel(horizontalPadding: 8)
+                    .hoverFill(hoveringRepos, selected: picking)
                 }
                 .buttonStyle(.plain)
-                .popover(isPresented: $picking, arrowEdge: .bottom) {
+                .onHover { hoveringRepos = $0 }
+                .help("Escolher os repos da tarefa")
+                .accessibilityLabel("Repos da tarefa")
+                .popover(isPresented: $picking, arrowEdge: .top) {
                     RepoPicker(chat: chat, repos: repos)
+                        .presentationBackground(Theme.raised)
+                        .environment(\.colorScheme, .dark)
                 }
             }
         }
-        .foregroundStyle(tint)
-        .chipLabel()
-        .background(tint == Theme.removed ? Theme.removedFill : Theme.accentFill, in: shape)
-        .overlay(shape.strokeBorder(tint.opacity(0.45), lineWidth: 1))
         .fixedSize()
     }
 }

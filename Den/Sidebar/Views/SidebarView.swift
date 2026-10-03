@@ -308,7 +308,7 @@ struct SidebarView: View {
         guard let worktree = worktrees.worktree(for: summary.id) else { return nil }
         let found = monitor.pullRequests(for: summary.id).map(\.pullRequest)
         guard let worst = PullRequestStatus.worst(found) else {
-            return TaskBadge(detail: "⑂ " + worktree.folderName)
+            return TaskBadge(detail: "⑂ " + worktree.branch)
         }
         let head = found.count == 1 ? "#\(worst.number)" : "\(found.count) PRs"
         return TaskBadge(tone: PullRequestStatus.tone(worst), tag: head,

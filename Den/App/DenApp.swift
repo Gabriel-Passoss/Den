@@ -15,7 +15,8 @@ struct DenApp: App {
             store: RunConfigurationStore(url: environment.runConfigurationsFile)))
         let ledger = TaskLedger(store: TaskWorktreeStore(url: environment.worktreesFile))
         _worktrees = State(initialValue: WorktreeModel(
-            ledger: ledger, root: environment.worktreesRoot, defaults: environment.defaults))
+            ledger: ledger, root: environment.worktreesRoot, defaults: environment.defaults,
+            registry: environment.registry))
         _monitor = State(initialValue: PullRequestMonitor(
             ledger: ledger,
             fetcher: GitHubCLI(override: environment.ghOverride,

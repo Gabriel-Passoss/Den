@@ -174,17 +174,6 @@ private actor ProgressRecorder {
     #expect(!names.contains("HEAD"))
 }
 
-@Test func branchNamesAreValidatedByGit() async throws {
-    let scratch = try scratchFolder()
-    defer { try? FileManager.default.removeItem(at: scratch.deletingLastPathComponent()) }
-    let repo = try await makeRepository(at: scratch.appending(path: "api"), scratch: scratch)
-    let maker = WorktreeMaker()
-
-    #expect(await maker.isValidBranchName("den/ok", in: repo.checkout))
-    #expect(!(await maker.isValidBranchName("den/a..b", in: repo.checkout)))
-    #expect(!(await maker.isValidBranchName("den/com espaço", in: repo.checkout)))
-}
-
 @Test func anExistingMirrorIsNeverTouched() async throws {
     let scratch = try scratchFolder()
     defer { try? FileManager.default.removeItem(at: scratch.deletingLastPathComponent()) }

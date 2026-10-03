@@ -14,7 +14,6 @@ struct SettingsView: View {
 private struct GitHubSettings: View {
     @Environment(PullRequestMonitor.self) private var monitor
     @AppStorage(GitHubCLI.pathKey) private var path = ""
-    @AppStorage(WorktreeModel.prefixKey) private var prefix = WorktreeModel.defaultPrefix
 
     var body: some View {
         Form {
@@ -39,12 +38,6 @@ private struct GitHubSettings: View {
                     }
                 }
                 Text("Vazio, o Den procura o gh no PATH do seu shell e em /opt/homebrew/bin e /usr/local/bin.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-            Section("Worktrees") {
-                TextField("Prefixo das branches", text: $prefix)
-                Text("Exemplo: \(prefix)NS-1472-melhorias-nos-seletores")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }

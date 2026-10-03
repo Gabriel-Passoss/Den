@@ -1,12 +1,12 @@
 import Foundation
 import Observation
+import HarnessCore
 
 @MainActor
 @Observable
 final class WorktreeModel {
     struct Draft: Equatable {
         var isEnabled: Bool
-        var editedName: String?
         var chosen: Set<String>
     }
 
@@ -16,15 +16,12 @@ final class WorktreeModel {
     }
 
     static let enabledKey = "Den.worktreeDefault"
-    static let prefixKey = "Den.branchPrefix"
-    static let defaultPrefix = "den/"
     static let autoChooseLimit = 4
 
     private(set) var layouts: [String: WorktreeLayout] = [:]
     private(set) var phases: [UUID: Phase] = [:]
     private(set) var warnings: [UUID: String] = [:]
     private(set) var drafts: [UUID: Draft] = [:]
-    private(set) var invalidNames: Set<String> = []
     private(set) var taken: [String: Set<String>] = [:]
     @ObservationIgnored private var cancelled: Set<UUID> = []
 
@@ -32,15 +29,18 @@ final class WorktreeModel {
     @ObservationIgnored private let maker: WorktreeMaker
     @ObservationIgnored private let root: URL
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let registry: HarnessRegistry
+    @ObservationIgnored private let suggester: BranchSuggester
 
-    init(ledger: TaskLedger, root: URL, defaults: UserDefaults, maker: WorktreeMaker = WorktreeMaker()) {
+    init(ledger: TaskLedger, root: URL, defaults: UserDefaults, maker: WorktreeMaker = WorktreeMaker(),
+         registry: HarnessRegistry = .standard, suggester: BranchSuggester = BranchSuggester()) {
         self.ledger = ledger
         self.root = root
         self.defaults = defaults
         self.maker = maker
+        self.registry = registry
+        self.suggester = suggester
     }
-
-    var prefix: String { defaults.string(forKey: Self.prefixKey) ?? Self.defaultPrefix }
 
     func worktree(for id: UUID) -> TaskWorktree? { ledger.worktree(for: id) }
 
@@ -77,7 +77,7 @@ final class WorktreeModel {
     func draft(for chat: ChatModel) -> Draft {
         if let draft = drafts[chat.sessionID] { return draft }
         let repos = layout(for: chat)?.repos ?? []
-        return Draft(isEnabled: defaults.bool(forKey: Self.enabledKey), editedName: nil,
+        return Draft(isEnabled: defaults.bool(forKey: Self.enabledKey),
                      chosen: repos.count <= Self.autoChooseLimit ? Set(repos.map(\.id)) : [])
     }
 
@@ -94,33 +94,9 @@ final class WorktreeModel {
         }
     }
 
-    func rename(_ name: String, for chat: ChatModel) async {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let automatic = automaticName(for: chat, message: chat.prompt)
-        update(chat) { $0.editedName = trimmed.isEmpty || trimmed == automatic ? nil : trimmed }
-        guard let edited = draft(for: chat).editedName,
-              let repo = chosenRepos(for: chat).first else { return }
-        if await maker.isValidBranchName(edited, in: repo.main) {
-            invalidNames.remove(edited)
-        } else {
-            invalidNames.insert(edited)
-        }
-    }
-
-    func branchName(for chat: ChatModel, message: String) -> String {
-        draft(for: chat).editedName ?? automaticName(for: chat, message: message)
-    }
-
     func blocker(for chat: ChatModel) -> String? {
-        guard isOffered(chat) else { return nil }
-        let draft = draft(for: chat)
-        guard draft.isEnabled else { return nil }
-        if chosenRepos(for: chat).isEmpty { return "Escolha ao menos um repo" }
-        guard let edited = draft.editedName else { return nil }
-        if invalidNames.contains(edited) { return "Nome de branch inválido" }
-        if let owner = owner(of: edited, for: chat) { return "Já existe em \(owner)" }
-        if folderExists(edited, for: chat) { return "Já existe uma worktree com esse nome" }
-        return nil
+        guard isOffered(chat), draft(for: chat).isEnabled else { return nil }
+        return chosenRepos(for: chat).isEmpty ? "Escolha ao menos um repo" : nil
     }
 
     func canSend(_ chat: ChatModel) -> Bool {
@@ -147,11 +123,15 @@ final class WorktreeModel {
             entries = (try? FileManager.default.contentsOfDirectory(
                 at: chat.workingDirectory, includingPropertiesForKeys: nil)) ?? []
         }
+        phases[id] = .creating("Criando worktree · escolhendo o nome…")
+        let suggestion = await suggestion(for: chat, text: text)
+        if cancelled.remove(id) != nil { return }
+        let branch = BranchNamer.name(stem: suggestion.stem, prefix: suggestion.type + "/") { name in
+            owner(of: name, for: chat) != nil || folderExists(name, for: chat)
+        }
         let plan = WorktreePlanner.plan(layout: layout, sessionDirectory: chat.workingDirectory,
-                                        chosen: draft(for: chat).chosen,
-                                        branch: branchName(for: chat, message: text),
-                                        prefix: prefix, root: root, entries: entries)
-        phases[id] = .creating("Criando worktree…")
+                                        chosen: draft(for: chat).chosen, branch: branch,
+                                        prefix: "", root: root, entries: entries)
         do {
             let made = try await maker.make(plan) { [weak self] progress in
                 await self?.show(progress, for: id)
@@ -196,11 +176,15 @@ final class WorktreeModel {
         }
     }
 
-    private func automaticName(for chat: ChatModel, message: String) -> String {
-        BranchNamer.name(for: message, prefix: prefix,
-                         fallback: String(chat.sessionID.uuidString.lowercased().prefix(4))) { name in
-            owner(of: name, for: chat) != nil || folderExists(name, for: chat)
+    private func suggestion(for chat: ChatModel, text: String) async -> BranchSuggestion {
+        if let harness = registry.harness(for: chat.harness),
+           let suggested = await suggester.suggest(for: text, harness: harness) {
+            return suggested
         }
+        return BranchSuggestion(
+            type: BranchNamer.type(for: text),
+            stem: BranchNamer.stem(for: text)
+                ?? "\(BranchNamer.fallbackStem)-\(chat.sessionID.uuidString.lowercased().prefix(4))")
     }
 
     private func update(_ chat: ChatModel, _ change: (inout Draft) -> Void) {
@@ -232,7 +216,7 @@ final class WorktreeModel {
         case .multiple(let base, _): group = WorktreePlanner.group(for: base, root: root)
         case nil: return false
         }
-        let folder = BranchNamer.folder(for: name, prefix: prefix)
+        let folder = BranchNamer.folder(for: name, prefix: "")
         return FileManager.default.fileExists(atPath: root.appending(path: group).appending(path: folder).path)
     }
 }

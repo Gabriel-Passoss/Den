@@ -3,15 +3,37 @@ import Foundation
 nonisolated enum BranchNamer {
     static let limit = 48
     static let fallbackStem = "tarefa"
+    static let types = ["feat", "fix", "refactor", "test", "docs", "chore", "perf", "build", "ci", "style"]
+
+    private static let typeHints: [(type: String, words: [String])] = [
+        ("fix", ["corrig", "consert", "bug", "fix", "erro", "quebr", "falha"]),
+        ("refactor", ["refator", "refactor", "reorganiz", "renome"]),
+        ("test", ["teste", "test"]),
+        ("docs", ["document", "docs", "readme"]),
+    ]
+
+    static func type(for message: String) -> String {
+        let text = message.folding(options: [.diacriticInsensitive, .caseInsensitive],
+                                   locale: Locale(identifier: "en_US_POSIX"))
+        return typeHints.first { hint in hint.words.contains { text.contains($0) } }?.type ?? "feat"
+    }
 
     static func name(for message: String, prefix: String, fallback: String? = nil,
                      taken: (String) -> Bool = { _ in false }) -> String {
-        let stem = stem(for: message) ?? "\(fallbackStem)-\(fallback ?? randomSuffix())"
+        name(stem: stem(for: message) ?? "\(fallbackStem)-\(fallback ?? randomSuffix())",
+             prefix: prefix, taken: taken)
+    }
+
+    static func name(stem: String, prefix: String, taken: (String) -> Bool = { _ in false }) -> String {
         let first = prefix + stem
         guard taken(first) else { return first }
         var counter = 2
         while taken("\(first)-\(counter)") { counter += 1 }
         return "\(first)-\(counter)"
+    }
+
+    static func ticketKey(in message: String) -> String? {
+        message.firstMatch(of: #/\b[A-Z][A-Z0-9]{1,9}-[0-9]+\b/#).map { String($0.output) }
     }
 
     static func stem(for message: String) -> String? {

@@ -21,7 +21,7 @@ struct BranchBadge: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.branch").font(.system(size: 12))
                 if !compact {
-                    Text(worktree.folderName)
+                    Text(worktree.branch)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .frame(maxWidth: 200)
@@ -35,6 +35,6 @@ struct BranchBadge: View {
         }
         .help(worktree.repos.map(\.worktree.path).joined(separator: "\n"))
         .accessibilityIdentifier("worktree-branch")
-        .accessibilityLabel(worktree.folderName)
+        .accessibilityLabel(worktree.branch)
     }
 }

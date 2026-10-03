@@ -59,3 +59,23 @@ import Foundation
     #expect(BranchNamer.folder(for: "den/NS-1-x", prefix: "den/") == "NS-1-x")
     #expect(BranchNamer.folder(for: "feat/a/b", prefix: "den/") == "feat-a-b")
 }
+
+@Test func aGivenStemGetsThePrefixAndTheNextFreeSuffix() {
+    #expect(BranchNamer.name(stem: "fix-login", prefix: "den/") == "den/fix-login")
+    #expect(BranchNamer.name(stem: "fix-login", prefix: "den/", taken: { $0 == "den/fix-login" })
+            == "den/fix-login-2")
+}
+
+@Test func theTicketKeyOfAMessageIsFound() {
+    #expect(BranchNamer.ticketKey(in: "corrige o bug NS-38 no importador") == "NS-38")
+    #expect(BranchNamer.ticketKey(in: "corrige o bug no importador") == nil)
+}
+
+@Test func theTypeOfAMessageIsGuessedFromItsWords() {
+    #expect(BranchNamer.type(for: "corrige o redirecionamento do login") == "fix")
+    #expect(BranchNamer.type(for: "Bug no importador de CSV") == "fix")
+    #expect(BranchNamer.type(for: "refatora o módulo de sessões") == "refactor")
+    #expect(BranchNamer.type(for: "adiciona testes ao importador") == "test")
+    #expect(BranchNamer.type(for: "documenta a API de pagamentos") == "docs")
+    #expect(BranchNamer.type(for: "exporta os relatórios em CSV") == "feat")
+}

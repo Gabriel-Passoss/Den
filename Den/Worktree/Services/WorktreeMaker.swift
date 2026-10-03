@@ -111,10 +111,6 @@ nonisolated struct WorktreeMaker: Sendable {
         return taken
     }
 
-    func isValidBranchName(_ name: String, in repo: URL) async -> Bool {
-        await git(["check-ref-format", "--branch", name], repo, commandTimeout)?.succeeded == true
-    }
-
     private func create(_ entry: WorktreePlan.Entry, branch: String,
                         progress: @Sendable (Progress) async -> Void) async -> Result<Created, Failure> {
         let remotes = await git(["remote"], entry.main, commandTimeout)?.output
