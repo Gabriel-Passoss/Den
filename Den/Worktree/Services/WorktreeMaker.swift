@@ -145,7 +145,8 @@ nonisolated struct WorktreeMaker: Sendable {
             ? await offlineWarning(entry.name, base: base, in: entry.main) : nil
         return .success(Created(
             repo: TaskWorktree.Repo(name: entry.name, original: entry.main, worktree: entry.worktree,
-                                    base: base, remote: github),
+                                    base: base, remote: github,
+                                    gitDirectory: WorktreeLocator.gitDirectory(ofWorktreeAt: entry.worktree)),
             warning: warning))
     }
 

@@ -8,6 +8,7 @@ nonisolated struct TaskWorktree: Codable, Equatable, Sendable {
         var worktree: URL
         var base: String
         var remote: GitHubRemote?
+        var gitDirectory: URL?
     }
 
     var branch: String

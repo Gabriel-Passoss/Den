@@ -87,7 +87,10 @@ struct ChatView: View {
             }
         }
 
-        .task(id: chat.sessionID) { await chat.loadBranch() }
+        .task(id: chat.sessionID) {
+            await worktrees.reconcile(chat)
+            await chat.loadBranch()
+        }
         .task(id: chat.sessionID) {
             let id = chat.sessionID
             monitor.appear(id)
@@ -112,7 +115,10 @@ struct ChatView: View {
             if !chat.isBusy {
                 keys.disarmEsc()
                 worktrees.clearWarning(chat.sessionID)
-                monitor.turnEnded(chat.sessionID)
+                Task { @MainActor in
+                    await worktrees.reconcile(chat)
+                    monitor.turnEnded(chat.sessionID)
+                }
                 if pane == .changes {
                     let gitChanges = self.gitChanges
                     let directory = chat.workingDirectory
@@ -127,9 +133,11 @@ struct ChatView: View {
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)) { _ in
             let chat = self.chat
+            let worktrees = self.worktrees
             let monitor = self.monitor
             Task { @MainActor in
                 if chat.hasUnread { chat.hasUnread = false }
+                await worktrees.reconcile(chat)
                 monitor.appBecameActive()
             }
         }

@@ -19,6 +19,21 @@ final class TaskLedger {
         persist()
     }
 
+    func update(_ worktree: TaskWorktree, for id: UUID) {
+        guard var entry = entries[id], entry.worktree != worktree else { return }
+        var pullRequests: [String: PullRequest] = [:]
+        var dismissed: [String: String] = [:]
+        for (old, new) in zip(entry.worktree.repos, worktree.repos) {
+            pullRequests[new.worktree.path] = entry.pullRequests[old.worktree.path]
+            dismissed[new.worktree.path] = entry.dismissed[old.worktree.path]
+        }
+        entry.worktree = worktree
+        entry.pullRequests = pullRequests
+        entry.dismissed = dismissed
+        entries[id] = entry
+        persist()
+    }
+
     func forget(_ id: UUID) {
         guard entries.removeValue(forKey: id) != nil else { return }
         persist()

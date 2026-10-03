@@ -159,6 +159,19 @@ final class WorktreeModel {
 
     func clearWarning(_ id: UUID) { warnings[id] = nil }
 
+    func reconcile(_ chat: ChatModel) async {
+        let id = chat.sessionID
+        guard !isCreating(id), let recorded = ledger.worktree(for: id) else { return }
+        let current = await Task.detached { WorktreeLocator.current(recorded) }.value
+        guard !isCreating(id), ledger.worktree(for: id) == recorded else { return }
+        ledger.update(current, for: id)
+        if current.sessionDirectory.path != chat.workingDirectory.path {
+            await chat.choose(directory: current.sessionDirectory)
+        } else if current.branch != chat.branch {
+            await chat.loadBranch()
+        }
+    }
+
     func forget(_ id: UUID) {
         if isCreating(id) { cancelled.insert(id) }
         ledger.forget(id)

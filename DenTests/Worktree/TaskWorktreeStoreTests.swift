@@ -108,6 +108,37 @@ func sampleWorktree(branch: String = "den/NS-1-fix") -> TaskWorktree {
     #expect(TaskLedger(store: TaskWorktreeStore(url: url)).pullRequests(for: id).isEmpty)
 }
 
+@Test func aMovedWorktreeKeepsItsPullRequestAndDismissalUnderTheNewPath() throws {
+    let url = temporaryFile()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let id = UUID()
+    let ledger = TaskLedger(store: TaskWorktreeStore(url: url))
+    ledger.record(sampleWorktree(), for: id)
+    ledger.setPullRequest(makePullRequest(number: 80), for: id, worktree: "/wt/api/NS-1-fix")
+    ledger.dismiss(id, worktree: "/wt/api/NS-1-fix", signature: "open")
+    var moved = sampleWorktree(branch: "fix/NS-1-login")
+    moved.repos[0].worktree = URL(fileURLWithPath: "/wt/api/fix-NS-1-login")
+    moved.sessionDirectory = URL(fileURLWithPath: "/wt/api/fix-NS-1-login/apps/web")
+
+    ledger.update(moved, for: id)
+
+    let reopened = TaskLedger(store: TaskWorktreeStore(url: url))
+    #expect(reopened.worktree(for: id) == moved)
+    #expect(reopened.pullRequests(for: id).mapValues(\.number) == ["/wt/api/fix-NS-1-login": 80])
+    #expect(reopened.dismissedSignature(for: id, worktree: "/wt/api/fix-NS-1-login") == "open")
+    #expect(reopened.dismissedSignature(for: id, worktree: "/wt/api/NS-1-fix") == nil)
+}
+
+@Test func updatingAnUnknownSessionRecordsNothing() throws {
+    let url = temporaryFile()
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let ledger = TaskLedger(store: TaskWorktreeStore(url: url))
+
+    ledger.update(sampleWorktree(), for: UUID())
+
+    #expect(ledger.entries.isEmpty)
+}
+
 @Test func aPullRequestForAnUnknownSessionIsIgnored() throws {
     let url = temporaryFile()
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }

@@ -281,3 +281,55 @@ private func gatedMaker(_ gate: Gate) -> WorktreeMaker {
                                     in: bench.checkout)))
     }
 }
+
+@MainActor
+@Test func aRenameMadeByTheAgentMovesTheSessionAndItsRecord() async throws {
+    try await withBench { bench in
+        bench.worktrees.setEnabled(true, for: bench.chat)
+        await bench.worktrees.launch(bench.chat, text: "ajusta o login")
+        let made = try #require(bench.worktrees.worktree(for: bench.chat.sessionID))
+        let old = try #require(made.repos.first?.worktree)
+        let moved = old.deletingLastPathComponent().appending(path: "feat-fix-sign-in")
+        try await runGit(["branch", "-m", made.branch, "feat/fix-sign-in"], in: bench.checkout)
+        try await runGit(["worktree", "move", old.path, moved.path], in: bench.checkout)
+
+        await bench.worktrees.reconcile(bench.chat)
+
+        let current = try #require(bench.worktrees.worktree(for: bench.chat.sessionID))
+        #expect(current.branch == "feat/fix-sign-in")
+        #expect(current.repos.map { $0.worktree.resolvingSymlinksInPath().path }
+                == [moved.resolvingSymlinksInPath().path])
+        #expect(bench.chat.workingDirectory.resolvingSymlinksInPath().path
+                == moved.resolvingSymlinksInPath().path)
+        #expect(bench.chat.branch == "feat/fix-sign-in")
+    }
+}
+
+@MainActor
+@Test func aBranchRenameAloneRefreshesTheSessionBranch() async throws {
+    try await withBench { bench in
+        bench.worktrees.setEnabled(true, for: bench.chat)
+        await bench.worktrees.launch(bench.chat, text: "ajusta o login")
+        let made = try #require(bench.worktrees.worktree(for: bench.chat.sessionID))
+        let folder = bench.chat.workingDirectory
+        try await runGit(["branch", "-m", made.branch, "feat/fix-sign-in"], in: bench.checkout)
+
+        await bench.worktrees.reconcile(bench.chat)
+
+        #expect(bench.worktrees.worktree(for: bench.chat.sessionID)?.branch == "feat/fix-sign-in")
+        #expect(bench.chat.workingDirectory == folder)
+        #expect(bench.chat.branch == "feat/fix-sign-in")
+    }
+}
+
+@MainActor
+@Test func aSessionWithoutAWorktreeIsLeftAlone() async throws {
+    try await withBench { bench in
+        let folder = bench.chat.workingDirectory
+
+        await bench.worktrees.reconcile(bench.chat)
+
+        #expect(bench.chat.workingDirectory == folder)
+        #expect(bench.worktrees.worktree(for: bench.chat.sessionID) == nil)
+    }
+}

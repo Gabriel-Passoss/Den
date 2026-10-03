@@ -35,6 +35,8 @@ private func severalPlan(_ folder: URL, branch: String, root: URL) throws -> Wor
     #expect(made.worktree.repos.map(\.worktree.path) == [worktree.path])
     #expect(made.worktree.repos.first?.base == "origin/main")
     #expect(made.worktree.repos.first?.remote == nil)
+    #expect(made.worktree.repos.first?.gitDirectory?.resolvingSymlinksInPath().path
+            == repo.checkout.appending(path: ".git/worktrees/task").resolvingSymlinksInPath().path)
     #expect(made.warnings.isEmpty)
     #expect(try await runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: worktree) == "den/task")
     #expect(try await runGit(["rev-parse", "HEAD"], in: worktree) == newest)
