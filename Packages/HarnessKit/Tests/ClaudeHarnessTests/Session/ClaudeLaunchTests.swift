@@ -111,15 +111,15 @@ private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-55555555
     #expect(!args.contains("--effort"))
 }
 
-@Test func everyPermissionModeReachesTheCLIWithItsVerifiedSpelling() {
-    let spellings = PermissionMode.allCases.map { mode -> String in
+@Test func everyPermissionModeReachesTheCLIWithItsVerifiedSpelling() throws {
+    let spellings = try PermissionMode.allCases.map { mode -> String in
         let args = ClaudeLaunch.make(
             installation: install,
             workingDirectory: cwd,
             session: .fresh(sessionID: session),
             permissionMode: mode
         ).arguments
-        let index = try! #require(args.firstIndex(of: "--permission-mode"))
+        let index = try #require(args.firstIndex(of: "--permission-mode"))
         return args[args.index(after: index)]
     }
     #expect(spellings == ["acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan"])

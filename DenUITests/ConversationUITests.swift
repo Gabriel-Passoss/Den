@@ -112,7 +112,7 @@ final class ConversationUITests: XCTestCase {
 
         require(text(containing: "criado com o conte", in: app), in: app)
         XCTAssertFalse(allow.exists)
-        XCTAssertTrue(claude.received.last?.contains(#""behavior":"allow""#) == true)
+        XCTAssertEqual(claude.received.last?.contains(#""behavior":"allow""#), true)
     }
 
     @MainActor

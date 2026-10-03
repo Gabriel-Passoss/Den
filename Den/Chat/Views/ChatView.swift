@@ -213,7 +213,7 @@ struct ChatView: View {
                     .transition(.opacity)
                 Image(nsImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(radius: 24)
                     .padding(36)

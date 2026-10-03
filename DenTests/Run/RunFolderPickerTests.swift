@@ -11,7 +11,7 @@ private func textFields(in view: NSView) -> [NSTextField] {
 }
 
 private struct PickerInForm: View {
-    @State var selection = ""
+    @State private var selection = ""
     var body: some View {
         Form {
             Section {
