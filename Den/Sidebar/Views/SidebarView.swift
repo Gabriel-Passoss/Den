@@ -311,7 +311,7 @@ struct SidebarView: View {
             return TaskBadge(detail: "⑂ " + worktree.branch)
         }
         let head = found.count == 1 ? "#\(worst.number)" : "\(found.count) PRs"
-        return TaskBadge(tone: PullRequestStatus.tone(worst), tag: head,
+        return TaskBadge(tone: PullRequestStatus.tone(worst),
                          detail: "\(head) · \(PullRequestStatus.label(worst))")
     }
 

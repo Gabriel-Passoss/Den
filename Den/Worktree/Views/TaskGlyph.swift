@@ -1,22 +1,17 @@
 import SwiftUI
-import HarnessCore
 
 struct TaskGlyph: View {
     let tone: PullRequestTone?
-    let harness: HarnessID?
+    var size: CGFloat = 18
 
     var body: some View {
         Image(systemName: tone?.symbol ?? "arrow.triangle.branch")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(tone.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(Theme.textTertiary))
-            .frame(width: 18, height: 18)
+            .resizable()
+            .scaledToFit()
+            .fontWeight(.semibold)
+            .foregroundStyle(tone?.color ?? Theme.textTertiary)
+            .frame(width: size - 3, height: size - 3)
+            .frame(width: size, height: size)
             .animation(.easeInOut(duration: 0.25), value: tone)
-            .overlay(alignment: .bottomTrailing) {
-                HarnessBadge(harness: harness, size: 9)
-                    .padding(1.5)
-                    .background(Theme.sidebar,
-                                in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    .offset(x: 4, y: 4)
-            }
     }
 }

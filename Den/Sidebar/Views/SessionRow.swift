@@ -16,9 +16,10 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if task != nil {
-                TaskGlyph(tone: task?.tone, harness: summary.harnesses.last)
-            } else {
+            HStack(spacing: 5) {
+                if let task {
+                    TaskGlyph(tone: task.tone, size: 18)
+                }
                 HarnessBadge(harness: summary.harnesses.last, size: 18)
             }
 
@@ -37,14 +38,6 @@ struct SessionRow: View {
             }
 
             Spacer(minLength: 4)
-
-            if let tag = task?.tag {
-                Text(tag)
-                    .font(.system(size: 11, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(task?.tone?.color ?? Theme.textTertiary)
-                    .fixedSize()
-            }
 
             if let indicator {
                 Circle()
