@@ -4,6 +4,11 @@
 # unreachable code) can't pile up. The app build leaves its index in
 # build/DerivedData for `Scripts/quality/unused-code --skip-build`.
 #
+# A build setting given to xcodebuild reaches the package's targets too, and
+# Xcode 26 already builds those with -suppress-warnings, which the compiler
+# refuses next to -warnings-as-errors. So the setting is on only for targets of
+# the Den project; the `swift build` line is what holds HarnessKit to it.
+#
 # Arguments are passed on to xcodebuild as build settings; CI uses them to sign
 # ad hoc.
 set -eu
@@ -11,12 +16,13 @@ cd "$(dirname "$0")/../.."
 
 swift build --package-path Packages/HarnessKit --build-tests -Xswiftc -warnings-as-errors
 
+# shellcheck disable=SC2016 # xcodebuild expands $(…), not the shell
 for scheme in Den DenUITests; do
     xcodebuild build-for-testing -quiet \
         -project Den.xcodeproj -scheme "$scheme" \
         -destination 'platform=macOS' \
         -derivedDataPath build/DerivedData \
-        SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+        'SWIFT_TREAT_WARNINGS_AS_ERRORS=$(STRICT_$(PROJECT_NAME):default=NO)' STRICT_Den=YES \
         COMPILER_INDEX_STORE_ENABLE=YES INDEX_ENABLE_DATA_STORE=YES \
         "$@"
 done
