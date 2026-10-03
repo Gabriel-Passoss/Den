@@ -90,6 +90,8 @@ if [ ! -x "$installed" ]; then
         exec "$on_path" "$@"
     fi
 
+    for variable in $(git rev-parse --local-env-vars); do unset "$variable"; done
+
     say "Fetching $name $version into ${installed#"$root"/} (only the first time)…"
     mkdir -p "$tools"
     work=$(mktemp -d "$tools/.$name.XXXXXX")
