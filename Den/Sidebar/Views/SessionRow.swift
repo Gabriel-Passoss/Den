@@ -52,15 +52,22 @@ struct SessionRow: View {
         .simultaneousGesture(TapGesture(count: 2).onEnded {
             Task { @MainActor in isEditing = true }
         })
-        .contextMenu {
-            Button("Renomear") { isEditing = true }
-            if let unfile {
-                Button("Remover da pasta", action: unfile)
-            }
-            Divider()
-            Button("Apagar sessão…", role: .destructive, action: delete)
-        }
+        .denContextMenu(menuSections)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private var menuSections: [DenMenuSection] {
+        var edit = [DenMenuItem(id: "rename", title: "Renomear") { isEditing = true }]
+        if let unfile {
+            edit.append(DenMenuItem(id: "unfile", title: "Remover da pasta", action: unfile))
+        }
+        return [
+            DenMenuSection(id: "edit", items: edit),
+            DenMenuSection(id: "danger", items: [
+                DenMenuItem(id: "delete", title: "Apagar sessão…",
+                            isDestructive: true, action: delete),
+            ]),
+        ]
     }
 
     static func color(for indicator: WorkspaceModel.SessionIndicator) -> Color {

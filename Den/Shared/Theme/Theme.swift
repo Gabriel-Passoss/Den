@@ -183,29 +183,29 @@ extension View {
     }
 }
 
-struct MenuChip<Label: View, Content: View>: View {
+struct ChipSurface: ViewModifier {
     var bordered = false
     var radius: CGFloat = 8
-    @ViewBuilder var content: () -> Content
-    @ViewBuilder var label: () -> Label
+    var hovering = false
+    var open = false
 
-    @State private var hovering = false
-    @Environment(\.isEnabled) private var isEnabled
-
-    var body: some View {
+    func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        Menu(content: content, label: label)
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .background(bordered ? (hovering ? Theme.hoverRaised : Theme.raised)
-                                 : (hovering ? Theme.hover : .clear), in: shape)
+        let active = hovering || open
+        return content
+            .background(bordered ? (active ? Theme.hoverRaised : Theme.raised)
+                                 : (active ? Theme.hover : .clear), in: shape)
             .overlay {
                 if bordered { shape.strokeBorder(Theme.borderStrong, lineWidth: 1) }
             }
-            .opacity(isEnabled ? 1 : 0.5)
-            .onHover { hovering = isEnabled && $0 }
+    }
+}
+
+extension View {
+    func chipSurface(bordered: Bool = false, radius: CGFloat = 8,
+                     hovering: Bool = false, open: Bool = false) -> some View {
+        modifier(ChipSurface(bordered: bordered, radius: radius,
+                             hovering: hovering, open: open))
     }
 }
 

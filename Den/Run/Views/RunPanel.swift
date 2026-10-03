@@ -94,10 +94,11 @@ struct RunPanel: View {
                         start: { run(item) },
                         stop: { Task { await runs.stop(item.id) } })
                     .onTapGesture { selectedID = item.id }
-                    .contextMenu {
-                        Button("Editar…") { editor = .edit(item) }
-                        Button("Remover", role: .destructive) { remove(item) }
-                    }
+                    .denContextMenu([DenMenuSection(items: [
+                        DenMenuItem(id: "edit", title: "Editar…") { editor = .edit(item) },
+                        DenMenuItem(id: "remove", title: "Remover",
+                                    isDestructive: true) { remove(item) },
+                    ])])
                 }
             }
             .padding(6)

@@ -132,6 +132,28 @@ final class ConversationUITests: XCTestCase {
         require(app.staticTexts["OK"], in: app)
     }
 
+    // MARK: - Menus
+
+    @MainActor
+    func testTheSidebarMenuOpensInAppAndDrillsIntoTheHarnesses() throws {
+        let app = launch()
+
+        app.buttons["Nova"].click()
+        let popover = app.popovers.firstMatch
+        require(popover, in: app)
+        let menu = popover.scrollViews["den-menu"]
+        require(menu.buttons["Nova sessão"], in: app)
+        XCTAssertTrue(menu.buttons["Nova pasta"].exists)
+
+        menu.buttons["Nova sessão com"].click()
+        require(popover.buttons["Voltar"], in: app)
+        XCTAssertFalse(menu.buttons["Nova pasta"].exists)
+        XCTAssertTrue(menu.buttons["Claude Code"].exists)
+
+        popover.buttons["Voltar"].click()
+        require(menu.buttons["Nova pasta"], in: app)
+    }
+
     // MARK: - Mentions
 
     private let bigProject = """
@@ -198,7 +220,9 @@ final class ConversationUITests: XCTestCase {
         require(row, in: app)
 
         row.rightClick()
-        app.menuItems["Renomear"].click()
+        let menu = app.popovers.firstMatch
+        require(menu, in: app)
+        menu.buttons["Renomear"].click()
         app.typeKey("a", modifierFlags: .command)
         app.typeText("Renomeada\n")
 
@@ -216,7 +240,9 @@ final class ConversationUITests: XCTestCase {
         require(row, in: app)
 
         row.rightClick()
-        app.menuItems["Apagar sessão…"].click()
+        let menu = app.popovers.firstMatch
+        require(menu, in: app)
+        menu.buttons["Apagar sessão…"].click()
         // The Touch Bar mirrors the alert's buttons, so look inside the sheet.
         let confirm = app.sheets.buttons["Apagar"]
         require(confirm, in: app)
