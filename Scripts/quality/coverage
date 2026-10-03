@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Fails when line coverage is below the floor recorded in .coverage-floor.json.
+
+  Scripts/quality/coverage package [--write-floor]
+  Scripts/quality/coverage app <result.xcresult> [--write-floor]
+
+`package` reads the profile that `swift test --enable-code-coverage` left in
+Packages/HarnessKit. `app` reads the result bundle of an `xcodebuild test
+-enableCodeCoverage YES` run and leaves out everything under a Views folder,
+which the UI tests exercise instead. --write-floor records what was measured,
+less half a point for the run-to-run wobble and rounded down, as the new floor.
+"""
+import argparse
+import json
+import math
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+FLOOR_FILE = ROOT / ".coverage-floor.json"
+PACKAGE = ROOT / "Packages" / "HarnessKit"
+PACKAGE_TARGETS = ("HarnessCore", "ClaudeHarness", "OpenCodeHarness", "HarnessProbeArguments")
+APP_TARGET = "Den.app"
+APP_KEY = "Den"
+WOBBLE = 0.5
+
+
+def package_totals(export):
+    totals = {}
+    for entry in export["data"][0]["files"]:
+        _, found, tail = entry["filename"].partition("/Sources/")
+        target = tail.split("/", 1)[0]
+        if not found or target not in PACKAGE_TARGETS:
+            continue
+        lines = entry["summary"]["lines"]
+        covered, count = totals.get(target, (0, 0))
+        totals[target] = (covered + lines["covered"], count + lines["count"])
+    return totals
+
+
+def app_totals(report):
+    covered = count = 0
+    for target in report["targets"]:
+        if target["name"] != APP_TARGET:
+            continue
+        for entry in target["files"]:
+            if "Views" in Path(entry["path"]).parts:
+                continue
+            covered += entry["coveredLines"]
+            count += entry["executableLines"]
+    return {APP_KEY: (covered, count)}
+
+
+def percentages(totals):
+    return {name: 100 * covered / count for name, (covered, count) in totals.items() if count}
+
+
+def failures(measured, floors, names):
+    problems = []
+    for name in names:
+        if name not in floors:
+            problems.append(f"{name}: no floor recorded; run again with --write-floor")
+        elif name not in measured:
+            problems.append(f"{name}: missing from the coverage report")
+        elif measured[name] < floors[name]:
+            problems.append(f"{name}: {measured[name]:.1f}% is below the floor of {floors[name]}%")
+    return problems
+
+
+def raised(floors, measured, names):
+    return {**floors, **{name: math.floor(measured[name] - WOBBLE) for name in names if name in measured}}
+
+
+def output_of(*command):
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        sys.exit(f"{' '.join(command)} failed:\n{result.stderr.strip()}")
+    return result.stdout
+
+
+def profile_and_bundles(report):
+    profile = report.parent / "default.profdata"
+    bundles = sorted(path for path in report.parent.parent.glob("*.xctest/Contents/MacOS/*") if path.is_file())
+    if not profile.exists() or not bundles:
+        sys.exit(f"no coverage profile at {profile}; run `swift test --enable-code-coverage` first")
+    return profile, bundles
+
+
+def measure_package():
+    report = Path(output_of("swift", "test", "--package-path", str(PACKAGE), "--show-codecov-path").strip())
+    profile, bundles = profile_and_bundles(report)
+    objects = [argument for bundle in bundles for argument in ("-object", str(bundle))]
+    export = output_of("xcrun", "llvm-cov", "export", "-summary-only", "-instr-profile", str(profile), *objects)
+    return percentages(package_totals(json.loads(export)))
+
+
+def measure_app(bundle):
+    return percentages(app_totals(json.loads(output_of("xcrun", "xccov", "view", "--report", "--json", bundle))))
+
+
+def main(arguments=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("group", choices=["package", "app"])
+    parser.add_argument("result", nargs="?", help="the .xcresult bundle, for `app`")
+    parser.add_argument("--write-floor", action="store_true")
+    options = parser.parse_args(arguments)
+    if options.group == "app" and not options.result:
+        parser.error("app needs the path of an .xcresult bundle")
+
+    if options.group == "package":
+        measured, names = measure_package(), PACKAGE_TARGETS
+    else:
+        measured, names = measure_app(options.result), (APP_KEY,)
+
+    floors = json.loads(FLOOR_FILE.read_text(encoding="utf-8")) if FLOOR_FILE.exists() else {}
+    if options.write_floor:
+        floors = raised(floors, measured, names)
+        FLOOR_FILE.write_text(json.dumps(floors, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    for name in names:
+        shown = f"{measured[name]:5.1f}%" if name in measured else "    -"
+        print(f"{name:24}{shown}   floor {floors.get(name, '-')}%")
+    problems = failures(measured, floors, names)
+    for problem in problems:
+        print(problem, file=sys.stderr)
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -22,25 +22,9 @@ struct ChatComposer: View {
                 pendingAttachmentRow
             }
 
-            ComposerTextView(text: $chat.prompt, focusRequested: $focusRequested,
-                             placeholder: Self.placeholder,
-                             ghost: chat.visibleSuggestion ?? "",
-                             onSubmit: submit,
-                             onPaste: { chat.capturePaste($0) },
-                             onAcceptGhost: acceptSuggestion,
-                             onDismissGhost: chat.dismissSuggestion)
-                .overlay(alignment: .topLeading) {
-                    if let suggestion = chat.visibleSuggestion {
-                        suggestedReply(suggestion)
-                            .transition(.opacity)
-                    } else if chat.prompt.isEmpty {
-                        Text(Self.placeholder)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.textTertiary)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .animation(.easeOut(duration: 0.2), value: chat.visibleSuggestion)
+            ComposerField(chat: chat, focusRequested: $focusRequested,
+                          placeholder: Self.placeholder, submit: submit,
+                          stickToBottom: stickToBottom)
                 .padding(.horizontal, 8)
                 .padding(.top, 6)
                 .padding(.bottom, 4)
@@ -204,36 +188,6 @@ struct ChatComposer: View {
         Task { await chat.send(text: text) }
     }
 
-    private func suggestedReply(_ suggestion: String) -> some View {
-        Text(suggestion)
-            .font(Font(ComposerTextView.font))
-            .foregroundStyle(Theme.textTertiary)
-            .lineLimit(ComposerTextView.ghostMaxLines)
-            .padding(.trailing, ComposerTextView.ghostTrailing)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .allowsHitTesting(false)
-            .accessibilityLabel("Resposta sugerida: \(suggestion). Seta para a direita envia.")
-            .accessibilityIdentifier("suggested-reply")
-            .overlay(alignment: .topTrailing) {
-                Button(action: acceptSuggestion) {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .iconLabel(size: 20)
-                        .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .strokeBorder(Theme.borderStrong, lineWidth: 1))
-                }
-                .buttonStyle(.denGhost(radius: 5))
-                .help("Enviar resposta sugerida (→)")
-                .accessibilityLabel("Enviar resposta sugerida")
-            }
-    }
-
-    private func acceptSuggestion() {
-        stickToBottom()
-        Task { await chat.acceptSuggestion() }
-    }
-
     private var pendingAttachmentRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -241,7 +195,7 @@ struct ChatComposer: View {
                     if pending.isImage, let image = ImageCache.decodedImage(pending.data) {
                         Image(nsImage: image)
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .scaledToFill()
                             .frame(width: 56, height: 56)
                             .clipShape(RoundedRectangle(cornerRadius: 9))
                             .overlay(RoundedRectangle(cornerRadius: 9)

@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+"""Mutation testing for HarnessKit: flips one operator at a time and expects a test to fail.
+
+  Scripts/quality/mutation --base <ref>     mutate the lines changed since <ref>
+  Scripts/quality/mutation --all            mutate the whole package
+      [--write-baseline]                    accept the survivors of this run
+      [--report <file>]                     write every outcome as JSON
+
+A mutant the tests still pass with has survived: no test pins that line down.
+The run fails on survivors that .mutation-baseline.json does not list. A mutant
+that does not compile is discarded. Everything runs on a copy of the package.
+"""
+import argparse
+import bisect
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+from collections import Counter, namedtuple
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+PACKAGE = Path("Packages/HarnessKit")
+SOURCES = PACKAGE / "Sources"
+EXCLUDED_TARGETS = ("HarnessTestSupport", "harness-probe")
+BASELINE_FILE = ROOT / ".mutation-baseline.json"
+TEST_TIMEOUT = 120
+
+REPLACEMENTS = {
+    "==": "!=", "!=": "==",
+    "<": ">=", ">=": "<",
+    ">": "<=", "<=": ">",
+    "&&": "||", "||": "&&",
+    "true": "false", "false": "true",
+}
+TOKEN = re.compile(r"(?<=\s)(?:==|!=|<=|>=|<|>|&&|\|\|)(?=\s)|\b(?:true|false)\b")
+STRING_START = re.compile(r'#*"')
+EXTENDED_REGEX_START = re.compile(r"#+/")
+REGEX_OPENERS = "(,:=[{;?&|~"
+REGEX_KEYWORDS = {"return", "try", "await", "throw", "case", "in", "where", "if", "guard", "while", "else"}
+WORD_END = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
+HUNK = re.compile(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@")
+
+Mutant = namedtuple("Mutant", "file line offset original replacement code occurrence")
+
+
+def code_mask(source):
+    mask = bytearray(len(source))
+    _scan_code(source, 0, mask, interpolated=False)
+    return mask
+
+
+def _scan_code(source, index, mask, interpolated):
+    depth = 0
+    while index < len(source):
+        if source.startswith("//", index):
+            newline = source.find("\n", index)
+            index = len(source) if newline < 0 else newline
+        elif source.startswith("/*", index):
+            index = _skip_block_comment(source, index)
+        elif STRING_START.match(source, index):
+            index = _scan_string(source, index, mask)
+        elif EXTENDED_REGEX_START.match(source, index):
+            index = _skip_extended_regex(source, index)
+        elif source[index] == "/" and _opens_regex(source, index):
+            index = _skip_regex(source, index)
+        else:
+            if interpolated and source[index] == "(":
+                depth += 1
+            elif interpolated and source[index] == ")":
+                if depth == 0:
+                    return index + 1
+                depth -= 1
+            mask[index] = 1
+            index += 1
+    return index
+
+
+def _skip_block_comment(source, index):
+    depth = 0
+    while index < len(source):
+        if source.startswith("/*", index):
+            depth += 1
+            index += 2
+        elif source.startswith("*/", index):
+            depth -= 1
+            index += 2
+            if depth == 0:
+                break
+        else:
+            index += 1
+    return index
+
+
+def _opens_regex(source, index):
+    following = source[index + 1:index + 2]
+    if not following or following in " \t\n":
+        return False
+    before = source[:index].rstrip(" \t")
+    if not before or before[-1] == "\n" or before[-1] in REGEX_OPENERS:
+        return True
+    word = WORD_END.search(before)
+    return bool(word) and word.group() in REGEX_KEYWORDS
+
+
+def _skip_extended_regex(source, index):
+    hashes = 0
+    while source[index] == "#":
+        hashes += 1
+        index += 1
+    closing = source.find("/" + "#" * hashes, index + 1)
+    if closing >= 0:
+        return closing + 1 + hashes
+    newline = source.find("\n", index)
+    return len(source) if newline < 0 else newline
+
+
+def _skip_regex(source, index):
+    index += 1
+    while index < len(source) and source[index] != "\n":
+        if source[index] == "\\":
+            index += 2
+        elif source[index] == "/":
+            return index + 1
+        else:
+            index += 1
+    return index
+
+
+def _scan_string(source, index, mask):
+    hashes = 0
+    while source[index] == "#":
+        hashes += 1
+        index += 1
+    multiline = source.startswith('"""', index)
+    quote = '"""' if multiline else '"'
+    index += len(quote)
+    closing = quote + "#" * hashes
+    escape = "\\" + "#" * hashes
+    while index < len(source):
+        if source.startswith(closing, index):
+            return index + len(closing)
+        if source.startswith(escape, index):
+            index += len(escape)
+            if source.startswith("(", index):
+                index = _scan_code(source, index + 1, mask, interpolated=True)
+            else:
+                index += 1
+        elif not multiline and source[index] == "\n":
+            return index
+        else:
+            index += 1
+    return index
+
+
+def mutants_in(file, source):
+    mask = code_mask(source)
+    starts = [0] + [match.end() for match in re.finditer("\n", source)]
+    seen = Counter()
+    found = []
+    for match in TOKEN.finditer(source):
+        if not all(mask[match.start():match.end()]):
+            continue
+        original = match.group()
+        line = bisect.bisect_right(starts, match.start())
+        end = source.find("\n", match.start())
+        code = source[starts[line - 1]:len(source) if end < 0 else end].strip()
+        found.append(Mutant(file, line, match.start(), original, REPLACEMENTS[original], code, seen[line, original]))
+        seen[line, original] += 1
+    return found
+
+
+def mutated(source, mutant):
+    return source[:mutant.offset] + mutant.replacement + source[mutant.offset + len(mutant.original):]
+
+
+def changed_lines(diff):
+    changed = {}
+    file = None
+    for row in diff.splitlines():
+        if row.startswith("+++ "):
+            file = row[6:] if row.startswith("+++ b/") else None
+            continue
+        hunk = HUNK.match(row)
+        if file and hunk:
+            start, count = int(hunk.group(1)), int(hunk.group(2) or 1)
+            changed.setdefault(file, set()).update(range(start, start + count))
+    return changed
+
+
+def discover(root, lines=None):
+    found = []
+    for path in sorted((root / SOURCES).rglob("*.swift")):
+        file = path.relative_to(root).as_posix()
+        if path.relative_to(root / SOURCES).parts[0] in EXCLUDED_TARGETS:
+            continue
+        if lines is not None and file not in lines:
+            continue
+        for mutant in mutants_in(file, path.read_text(encoding="utf-8")):
+            if lines is None or mutant.line in lines[file]:
+                found.append(mutant)
+    return found
+
+
+def evaluate(mutants, workspace, builds, passes, announce=lambda mutant, outcome: None):
+    outcomes = []
+    for mutant in mutants:
+        path = workspace / Path(mutant.file).relative_to(PACKAGE)
+        original = path.read_bytes()
+        path.write_bytes(mutated(original.decode("utf-8"), mutant).encode("utf-8"))
+        try:
+            outcome = "discarded" if not builds() else "survived" if passes() else "killed"
+        finally:
+            path.write_bytes(original)
+        outcomes.append((mutant, outcome))
+        announce(mutant, outcome)
+    return outcomes
+
+
+def key(mutant):
+    return (mutant.file, mutant.code, mutant.original, mutant.replacement, mutant.occurrence)
+
+
+def rebased(baseline, outcomes):
+    ran = {key(mutant) for mutant, _ in outcomes}
+    survived = {key(mutant) for mutant, outcome in outcomes if outcome == "survived"}
+    return (baseline - ran) | survived
+
+
+def unaccepted(outcomes, baseline):
+    return [mutant for mutant, outcome in outcomes if outcome == "survived" and key(mutant) not in baseline]
+
+
+def read_baseline(path):
+    if not path.exists():
+        return set()
+    return {
+        (entry["file"], entry["code"], entry["original"], entry["replacement"], entry["occurrence"])
+        for entry in json.loads(path.read_text(encoding="utf-8"))
+    }
+
+
+def write_baseline(path, baseline):
+    names = ("file", "code", "original", "replacement", "occurrence")
+    entries = [dict(zip(names, entry)) for entry in sorted(baseline)]
+    path.write_text(json.dumps(entries, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def described(mutant):
+    return f"{mutant.file}:{mutant.line}  {mutant.original} → {mutant.replacement}"
+
+
+def output_of(*command):
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        sys.exit(f"{' '.join(command)} failed:\n{result.stderr.strip()}")
+    return result.stdout
+
+
+def diff_since(base):
+    fork = output_of("git", "-C", str(ROOT), "merge-base", base, "HEAD").strip()
+    return output_of("git", "-C", str(ROOT), "diff", "-U0", "--no-color", "--no-ext-diff",
+                     "--src-prefix=a/", "--dst-prefix=b/", fork, "--", SOURCES.as_posix())
+
+
+def succeeds(command, timeout=None):
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    try:
+        return process.wait(timeout=timeout) == 0
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+        return False
+
+
+def main(arguments=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    scope = parser.add_mutually_exclusive_group(required=True)
+    scope.add_argument("--base", metavar="REF", help="mutate the lines changed since REF")
+    scope.add_argument("--all", action="store_true", help="mutate the whole package")
+    parser.add_argument("--write-baseline", action="store_true")
+    parser.add_argument("--report", metavar="FILE")
+    options = parser.parse_args(arguments)
+
+    mutants = discover(ROOT, None if options.all else changed_lines(diff_since(options.base)))
+    outcomes = []
+    if mutants:
+        print(f"{len(mutants)} mutants", flush=True)
+        with tempfile.TemporaryDirectory(prefix="den-mutation-") as scratch:
+            workspace = Path(scratch) / PACKAGE.name
+            shutil.copytree(ROOT / PACKAGE, workspace, ignore=shutil.ignore_patterns(".build"))
+
+            def builds():
+                return succeeds(["swift", "build", "--build-tests", "--package-path", str(workspace)])
+
+            def passes():
+                return succeeds(["swift", "test", "--skip-build", "--package-path", str(workspace)], TEST_TIMEOUT)
+
+            if not builds() or not passes():
+                print("the package must build and pass its tests before it is mutated", file=sys.stderr)
+                return 2
+            outcomes = evaluate(mutants, workspace, builds, passes,
+                                lambda mutant, outcome: print(f"{outcome:10}{described(mutant)}", flush=True))
+    else:
+        print("no mutants in scope")
+
+    baseline = read_baseline(BASELINE_FILE)
+    if options.write_baseline:
+        baseline = rebased(set() if options.all else baseline, outcomes)
+        write_baseline(BASELINE_FILE, baseline)
+    if options.report:
+        Path(options.report).parent.mkdir(parents=True, exist_ok=True)
+        Path(options.report).write_text(json.dumps(
+            [{**mutant._asdict(), "outcome": outcome} for mutant, outcome in outcomes],
+            indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    counts = Counter(outcome for _, outcome in outcomes)
+    print(f"{counts['killed']} killed, {counts['survived']} survived, {counts['discarded']} discarded")
+    fresh = unaccepted(outcomes, baseline)
+    for mutant in fresh:
+        print(f"survived: {described(mutant)}\n    {mutant.code}", file=sys.stderr)
+    return 1 if fresh else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

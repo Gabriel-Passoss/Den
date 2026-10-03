@@ -1,0 +1,46 @@
+# SwiftFormat: the house style, checked on every commit and in CI.
+# `Scripts/quality/tool swiftformat .` fixes a file; docs/quality.md has the rest.
+#
+# The options below write down the style the code already has (four spaces,
+# `0..<n` without spaces, `case .x(let y)`, one-line guards, aligned
+# continuation lines), so the formatter keeps it instead of rewriting it.
+
+--swift-version 6.2
+--language-mode 5
+--min-version 0.63.1
+
+--exclude .build,**/.build,DerivedData,build
+
+--indent 4
+--ifdef no-indent
+--ranges no-space
+--decimal-grouping ignore
+--hex-grouping ignore
+--pattern-let inline
+--trailing-commas collections-only
+--strip-unused-args closure-only
+--type-blank-lines preserve
+--else-position same-line
+--guard-else auto
+--wrap-arguments preserve
+--wrap-parameters preserve
+--wrap-collections preserve
+
+# Rules that would rewrite a deliberate part of the style:
+# - indent, wrapArguments: the code aligns wrapped lines under the opening paren
+#   or operator, which these rules flatten.
+# - wrap*Bodies, wrapMultilineStatementBraces: one-line `guard … else { return }`
+#   and `{` at the end of a wrapped condition are the norm here.
+# - sortImports: imports go system first, then the project's own modules.
+# - modifierOrder: `nonisolated` comes first (`nonisolated private static`).
+# - swiftTestingTestCaseNames: tests keep camelCase names, not `raw identifiers`.
+# - blankLinesAtStartOfScope, redundantSelf, hoistTry, hoistAwait,
+#   trailingClosures, redundantType, redundantMemberwiseInit: spacing and
+#   spelling choices left to the author.
+# - preferKeyPath: `#expect(xs.allSatisfy(\.flag))` does not compile, because
+#   the macro passes the key path on to a rethrowing call.
+--disable preferKeyPath
+--disable indent,wrapArguments
+--disable wrapIfStatementBodies,wrapIfExpressionBodies,wrapPropertyBodies,wrapFunctionBodies,wrapLoopBodies,wrapMultilineStatementBraces
+--disable sortImports,modifierOrder,swiftTestingTestCaseNames
+--disable blankLinesAtStartOfScope,redundantSelf,hoistTry,hoistAwait,trailingClosures,redundantType,redundantMemberwiseInit

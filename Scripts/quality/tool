@@ -1,0 +1,109 @@
+#!/bin/sh
+# Runs a code-quality tool at the version this repository pins, so a commit on
+# any machine and CI check the code with the same rules. A copy already on PATH
+# is used when it is that exact version; otherwise the first run puts one in
+# .build/quality-tools and later runs reuse it.
+#
+#   Scripts/quality/tool swiftlint lint
+#   Scripts/quality/tool swiftformat .
+#   Scripts/quality/tool periphery scan
+#
+# Bumping a tool: change its version (and commit or checksum) below, then run
+# `Scripts/quality/check` and commit what the new version asks for.
+set -eu
+
+SWIFTLINT_VERSION=0.65.1
+# The checksum SwiftLint itself publishes for the bundle, in its Package.swift.
+SWIFTLINT_SHA256=c3a1d77647ca18c1b7e9be7dbc6cd4490d26422f28814b76370244ff61970869
+
+# Built from source, so the tag's commit is what pins them.
+SWIFTFORMAT_VERSION=0.63.1
+SWIFTFORMAT_COMMIT=77d3f8222a779de39dbcfe16c7ec60f437f794d6
+PERIPHERY_VERSION=3.8.0
+PERIPHERY_COMMIT=a2db299196ae774cd644c79fa6b1f67556d78de8
+
+usage="usage: Scripts/quality/tool <swiftlint|swiftformat|periphery> [arguments…]"
+name=${1:?$usage}
+shift
+
+root=$(cd "$(dirname "$0")/../.." && pwd -P)
+tools=${QUALITY_TOOLS_DIR:-$root/.build/quality-tools}
+
+say() { printf '%s\n' "$*" >&2; }
+
+sha256() {
+    if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1"; else sha256sum "$1"; fi | cut -d' ' -f1
+}
+
+# The version a binary reports, in the form each tool prints it.
+version_of() {
+    case $name in
+    swiftlint) "$1" version ;;
+    swiftformat) "$1" --version ;;
+    periphery) "$1" version ;;
+    esac 2>/dev/null | tr -d '[:space:]'
+}
+
+fetch_swiftlint() {
+    case "$(uname -s)/$(uname -m)" in
+    Darwin/*) variant=macos ;;
+    Linux/x86_64) variant=linux/amd64 ;;
+    Linux/aarch64 | Linux/arm64) variant=linux/arm64 ;;
+    *) say "SwiftLint has no binary for $(uname -s)/$(uname -m)"; exit 1 ;;
+    esac
+    curl -fsSL -o "$work/bundle.zip" \
+        "https://github.com/realm/SwiftLint/releases/download/$version/SwiftLintBinary.artifactbundle.zip"
+    actual=$(sha256 "$work/bundle.zip")
+    if [ "$actual" != "$SWIFTLINT_SHA256" ]; then
+        say "SwiftLint $version: checksum $actual does not match the pinned $SWIFTLINT_SHA256"
+        exit 1
+    fi
+    unzip -q "$work/bundle.zip" -d "$work"
+    mv "$work/SwiftLintBinary.artifactbundle/$variant/swiftlint" "$work/$name"
+}
+
+# SwiftFormat and Periphery are Swift packages: clone the tag, check it is the
+# pinned commit, and build the product with the toolchain Xcode already has.
+build_from_source() {
+    git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$version" "$1" "$work/src"
+    head=$(git -C "$work/src" rev-parse HEAD)
+    if [ "$head" != "$2" ]; then
+        say "$name $version: tag points at $head, not the pinned $2"
+        exit 1
+    fi
+    swift build --package-path "$work/src" --configuration release --product "$name" >&2
+    mv "$(swift build --package-path "$work/src" --configuration release --show-bin-path)/$name" "$work/$name"
+}
+
+case $name in
+swiftlint) version=$SWIFTLINT_VERSION ;;
+swiftformat) version=$SWIFTFORMAT_VERSION ;;
+periphery) version=$PERIPHERY_VERSION ;;
+*) say "$usage"; exit 64 ;;
+esac
+
+installed="$tools/$name-$version/$name"
+
+if [ ! -x "$installed" ]; then
+    on_path=$(command -v "$name" || true)
+    if [ -n "$on_path" ] && [ "$(version_of "$on_path")" = "$version" ]; then
+        exec "$on_path" "$@"
+    fi
+
+    say "Fetching $name $version into ${installed#"$root"/} (only the first time)…"
+    mkdir -p "$tools"
+    work=$(mktemp -d "$tools/.$name.XXXXXX")
+    trap 'rm -rf "$work"' EXIT
+    case $name in
+    swiftlint) fetch_swiftlint ;;
+    swiftformat) build_from_source https://github.com/nicklockwood/SwiftFormat "$SWIFTFORMAT_COMMIT" ;;
+    periphery) build_from_source https://github.com/peripheryapp/periphery "$PERIPHERY_COMMIT" ;;
+    esac
+    # Another hook may have finished the same fetch meanwhile; either copy will do.
+    mkdir -p "$tools/$name-$version"
+    mv -f "$work/$name" "$installed"
+    rm -rf "$work"
+    trap - EXIT
+fi
+
+exec "$installed" "$@"

@@ -14,6 +14,7 @@ nonisolated private final class Recorder: @unchecked Sendable {
     var text: String {
         lock.withLock { String(decoding: data, as: UTF8.self).replacingOccurrences(of: "\r", with: "") }
     }
+
     var exitStatus: ProcessExit? { lock.withLock { status } }
     var exitCount: Int { lock.withLock { exits } }
 }

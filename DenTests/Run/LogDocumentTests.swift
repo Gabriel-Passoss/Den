@@ -2,7 +2,6 @@ import Testing
 import AppKit
 @testable import Den
 
-
 @Test func paletteCoversTheCubeAndTheGrayRamp() {
     #expect(LogPalette.rgb(forIndex: 16) == LogPalette.RGB(red: 0, green: 0, blue: 0))
     #expect(LogPalette.rgb(forIndex: 21) == LogPalette.RGB(red: 0, green: 0, blue: 255))

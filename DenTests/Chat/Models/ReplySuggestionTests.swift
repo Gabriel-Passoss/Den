@@ -45,7 +45,7 @@ import Testing
     let text = ReplySuggestion.instruction(request: "crie o backup", reply: "Quer rotação?")
     #expect(text.contains("Pedido do usuário: crie o backup"))
     #expect(text.contains("Última mensagem do assistente: Quer rotação?"))
-    #expect(text.contains(ReplySuggestion.none))
+    #expect(text.contains(ReplySuggestion.noQuestion))
 }
 
 @Test func theInstructionKeepsTheStartOfTheRequestAndTheEndOfTheReply() {

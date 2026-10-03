@@ -16,7 +16,7 @@ import Foundation
     #expect(a == HarnessID(rawValue: "harness-a"))
 }
 
-@Test func aToolCallCarriesTheHarnessOwnNameEvenWhenItMapsCleanly() throws {
+@Test func aToolCallCarriesTheHarnessOwnNameEvenWhenItMapsCleanly() {
     let call = ToolCall(id: "toolu_1", rawName: "Edit", canonical: .edit,
                         input: .object(["file_path": .string("/tmp/a")]))
     #expect(call.canonical == .edit)
@@ -24,7 +24,7 @@ import Foundation
     #expect(call.input["file_path"] == .string("/tmp/a"))
 }
 
-@Test func anUnmappableToolIsCarriedWithoutACanonicalVerb() throws {
+@Test func anUnmappableToolIsCarriedWithoutACanonicalVerb() {
 
     let call = ToolCall(id: "toolu_2", rawName: "AlgoQueNaoConhecemos",
                         canonical: nil, input: .object([:]))

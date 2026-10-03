@@ -10,6 +10,7 @@ public protocol Harness: Sendable {
 
     func capabilities(for installation: HarnessInstallation) -> HarnessCapabilities
 
+    // periphery:ignore:parameters installation
     func knobs(for installation: HarnessInstallation,
                workingDirectory: URL) -> [HarnessKnob]
 

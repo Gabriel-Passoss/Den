@@ -7,7 +7,6 @@ import HarnessCore
 struct LiveChatHarness {
     let chat: ChatModel
     let harness: FakeHarness
-    let others: [FakeHarness]
     let attachments: URL
     let store: FileTranscriptStore
 
@@ -42,9 +41,9 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
                          harness: harness.id,
                          cache: SessionCache(defaults: defaults),
                          registry: HarnessRegistry(harnesses: [harness] + others),
-                         attachmentsRoot: attachments,
-                         runner: runner)
-    try await body(LiveChatHarness(chat: chat, harness: harness, others: others,
+                         attachmentsRoot: attachments)
+    chat.runner = runner
+    try await body(LiveChatHarness(chat: chat, harness: harness,
                                    attachments: attachments, store: store))
 }
 
@@ -75,4 +74,14 @@ func endOfTurn(isError: Bool = false) -> SessionUpdate {
         timestamp: Date(),
         kind: .turnResult(TurnResult(usage: .zero, stopReason: "end_turn", isError: isError)),
         raw: .null))
+}
+
+func routeQuestion(id: String) -> PermissionRequest {
+    PermissionRequest(
+        id: id, toolName: "AskUserQuestion",
+        input: .object(["questions": .array([.object([
+            "question": .string("Qual caminho?"),
+            "header": .string("Rota"),
+            "options": .array([.object(["label": .string("A")])]),
+        ])])]))
 }

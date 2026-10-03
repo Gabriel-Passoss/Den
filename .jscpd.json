@@ -1,0 +1,11 @@
+{
+  "path": ["Den", "DenTests", "DenUITests", "DenTestSupport", "Packages"],
+  "format": ["swift"],
+  "minTokens": 50,
+  "minLines": 5,
+  "mode": "mild",
+  "reporters": ["console"],
+  "noColors": true,
+  "baseline": ".jscpd-baseline.json",
+  "failOnNewClones": 0
+}

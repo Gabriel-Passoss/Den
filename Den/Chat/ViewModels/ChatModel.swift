@@ -33,6 +33,11 @@ final class ChatModel {
         }
     }
 
+    private func turnBegan() {
+        resetStreaming()
+        dismissSuggestion()
+    }
+
     private func resetStreaming() {
         streamFlush?.cancel()
         streamFlush = nil
@@ -70,25 +75,9 @@ final class ChatModel {
 
     var pendingQuestion: QuestionPrompt?
 
-    private(set) var suggestedReply: String?
+    var suggestedReply: String?
 
-    private var suggestionTurn = 0
-
-    var visibleSuggestion: String? {
-        guard prompt.isEmpty, pendingAttachments.isEmpty, pendingPastes.isEmpty,
-              !isBusy else { return nil }
-        return suggestedReply
-    }
-
-    func acceptSuggestion() async {
-        guard let reply = visibleSuggestion else { return }
-        await send(text: reply)
-    }
-
-    func dismissSuggestion() {
-        suggestionTurn += 1
-        suggestedReply = nil
-    }
+    var suggestionTurn = 0
 
     var branch: String?
 
@@ -118,10 +107,10 @@ final class ChatModel {
 
     private let store: FileTranscriptStore
     private let cache: SessionCache
-    private let registry: HarnessRegistry
+    let registry: HarnessRegistry
     private let attachmentsRoot: URL
-    private let runner: any CommandRunner
-    private var installation: HarnessInstallation?
+    var runner: any CommandRunner = SystemCommandRunner()
+    var installation: HarnessInstallation?
     private var session: (any HarnessSession)?
     private var consumer: Task<Void, Never>?
     private var hasTitle = false
@@ -135,8 +124,6 @@ final class ChatModel {
 
     private var pendingSeed: String?
 
-    private let isRestored: Bool
-
     private var hasLaunched = false
 
     var isLive: Bool { session != nil }
@@ -146,10 +133,8 @@ final class ChatModel {
     init(store: FileTranscriptStore, workingDirectory: URL,
          harness: HarnessID? = nil, cache: SessionCache = .standard,
          registry: HarnessRegistry = .standard,
-         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot,
-         runner: any CommandRunner = SystemCommandRunner()) {
+         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
-        self.runner = runner
         self.cache = cache
         self.registry = registry
         self.attachmentsRoot = attachmentsRoot
@@ -162,7 +147,6 @@ final class ChatModel {
         self.segments = [Segment(harness: harness, harnessSessionID: "", model: "")]
 
         self.harnessSessionID = ""
-        self.isRestored = false
         restorePreferences()
         loadKnobs()
         catalog = cache.rememberedCatalog(for: workingDirectory, harness: harness)
@@ -171,10 +155,8 @@ final class ChatModel {
     init(store: FileTranscriptStore, restoring session: Session,
          cache: SessionCache = .standard,
          registry: HarnessRegistry = .standard,
-         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot,
-         runner: any CommandRunner = SystemCommandRunner()) {
+         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
-        self.runner = runner
         self.cache = cache
         self.registry = registry
         self.attachmentsRoot = attachmentsRoot
@@ -188,7 +170,6 @@ final class ChatModel {
         self.hasTitle = true
         self.harnessSessionID = session.segments.last?.harnessSessionID ?? ""
         self.harness = session.segments.last?.harness ?? registry.fallback
-        self.isRestored = true
         self.status = "fria"
         restorePreferences()
         loadKnobs()
@@ -574,46 +555,7 @@ final class ChatModel {
         generateTitle(from: text)
     }
 
-    private func generateTitle(from text: String) {
-        let instruction = "Gere um título curto (3 a 5 palavras, sem aspas e sem "
-            + "ponto final) que resuma o pedido a seguir, na mesma língua dele. "
-            + "Responda somente o título.\n\nPedido: \(text.prefix(QuickPrompt.requestLimit))"
-
-        runQuickPrompt(instruction) { [weak self] output in
-            guard let title = QuickPrompt.oneLine(output, maxLength: 80) else { return }
-            Task { await self?.applyGeneratedTitle(title) }
-        }
-    }
-
-    private func runQuickPrompt(_ instruction: String,
-                                then use: @escaping @MainActor (String) -> Void) {
-        guard let installation, let adapter = registry.harness(for: harness),
-              let arguments = adapter.quickPromptArguments(for: instruction) else { return }
-        let runner = runner
-        Task {
-            guard let output = try? await runner.run(installation.executable, arguments)
-            else { return }
-            use(output)
-        }
-    }
-
-    private func suggestReply() {
-        dismissSuggestion()
-        guard pending == nil, pendingQuestion == nil,
-              let replyIndex = lines.lastIndex(where: { $0.role == .assistant }),
-              let requestIndex = lines.lastIndex(where: { $0.role == .user }),
-              requestIndex < replyIndex,
-              ReplySuggestion.isAsking(lines[replyIndex].text) else { return }
-        let instruction = ReplySuggestion.instruction(
-            request: lines[requestIndex].text, reply: lines[replyIndex].text)
-        let turn = suggestionTurn
-        runQuickPrompt(instruction) { [weak self] output in
-            guard let self, turn == suggestionTurn else { return }
-            suggestedReply = ReplySuggestion.parse(output)
-        }
-    }
-
-    private func applyGeneratedTitle(_ generated: String) async {
+    func applyGeneratedTitle(_ generated: String) async {
         guard !userRenamed else { return }
         title = generated
         await persistMetadata()
@@ -634,8 +576,7 @@ final class ChatModel {
                 }
                 Task { await persistMetadata() }
             case .turnStarted:
-                resetStreaming()
-                dismissSuggestion()
+                turnBegan()
             case .textDelta(_, let text):
                 appendStreaming(text)
             case .notice(let subtype, let text):
@@ -769,12 +710,11 @@ final class ChatModel {
             if relaunchAfterTurn { Task { await relaunchIfIdle() } }
             if !result.isError { isRateLimited = false }
             if let tokens = result.contextTokens { contextTokens = tokens }
-            if persist { Task { await refreshContextUsage() } }
+            if persist { turnEnded(result) }
             if result.isError {
                 append(.notice, "o turno falhou no harness"
                        + (result.stopReason.map { " (\($0))" } ?? ""), at: moment)
             }
-            if persist, !result.isError { suggestReply() }
         case .contextCompacted(let compaction):
             compactingSince = nil
             if compaction.tokensAfter > 0 { contextTokens = compaction.tokensAfter }

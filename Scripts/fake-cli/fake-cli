@@ -23,6 +23,8 @@ case "$1 $2" in
   *) cat "$state/title" 2>/dev/null; exit 0 ;;
 esac
 
+# Launches are numbered files, and ls skips the dot-prefixed one being written.
+# shellcheck disable=SC2012
 launch=$(( $(ls "$state/launches" | wc -l) + 1 ))
 { pwd -P; printf '%s\n' "$@"; } > "$state/launches/.$launch"
 mv "$state/launches/.$launch" "$state/launches/$launch"

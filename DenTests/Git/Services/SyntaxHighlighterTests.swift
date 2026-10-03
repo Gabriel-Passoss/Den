@@ -109,11 +109,11 @@ func digitsOutsideAsciiNeverStallTheScanner() {
     // Every character here answers true to isNumber but matches nothing in the
     // scan's advance set. Entering the number branch used to leave the index
     // parked and spin the loop forever, freezing the app on such a diff.
-    #expect(tokens("x = \u{0663}", .swift) == ["plain:x = \u{0663}"])  // arabic-indic
-    #expect(tokens("x = \u{0968}", .swift) == ["plain:x = \u{0968}"])  // devanagari
-    #expect(tokens("x = \u{00B2}", .swift) == ["plain:x = \u{00B2}"])  // superscript
-    #expect(tokens("x = \u{2462}", .swift) == ["plain:x = \u{2462}"])  // circled
-    #expect(tokens("x = \u{FF13}", .swift) == ["plain:x = \u{FF13}"])  // fullwidth
+    #expect(tokens("x = \u{0663}", .swift) == ["plain:x = \u{0663}"]) // arabic-indic
+    #expect(tokens("x = \u{0968}", .swift) == ["plain:x = \u{0968}"]) // devanagari
+    #expect(tokens("x = \u{00B2}", .swift) == ["plain:x = \u{00B2}"]) // superscript
+    #expect(tokens("x = \u{2462}", .swift) == ["plain:x = \u{2462}"]) // circled
+    #expect(tokens("x = \u{FF13}", .swift) == ["plain:x = \u{FF13}"]) // fullwidth
 }
 
 @Test func aRomanNumeralTakesTheIdentifierPath() {

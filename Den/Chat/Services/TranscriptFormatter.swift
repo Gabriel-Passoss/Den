@@ -43,16 +43,15 @@ nonisolated enum TranscriptFormatter {
     }
 
     static func oneLine(_ value: JSONValue) -> String {
-        let text: String
-        switch value {
-        case .string(let s): text = s
+        let text: String = switch value {
+        case .string(let s): s
         case .object(let members):
-            text = members.map { "\($0.key)=\(oneLine($0.value))" }.sorted().joined(separator: " ")
-        case .array(let items): text = items.map(oneLine).joined(separator: ", ")
-        case .int(let i): text = String(i)
-        case .double(let d): text = String(d)
-        case .bool(let b): text = String(b)
-        case .null: text = "—"
+            members.map { "\($0.key)=\(oneLine($0.value))" }.sorted().joined(separator: " ")
+        case .array(let items): items.map(oneLine).joined(separator: ", ")
+        case .int(let i): String(i)
+        case .double(let d): String(d)
+        case .bool(let b): String(b)
+        case .null: "—"
         }
         let flat = text.replacingOccurrences(of: "\n", with: " ")
         return flat.count > 200 ? String(flat.prefix(200)) + "…" : flat

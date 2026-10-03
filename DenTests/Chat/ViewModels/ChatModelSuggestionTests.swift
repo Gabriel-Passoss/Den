@@ -9,14 +9,15 @@ private func withSuggestingChat(quickPrompt: [String]? = ["one-shot"],
                                 _ body: (LiveChatHarness, FakeCommandRunner) async throws -> Void)
 async throws {
     let runner = FakeCommandRunner()
-    try await withLiveChat(configure: { $0.quickPrompt = quickPrompt }, runner: runner) { live in
+    let configure: (inout FakeHarness) -> Void = { $0.quickPrompt = quickPrompt }
+    try await withLiveChat(configure: configure, runner: runner) { live in
         try await body(live, runner)
     }
 }
 
 private func suggestionCalls(_ runner: FakeCommandRunner) async -> [FakeCommandRunner.Call] {
     let calls = await runner.calls
-    return calls.filter { $0.arguments.last?.contains(ReplySuggestion.none) == true }
+    return calls.filter { $0.arguments.last?.contains(ReplySuggestion.noQuestion) == true }
 }
 
 private func waitForSuggestionCall(_ runner: FakeCommandRunner) async {
@@ -107,13 +108,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
 }
 
 @Test func aPendingQuestionCardSuggestsNothing() async throws {
-    let prompt = try #require(QuestionPrompt(from: PermissionRequest(
-        id: "q-1", toolName: "AskUserQuestion",
-        input: .object(["questions": .array([.object([
-            "question": .string("Qual caminho?"),
-            "header": .string("Rota"),
-            "options": .array([.object(["label": .string("A")])]),
-        ])])]))))
+    let prompt = try #require(QuestionPrompt(from: routeQuestion(id: "q-1")))
     try await withSuggestingChat { live, runner in
         await finishTurn(live) { live.chat.pendingQuestion = prompt }
         await expectNoSuggestionCall(runner)
@@ -141,7 +136,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
     }
 }
 
-@Test func aRestoredConversationEndingInAQuestionSuggestsNothing() async throws {
+@Test func aRestoredConversationEndingInAQuestionSuggestsNothing() async {
     let runner = FakeCommandRunner()
     var harness = FakeHarness()
     harness.quickPrompt = ["one-shot"]
@@ -160,8 +155,8 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
                          restoring: Session(title: "restored", workingDirectory: root,
                                             segments: [segment]),
                          cache: scratchCache,
-                         registry: HarnessRegistry(harnesses: [harness]),
-                         runner: runner)
+                         registry: HarnessRegistry(harnesses: [harness]))
+    chat.runner = runner
 
     #expect(chat.suggestedReply == nil)
     #expect(await runner.calls.isEmpty)
@@ -202,13 +197,13 @@ func anUnusableQuickPromptLeavesNoSuggestionAndNoNotice(_ output: UnusableOutput
     try await withSuggestingChat { live, runner in
         switch output {
         case .failure: await runner.fail(HarnessFailure(reason: "claude missing"))
-        case .noneMarker: await runner.answer(with: ReplySuggestion.none)
+        case .noneMarker: await runner.answer(with: ReplySuggestion.noQuestion)
         }
         await finishTurn(live)
         await waitForSuggestionCall(runner)
 
         await expectNoSuggestion(live)
-        #expect(live.chat.lines.filter { $0.role == .notice }.isEmpty)
+        #expect(!live.chat.lines.contains { $0.role == .notice })
     }
 }
 

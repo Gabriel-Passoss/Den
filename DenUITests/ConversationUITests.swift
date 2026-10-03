@@ -112,7 +112,7 @@ final class ConversationUITests: XCTestCase {
 
         require(text(containing: "criado com o conte", in: app), in: app)
         XCTAssertFalse(allow.exists)
-        XCTAssertTrue(claude.received.last?.contains(#""behavior":"allow""#) == true)
+        XCTAssertEqual(claude.received.last?.contains(#""behavior":"allow""#), true)
     }
 
     @MainActor
@@ -182,7 +182,7 @@ final class ConversationUITests: XCTestCase {
         """
 
     @MainActor
-    func testMentionsReachEveryFolderOfABigProject() throws {
+    func testMentionsReachEveryFolderOfABigProject() {
         let app = launch(projectSetup: bigProject)
         let composer = openComposer(in: app)
 
@@ -197,7 +197,7 @@ final class ConversationUITests: XCTestCase {
     }
 
     @MainActor
-    func testMentionsReachADeepSourceBesideBuildOutputAndAWorktree() throws {
+    func testMentionsReachADeepSourceBesideBuildOutputAndAWorktree() {
         let app = launch(projectSetup: backendWithWorktree)
         let composer = openComposer(in: app)
 

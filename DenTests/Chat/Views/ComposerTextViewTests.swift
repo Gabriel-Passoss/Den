@@ -43,7 +43,7 @@ private func lines(_ height: CGFloat) -> Double {
 // MARK: - Paste
 
 @MainActor
-@Test func pastingHandsTheTextToTheChatFirst() throws {
+@Test func pastingHandsTheTextToTheChatFirst() {
     let board = NSPasteboard(name: .init("DenTests-" + UUID().uuidString))
     defer { board.releaseGlobally() }
     board.clearContents()
@@ -81,8 +81,6 @@ private func lines(_ height: CGFloat) -> Double {
 
     #expect(view.capture(from: board) == false)
 }
-
-// MARK: - Suggested reply
 
 @MainActor
 private final class GhostLog {

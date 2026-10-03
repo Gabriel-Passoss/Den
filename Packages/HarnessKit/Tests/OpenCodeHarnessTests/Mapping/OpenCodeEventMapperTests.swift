@@ -135,7 +135,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     #expect(catalog.supportsCompact, "/compact is served without being announced")
 }
 
-@Test func theContextOfTheTurnComesFromTheUsageUpdate() throws {
+@Test func theContextOfTheTurnComesFromTheUsageUpdate() {
     var subject = mapper()
     let out = subject.map(update: update(
         #"{"sessionUpdate":"usage_update","used":19818,"size":200000,"cost":{"amount":0.12}}"#))
@@ -144,7 +144,7 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     #expect(out.entries.isEmpty)
 }
 
-@Test func aUsageUpdateWithoutASizeLeavesTheWindowUnknown() throws {
+@Test func aUsageUpdateWithoutASizeLeavesTheWindowUnknown() {
     var subject = mapper()
     let out = subject.map(update: update(#"{"sessionUpdate":"usage_update","used":19818}"#))
 
@@ -311,7 +311,7 @@ private let thoughtChunk = #"""
  "content":{"type":"text","text":"**Organizing files**"}}
 """#
 
-@Test func theSummaryOfACompactionComesPrecededByItsBoundary() throws {
+@Test func theSummaryOfACompactionComesPrecededByItsBoundary() {
     var subject = mapper()
     subject.beginCompaction()
 
@@ -338,7 +338,7 @@ private let thoughtChunk = #"""
     #expect(compaction.tokensAfter == 0, "nem o que sobrou")
 }
 
-@Test func theSummaryDoesNotStreamWhileCompacting() throws {
+@Test func theSummaryDoesNotStreamWhileCompacting() {
     var subject = mapper()
     subject.beginCompaction()
 
@@ -346,7 +346,7 @@ private let thoughtChunk = #"""
             "the progress card is what draws the turn")
 }
 
-@Test func aTurnThatIsNotACompactionKeepsItsProseAndItsDeltas() throws {
+@Test func aTurnThatIsNotACompactionKeepsItsProseAndItsDeltas() {
     var subject = mapper()
 
     let open = subject.map(update: update(summaryChunk))
@@ -356,7 +356,7 @@ private let thoughtChunk = #"""
     #expect(closed.entries.map { kindName($0.kind) } == ["assistantText", "turnResult"])
 }
 
-@Test func theWholeCompactionTurnCollapsesIntoOneSummary() throws {
+@Test func theWholeCompactionTurnCollapsesIntoOneSummary() {
     var subject = mapper()
     subject.beginCompaction()
 
@@ -377,7 +377,7 @@ private let thoughtChunk = #"""
     #expect(!summary.contains("Organizing"), "the summarizer reasoning is not conversation")
 }
 
-@Test func theReplayOfASessionOnlyCarriesState() throws {
+@Test func theReplayOfASessionOnlyCarriesState() {
     let replayed = OpenCodeSession.replayable(MappedOutput(events: [
         .turnStarted,
         .textDelta(blockIndex: 0, text: "velho"),
@@ -392,7 +392,7 @@ private let thoughtChunk = #"""
             "replayed history does not come back as new conversation")
 }
 
-@Test func aCompactionThatEndsWithoutProseLeavesNoBoundary() throws {
+@Test func aCompactionThatEndsWithoutProseLeavesNoBoundary() {
     var subject = mapper()
     subject.beginCompaction()
 
