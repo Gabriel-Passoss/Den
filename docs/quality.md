@@ -1,8 +1,10 @@
-# Quality gates estáticos
+# Quality gates
 
-Verificações que olham o código sem executá-lo. Rodam em cada commit (via
-[pre-commit](https://pre-commit.com)) e de novo no CI em todo pull request
-(`.github/workflows/quality.yml`), com as mesmas versões das ferramentas.
+Verificações automáticas em dois momentos. As que só olham o código rodam em
+cada commit (via [pre-commit](https://pre-commit.com)) e de novo no CI; as que
+precisam compilar ou executar os testes rodam só no CI, em todo pull request
+(`.github/workflows/quality.yml` e `.github/workflows/tests.yml`), com as
+mesmas versões das ferramentas.
 
 ## O que é verificado
 
@@ -15,11 +17,13 @@ Verificações que olham o código sem executá-lo. Rodam em cada commit (via
 | Código duplicado (clone novo de ≥ 50 tokens e ≥ 5 linhas) | jscpd 5.4.0 — `.jscpd.json` | ✓ | ✓ |
 | Warnings do compilador viram erro (concorrência, deprecações, valores não usados, código inalcançável) | `swiftc` / `xcodebuild` — `Scripts/quality/build-strict` | | ✓ |
 | Código não usado: declarações, parâmetros, imports, propriedades só atribuídas | Periphery 3.8.0 — `.periphery.yml` e `Packages/HarnessKit/.periphery.yml` | | ✓ |
+| Piso de cobertura de linhas, por alvo do HarnessKit e para o app fora das pastas `Views` | `Scripts/quality/coverage` — `.coverage-floor.json` | | ✓ |
 | Segredos (chaves, tokens) | gitleaks 8.30.1 | ✓ no que está staged | ✓ no histórico inteiro |
 | Mensagem de commit no formato Conventional Commits (`feat(app): …`) | conventional-pre-commit | ✓ | ✓ nos commits do PR |
 | Scripts shell | shellcheck | ✓ | ✓ |
 | Workflows do GitHub Actions (inclui shellcheck nos `run:`) | actionlint | ✓ | ✓ |
 | Higiene: conflito de merge esquecido, nomes que colidem no APFS, arquivo grande, JSON/YAML/plist inválido, chave privada, espaço no fim da linha, LF | pre-commit-hooks | ✓ | ✓ |
+| Testes dos próprios scripts de qualidade | `python3 -m unittest` — `Scripts/quality/tests` | ✓ se `Scripts/quality/` mudou | ✓ |
 
 O build com warnings como erro e o Periphery precisam do Xcode e de um build
 completo, por isso ficam só no CI (e no `Scripts/quality/check`, abaixo).
@@ -80,6 +84,29 @@ Scripts/quality/check          # + build com warnings como erro + Periphery
 Scripts/quality/unused-code    # só o Periphery (compila antes)
 ```
 
+## Gates que rodam os testes
+
+Cobertura, Thread Sanitizer e mutação precisam executar os testes, por isso
+ficam só no CI. Para rodar na máquina:
+
+### Cobertura
+
+```sh
+swift test --package-path Packages/HarnessKit --enable-code-coverage
+Scripts/quality/coverage package
+
+rm -rf build/app.xcresult
+xcodebuild test -project Den.xcodeproj -scheme Den -destination 'platform=macOS' \
+  -enableCodeCoverage YES -resultBundlePath build/app.xcresult
+Scripts/quality/coverage app build/app.xcresult
+```
+
+O script compara o que foi medido com `.coverage-floor.json`: um piso por
+alvo do HarnessKit e um para o app fora das pastas `Views`, que os testes de
+UI exercitam. Abaixo do piso, falha. Depois de aumentar a cobertura, suba o
+piso com `--write-floor` e commite o arquivo. Ele grava meio ponto abaixo do
+medido, porque a cobertura oscila um pouco de uma execução para outra.
+
 ## Dívida registrada (baselines)
 
 Os gates foram ligados num código que já existia. O que já estava lá ficou
@@ -136,8 +163,5 @@ Coisas que também dá para verificar estaticamente e que ainda não estão liga
    verificação de licenças, e Dependabot para as GitHub Actions.
 5. **GitHub**: ligar *secret scanning* com *push protection* e exigir os jobs
    `Quality` como status checks obrigatórios na proteção da `main`.
-6. **Cobertura de testes como gate** (não é estática, mas é barata): o
-   `xcodebuild test` já pode gerar cobertura com `-enableCodeCoverage YES`, e o
-   CI falharia se ela caísse.
-7. **Spell check** de identificadores e comentários com
+6. **Spell check** de identificadores e comentários com
    [typos](https://github.com/crate-ci/typos), que tem hook de pre-commit.

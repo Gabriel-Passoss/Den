@@ -56,6 +56,12 @@ repos:
         additional_dependencies: [jscpd@5.4.0]
         types: [swift]
         pass_filenames: false # a copy can come from any file, so scan them all
+      - id: quality-script-tests
+        name: Tests of the quality scripts
+        entry: python3 -B -m unittest discover -s Scripts/quality/tests
+        language: unsupported
+        files: ^Scripts/quality/
+        pass_filenames: false
 
   # Shell scripts and CI workflows.
   - repo: https://github.com/shellcheck-py/shellcheck-py

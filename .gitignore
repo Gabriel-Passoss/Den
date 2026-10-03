@@ -2,6 +2,9 @@
 .build/
 build/
 
+# Python (the quality scripts' tests)
+__pycache__/
+
 # Tooling de agentes (skills reinstaláveis via skills-lock)
 .agents/
 .claude/
