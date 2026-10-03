@@ -131,6 +131,8 @@ nonisolated final class FakeCLI {
     }
 
     private static let scripts = testResources
+
+    static var gh: String { scripts.appending(path: "gh").path }
 }
 
 extension FakeCLI {

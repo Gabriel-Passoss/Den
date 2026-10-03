@@ -27,10 +27,12 @@ final class ConversationUITests: XCTestCase {
     }
 
     @MainActor
-    private func launch(projectSetup: String? = nil) -> XCUIApplication {
+    private func launch(projectSetup: String? = nil,
+                        extraEnvironment: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["DEN_UI_TEST_ROOT"] = root.path
         app.launchEnvironment["DEN_PROJECT_SETUP"] = projectSetup
+        app.launchEnvironment.merge(extraEnvironment) { $1 }
         for cli in [claude!, openCode!] {
             app.launchEnvironment.merge(cli.launchEnvironment) { $1 }
         }
@@ -78,6 +80,69 @@ final class ConversationUITests: XCTestCase {
     @MainActor
     private func startConversation(_ text: String, in app: XCUIApplication) {
         openComposer(in: app).typeText(text + "\n")
+    }
+
+    private let repositoryWithOrigin = """
+        git init -q -b main
+        git -c user.name=Den -c user.email=den@den.invalid -c commit.gpgsign=false commit -q --allow-empty -m init
+        git clone -q --bare . ../origin.git
+        git remote add origin https://github.com/den/fixture.git
+        git config url."$(cd ../origin.git && pwd)".insteadOf https://github.com/den/fixture.git
+        git fetch -q origin
+        git remote set-head origin main
+        """
+
+    @MainActor
+    private func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    @MainActor
+    func testTheWorktreeChipMovesTheFirstTurnIntoItsOwnWorktree() throws {
+        try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
+        try claude.answerTitles(with: "Saudação curta")
+        let app = launch(projectSetup: repositoryWithOrigin)
+
+        let composer = openComposer(in: app)
+        let chip = element("worktree-chip", in: app)
+        require(chip, in: app)
+        chip.click()
+        composer.click()
+        composer.typeText("Diga apenas OK e nada mais.\n")
+
+        require(app.staticTexts["OK"], in: app)
+        let badge = element("worktree-branch", in: app)
+        require(badge, in: app)
+        XCTAssertEqual(badge.label, "diga-apenas-ok-e-nada")
+        require(text(containing: "⑂ diga-apenas-ok-e-nada", in: app), in: app)
+        XCTAssertTrue(claude.launches.last?.directory
+            .hasSuffix("/worktrees/project/diga-apenas-ok-e-nada") == true,
+            "launched in \(claude.launches.last?.directory ?? "nowhere")")
+    }
+
+    private let failingPullRequest = #"[{"number":80,"title":"Diga apenas OK","url":"https://github.com/den/fixture/pull/80","state":"OPEN","isDraft":false,"additions":3,"deletions":1,"baseRefName":"main","reviewDecision":"","mergeable":"MERGEABLE","updatedAt":"2026-10-01T10:01:00Z","statusCheckRollup":[{"__typename":"CheckRun","name":"lint","workflowName":"CI","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/den/fixture/actions/runs/1","startedAt":"2026-10-01T10:00:00Z","completedAt":"2026-10-01T10:00:42Z"}]}]"#
+
+    @MainActor
+    func testThePullRequestOfTheTaskShowsAboveTheComposerAndInTheSidebar() throws {
+        try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
+        try claude.answerTitles(with: "Saudação curta")
+        let app = launch(projectSetup: repositoryWithOrigin,
+                         extraEnvironment: ["DEN_GH": FakeCLI.gh, "FAKE_GH_PR_LIST": failingPullRequest])
+
+        let composer = openComposer(in: app)
+        let chip = element("worktree-chip", in: app)
+        require(chip, in: app)
+        chip.click()
+        composer.click()
+        composer.typeText("Diga apenas OK e nada mais.\n")
+
+        require(element("pull-request-bar", in: app), in: app)
+        require(app.staticTexts["#80"], in: app)
+        require(text(containing: "#80 · Checks falhando", in: app), in: app)
+        let checks = app.buttons["Checks"].firstMatch
+        require(checks, in: app)
+        checks.click()
+        require(app.staticTexts["lint"], in: app)
     }
 
     // MARK: - Conversation
