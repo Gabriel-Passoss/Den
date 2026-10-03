@@ -41,7 +41,6 @@ struct RunConfigurationRow: View {
         .help(configuration.command?.command ?? "")
     }
 
-    @ViewBuilder
     private var controls: some View {
         HStack(spacing: 2) {
             if instance?.isActive == true {

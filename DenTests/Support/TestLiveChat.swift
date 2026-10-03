@@ -7,7 +7,6 @@ import HarnessCore
 struct LiveChatHarness {
     let chat: ChatModel
     let harness: FakeHarness
-    let others: [FakeHarness]
     let attachments: URL
     let store: FileTranscriptStore
 
@@ -42,7 +41,7 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
                          cache: SessionCache(defaults: defaults),
                          registry: HarnessRegistry(harnesses: [harness] + others),
                          attachmentsRoot: attachments)
-    try await body(LiveChatHarness(chat: chat, harness: harness, others: others,
+    try await body(LiveChatHarness(chat: chat, harness: harness,
                                    attachments: attachments, store: store))
 }
 

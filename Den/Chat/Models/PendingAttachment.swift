@@ -1,5 +1,4 @@
 import Foundation
-import HarnessCore
 
 struct PendingAttachment: Identifiable, Equatable {
     let id = UUID()

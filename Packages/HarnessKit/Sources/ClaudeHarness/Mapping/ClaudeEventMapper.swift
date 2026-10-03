@@ -177,7 +177,7 @@ private extension ClaudeEventMapper {
             return MappedOutput(entries: [
                 TranscriptEntry(timestamp: moment,
                                 kind: .userMessage(text: text, attachments: []),
-                                raw: line)
+                                raw: line),
             ])
         }
         guard let blocks = content.arrayValue else {
@@ -219,7 +219,7 @@ private extension ClaudeEventMapper {
         return MappedOutput(
             events: context.map { [.contextUsage(tokens: $0)] } ?? [],
             entries: [
-                TranscriptEntry(timestamp: timestamp(of: line), kind: .turnResult(turn), raw: line)
+                TranscriptEntry(timestamp: timestamp(of: line), kind: .turnResult(turn), raw: line),
             ])
     }
 
@@ -265,7 +265,7 @@ private extension ClaudeEventMapper {
                     outcome == "failed"
                         ? .compaction(.failed(
                             reason: line["compact_error"]?.stringValue ?? ""))
-                        : .compaction(.finished)
+                        : .compaction(.finished),
                 ])
             }
             let status = line["status"]?.stringValue ?? ""
@@ -289,13 +289,13 @@ private extension ClaudeEventMapper {
         case "thinking_tokens":
             return MappedOutput(events: [
                 .notice(subtype: subtype,
-                        text: line["estimated_tokens"]?.intValue.map { String($0) } ?? "")
+                        text: line["estimated_tokens"]?.intValue.map { String($0) } ?? ""),
             ])
 
         case "hook_started", "hook_response":
 
             return MappedOutput(events: [
-                .notice(subtype: subtype, text: line["hook_name"]?.stringValue ?? "")
+                .notice(subtype: subtype, text: line["hook_name"]?.stringValue ?? ""),
             ])
 
         case "permission_denied":

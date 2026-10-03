@@ -153,11 +153,11 @@ public enum OutboundControlRequest: Equatable, Sendable {
 
     var subtype: String {
         switch self {
-        case .initialize: return "initialize"
-        case .interrupt: return "interrupt"
-        case .setPermissionMode: return "set_permission_mode"
-        case .setModel: return "set_model"
-        case .getContextUsage: return "get_context_usage"
+        case .initialize: "initialize"
+        case .interrupt: "interrupt"
+        case .setPermissionMode: "set_permission_mode"
+        case .setModel: "set_model"
+        case .getContextUsage: "get_context_usage"
         }
     }
 

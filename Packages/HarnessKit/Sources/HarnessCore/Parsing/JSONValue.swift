@@ -33,17 +33,17 @@ public extension JSONValue {
 
     var intValue: Int? {
         switch self {
-        case .int(let i): return i
-        case .double(let d): return Int(exactly: d)
-        default: return nil
+        case .int(let i): i
+        case .double(let d): Int(exactly: d)
+        default: nil
         }
     }
 
     var doubleValue: Double? {
         switch self {
-        case .double(let d): return d
-        case .int(let i): return Double(i)
-        default: return nil
+        case .double(let d): d
+        case .int(let i): Double(i)
+        default: nil
         }
     }
 

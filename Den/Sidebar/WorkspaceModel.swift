@@ -117,7 +117,7 @@ final class WorkspaceModel {
             sessionOrder.enumerated().map { ($1, $0) })
         return sessions.sorted { a, b in
             switch (index[a.id.uuidString], index[b.id.uuidString]) {
-            case let (ia?, ib?): ia < ib
+            case (let ia?, let ib?): ia < ib
             case (.some, nil): false
             case (nil, .some): true
             case (nil, nil): a.updatedAt > b.updatedAt

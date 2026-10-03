@@ -21,15 +21,15 @@ public enum RecordPreflightError: Error, Equatable, Sendable {
     public var message: String {
         switch self {
         case .cwdNotFound(let path):
-            return """
+            """
             --cwd não existe: \(path)
             confira o caminho — um caractere errado aqui só apareceria como erro \
             depois de o processo já ter sido lançado contra ele.
             """
         case .cwdNotADirectory(let path):
-            return "--cwd não é um diretório: \(path)"
+            "--cwd não é um diretório: \(path)"
         case .outputAlreadyExists(let path):
-            return """
+            """
             --out já existe: \(path)
             recusando sobrescrever. Uma gravação custa dinheiro real e leva \
             minutos; um arquivo truncado por engano não volta. Escolha outro \
@@ -40,8 +40,8 @@ public enum RecordPreflightError: Error, Equatable, Sendable {
 
     public var exitCode: Int32 {
         switch self {
-        case .cwdNotFound, .cwdNotADirectory: return 66
-        case .outputAlreadyExists: return 73
+        case .cwdNotFound, .cwdNotADirectory: 66
+        case .outputAlreadyExists: 73
         }
     }
 }

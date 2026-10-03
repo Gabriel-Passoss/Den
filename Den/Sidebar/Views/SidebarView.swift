@@ -273,7 +273,6 @@ struct SidebarView: View {
         .help("Iniciar uma sessão nova")
     }
 
-    @ViewBuilder
     private var emptyList: some View {
         VStack(spacing: 6) {
             Image(systemName: workspace.search.isEmpty ? "bubble.left.and.bubble.right"

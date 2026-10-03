@@ -9,12 +9,12 @@ private func fixtureLines(_ name: String) throws -> [Data] {
         .split(separator: "\n").filter { !$0.isEmpty }.map { Data($0.utf8) }
 }
 
-@Test func classifiesAConversationLineAsConversation() throws {
+@Test func classifiesAConversationLineAsConversation() {
     let line = Data(#"{"type":"assistant","message":{"role":"assistant"}}"#.utf8)
     #expect(ControlFrame.classify(line) == .conversation)
 }
 
-@Test func classifiesAControlResponseByItsRequestID() throws {
+@Test func classifiesAControlResponseByItsRequestID() {
     let line = Data(#"""
     {"type":"control_response","response":{"subtype":"success","request_id":"init-1","response":{"commands":[]}}}
     """#.utf8)
@@ -25,7 +25,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(result.isSuccess)
 }
 
-@Test func classifiesAnErrorResponse() throws {
+@Test func classifiesAnErrorResponse() {
     let line = Data(#"""
     {"type":"control_response","response":{"subtype":"error","request_id":"x","error":"deu ruim"}}
     """#.utf8)
@@ -36,7 +36,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(result.errorMessage == "deu ruim")
 }
 
-@Test func classifiesAResponseWithAnUnrecognizedSubtypeAsFailure() throws {
+@Test func classifiesAResponseWithAnUnrecognizedSubtypeAsFailure() {
 
     let line = Data(#"""
     {"type":"control_response","response":{"subtype":"cancelled","request_id":"r1"}}
@@ -49,7 +49,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(result.errorMessage == "resposta com subtipo desconhecido: cancelled")
 }
 
-@Test func classifiesAResponseWithAMissingSubtypeAsFailure() throws {
+@Test func classifiesAResponseWithAMissingSubtypeAsFailure() {
     let line = Data(#"""
     {"type":"control_response","response":{"request_id":"r2"}}
     """#.utf8)
@@ -61,7 +61,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(result.errorMessage == "resposta com subtipo desconhecido: ausente")
 }
 
-@Test func aControlResponseMissingItsResponseBodyIsPreservedNotDiscarded() throws {
+@Test func aControlResponseMissingItsResponseBodyIsPreservedNotDiscarded() {
 
     let line = Data(#"""
     {"type":"control_response","oops":true}
@@ -92,7 +92,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(!r.id.isEmpty)
 }
 
-@Test func aPermissionSuggestionMissingItsTypeIsPreservedNotDropped() throws {
+@Test func aPermissionSuggestionMissingItsTypeIsPreservedNotDropped() {
 
     let line = Data(#"""
     {"type":"control_request","request_id":"a1","request":{"subtype":"can_use_tool","tool_name":"Bash","permission_suggestions":[{"mode":"acceptEdits"}]}}
@@ -106,7 +106,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(r.suggestions.first?.raw["mode"] == .string("acceptEdits"))
 }
 
-@Test func anUnknownControlSubtypeIsPreservedNotRejected() throws {
+@Test func anUnknownControlSubtypeIsPreservedNotRejected() {
 
     let line = Data(#"""
     {"type":"control_request","request_id":"z","request":{"subtype":"coisa_nova","x":1}}
@@ -118,7 +118,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(raw["request"]?["subtype"] == .string("coisa_nova"))
 }
 
-@Test func aPermissionRequestWithoutARequestIDIsNotOfferedToTheUI() throws {
+@Test func aPermissionRequestWithoutARequestIDIsNotOfferedToTheUI() {
     let line = Data(#"""
     {"type":"control_request","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}
     """#.utf8)
@@ -128,7 +128,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(raw["request"]?["tool_name"] == .string("Bash"))
 }
 
-@Test func anEmptyRequestIDIsTreatedAsNoRequestIDAtAll() throws {
+@Test func anEmptyRequestIDIsTreatedAsNoRequestIDAtAll() {
     let line = Data(#"""
     {"type":"control_request","request_id":"","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}
     """#.utf8)
@@ -146,7 +146,7 @@ private func fixtureLines(_ name: String) throws -> [Data] {
     #expect(result.errorMessage == "did not understand")
 }
 
-@Test func malformedJSONIsTreatedAsConversationNotAsAFailure() throws {
+@Test func malformedJSONIsTreatedAsConversationNotAsAFailure() {
 
     #expect(ControlFrame.classify(Data("nao sou json".utf8)) == .conversation)
 }

@@ -116,7 +116,7 @@ private let golden: [Golden] = [
     }
 }
 
-@Test func theGoldenFixturesCoverEveryDiscriminatorThisVersionKnows() throws {
+@Test func theGoldenFixturesCoverEveryDiscriminatorThisVersionKnows() {
 
     #expect(Set(golden.map(\.discriminator)) == TranscriptEntry.Kind.knownDiscriminators)
 }
@@ -127,7 +127,7 @@ private let golden: [Golden] = [
     {"id":"11111111-1111-1111-1111-111111111111","kind":{"assistantText":{"_0":"hi"}},"raw":{"a":1},"timestamp":"2023-11-14T22:13:20Z"}
     """#
     let expected = TranscriptEntry(
-        id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+        id: try #require(UUID(uuidString: "11111111-1111-1111-1111-111111111111")),
         timestamp: Date(timeIntervalSince1970: 1_700_000_000),
         kind: .assistantText("hi"), raw: .object(["a": .int(1)]))
 
@@ -161,19 +161,19 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
     {"id":"55555555-5555-5555-5555-555555555555","segments":[{"entries":[],"harness":"harness-a","harnessSessionID":"44444444-4444-4444-4444-444444444444","id":"33333333-3333-3333-3333-333333333333","model":"m","seededBy":{"replay":{"throughEntry":"22222222-2222-2222-2222-222222222222"}},"usage":{"cacheCreationTokens":0,"cacheReadTokens":0,"costUSD":0,"inputTokens":5,"outputTokens":0}}],"title":"t","workingDirectory":"file:///tmp/repo"}
     """#
     let expected = Session(
-        id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
+        id: try #require(UUID(uuidString: "55555555-5555-5555-5555-555555555555")),
         title: "t", workingDirectory: URL(fileURLWithPath: "/tmp/repo"),
         segments: [Segment(
-            id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+            id: try #require(UUID(uuidString: "33333333-3333-3333-3333-333333333333")),
             harness: HarnessID(rawValue: "harness-a"),
             harnessSessionID: "44444444-4444-4444-4444-444444444444",
             model: "m", entries: [], usage: UsageTotals(inputTokens: 5),
-            seededBy: .replay(throughEntry: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!))])
+            seededBy: .replay(throughEntry: try #require(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))))])
 
     let decoded = try decoder.decode(Session.self, from: Data(wire.utf8))
     #expect(decoded == expected)
     #expect(decoded.segments.first?.seededBy
-            == .replay(throughEntry: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!))
+            == .replay(throughEntry: try #require(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))))
     #expect(try json(String(decoding: try encoder.encode(expected), as: UTF8.self))
             == (try json(wire)))
 }

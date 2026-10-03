@@ -223,7 +223,7 @@ struct ChatComposer: View {
                     if pending.isImage, let image = ImageCache.decodedImage(pending.data) {
                         Image(nsImage: image)
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .scaledToFill()
                             .frame(width: 56, height: 56)
                             .clipShape(RoundedRectangle(cornerRadius: 9))
                             .overlay(RoundedRectangle(cornerRadius: 9)

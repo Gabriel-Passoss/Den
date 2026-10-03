@@ -72,7 +72,7 @@ enum SlashCatalog {
     static func query(in prompt: String) -> String? {
         guard prompt.hasPrefix("/") else { return nil }
         let token = prompt.dropFirst()
-        guard !token.contains(where: { $0.isNewline }) else { return nil }
+        guard !token.contains(where: \.isNewline) else { return nil }
         return String(token)
     }
 

@@ -30,6 +30,7 @@ import Foundation
 
 @Test func devHandsOutOneDefaultsObject() {
     let environment = DevEnvironment()
+    let first = environment.defaults
 
-    #expect(environment.defaults === environment.defaults)
+    #expect(environment.defaults === first)
 }

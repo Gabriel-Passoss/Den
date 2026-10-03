@@ -60,7 +60,7 @@ private func roundTrip(_ json: String) throws -> String {
     #expect(v["ausente"] == nil)
 }
 
-@Test func stringAccessorReturnsNilForOtherKinds() throws {
+@Test func stringAccessorReturnsNilForOtherKinds() {
     #expect(JSONValue.string("hi").stringValue == "hi")
     #expect(JSONValue.int(1).stringValue == nil)
 }

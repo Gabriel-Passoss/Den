@@ -78,7 +78,7 @@ struct FakeCommandRunner: CommandRunner {
         responses: ["/bin/zsh -l -c command -v claude": "/opt/homebrew/bin/claude\n"],
         failures: [
             "/opt/homebrew/bin/claude --version":
-                CommandFailure(exitCode: 1, stderr: "Invalid API key · Run /login")
+                CommandFailure(exitCode: 1, stderr: "Invalid API key · Run /login"),
         ]
     )
     await #expect(throws: ClaudeDiscovery.DiscoveryError.versionCommandFailed(
@@ -92,7 +92,7 @@ struct FakeCommandRunner: CommandRunner {
     let runner = FakeCommandRunner(
         responses: ["/usr/local/bin/claude --version": "2.0.9 (Claude Code)\n"],
         failures: [
-            "/opt/homebrew/bin/claude --version": CommandFailure(exitCode: 126, stderr: "permission denied")
+            "/opt/homebrew/bin/claude --version": CommandFailure(exitCode: 126, stderr: "permission denied"),
         ]
     )
     let install = try await ClaudeDiscovery(

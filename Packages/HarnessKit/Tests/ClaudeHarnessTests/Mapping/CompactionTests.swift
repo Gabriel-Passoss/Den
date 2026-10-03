@@ -38,7 +38,7 @@ import HarnessCore
             == [.compaction(.failed(reason: "Not enough messages to compact."))])
 }
 
-@Test func aFronteiraDeCompactacaoGuardaOsNumeros() throws {
+@Test func aFronteiraDeCompactacaoGuardaOsNumeros() {
     let line: JSONValue = .object([
         "type": .string("system"),
         "subtype": .string("compact_boundary"),
@@ -62,7 +62,7 @@ import HarnessCore
     #expect(compaction.duration == 132.877)
 }
 
-@Test func aCompactacaoAutomaticaSeDistingueDaManual() throws {
+@Test func aCompactacaoAutomaticaSeDistingueDaManual() {
     let line: JSONValue = .object([
         "type": .string("system"),
         "subtype": .string("compact_boundary"),

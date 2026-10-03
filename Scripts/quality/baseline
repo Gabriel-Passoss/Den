@@ -1,0 +1,14 @@
+#!/bin/sh
+# Records what SwiftLint and jscpd find today as accepted debt, so the gates
+# only fail on what is new. Run it after fixing old findings (to drop them) or
+# when a recorded one changed shape (a long function that grew or shrank), and
+# commit the result. Periphery has its own: `Scripts/quality/unused-code
+# --write-baseline`.
+set -eu
+cd "$(dirname "$0")/../.."
+
+# SwiftLint exits 2 when it found violations, which is the point here.
+status=0
+Scripts/quality/tool swiftlint lint --quiet --write-baseline .swiftlint-baseline.json >/dev/null || status=$?
+[ "$status" -eq 0 ] || [ "$status" -eq 2 ] || exit "$status"
+npx --yes jscpd@5.4.0 --update-baseline --reporters silent
