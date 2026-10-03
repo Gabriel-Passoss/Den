@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WorktreeChip: View {
     let chat: ChatModel
+    var nameWidth: CGFloat = 240
     @Environment(WorktreeModel.self) private var worktrees
     @State private var editing = false
     @State private var picking = false
@@ -20,28 +21,28 @@ struct WorktreeChip: View {
 
     private var disabled: some View {
         Button { worktrees.setEnabled(true, for: chat) } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "arrow.triangle.branch").font(.system(size: 8))
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.triangle.branch").font(.system(size: 12))
                 Text("Worktree")
             }
-            .font(.system(size: 10))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .overlay(Capsule().strokeBorder(.tertiary, style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
-            .contentShape(Capsule())
+            .foregroundStyle(Theme.textTertiary)
+            .chipLabel()
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Theme.borderControl, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.denGhost)
         .fixedSize()
         .help("Criar uma worktree para esta tarefa ao enviar")
         .accessibilityLabel("Worktree")
     }
 
     private func enabled(_ draft: WorktreeModel.Draft) -> some View {
-        let tint = worktrees.blocker(for: chat) == nil ? InlineCode.color : Color.red
+        let tint = worktrees.blocker(for: chat) == nil ? Theme.accentSoft : Theme.removed
         let name = worktrees.branchName(for: chat, message: chat.prompt)
-        return HStack(spacing: 4) {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        return HStack(spacing: 6) {
             Button { worktrees.setEnabled(false, for: chat) } label: {
-                Image(systemName: "arrow.triangle.branch").font(.system(size: 8))
+                Image(systemName: "arrow.triangle.branch").font(.system(size: 12))
             }
             .buttonStyle(.plain)
             .help("Não criar worktree")
@@ -50,16 +51,17 @@ struct WorktreeChip: View {
                 InlineRenameField(initial: name,
                                   commit: { typed in Task { await worktrees.rename(typed, for: chat) } },
                                   done: { editing = false })
-                    .font(.system(size: 10, design: .monospaced))
-                    .frame(width: 220)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .frame(width: nameWidth)
             } else {
                 Button { editing = true } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Text(name)
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 11.5, design: .monospaced))
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Image(systemName: "pencil").font(.system(size: 7))
+                            .frame(maxWidth: nameWidth)
+                        Image(systemName: "pencil").font(.system(size: 9))
                     }
                 }
                 .buttonStyle(.plain)
@@ -68,9 +70,9 @@ struct WorktreeChip: View {
             }
             if case .multiple(_, let repos) = worktrees.layout(for: chat) {
                 Button { picking = true } label: {
-                    HStack(spacing: 2) {
+                    HStack(spacing: 4) {
                         Text("· \(draft.chosen.count) repos")
-                        Image(systemName: "chevron.down").font(.system(size: 6, weight: .bold))
+                        Chevron(size: 8)
                     }
                 }
                 .buttonStyle(.plain)
@@ -79,12 +81,10 @@ struct WorktreeChip: View {
                 }
             }
         }
-        .font(.system(size: 10))
         .foregroundStyle(tint)
-        .padding(.horizontal, 7).padding(.vertical, 3)
-        .background(tint.opacity(0.14), in: Capsule())
-        .overlay(Capsule().strokeBorder(tint.opacity(0.4), lineWidth: 1))
-        .frame(maxWidth: 360)
-        .fixedSize(horizontal: false, vertical: true)
+        .chipLabel()
+        .background(tint == Theme.removed ? Theme.removedFill : Theme.accentFill, in: shape)
+        .overlay(shape.strokeBorder(tint.opacity(0.45), lineWidth: 1))
+        .fixedSize()
     }
 }

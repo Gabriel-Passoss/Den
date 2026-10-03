@@ -35,7 +35,8 @@ struct DenApp: App {
 
         .commands { HarnessCommands() }
 
-        .defaultSize(width: 1180, height: 760)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1280, height: 800)
         .windowResizability(.contentMinSize)
 
         Settings {

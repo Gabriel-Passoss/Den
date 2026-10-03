@@ -44,8 +44,13 @@ final class ChatModel {
 
     private(set) var contextTokens: Int = 0
 
-    var contextLabel: String? {
-        contextTokens > 0 ? "\(TranscriptFormatter.tokens(contextTokens)) tokens" : nil
+    private(set) var contextWindow: Int?
+
+    private(set) var contextUsage: ContextUsage?
+
+    var contextFraction: Double? {
+        guard let contextWindow, contextWindow > 0, contextTokens > 0 else { return nil }
+        return ContextUsage.fraction(used: contextTokens, window: contextWindow)
     }
 
     var pending: PermissionRequest?
@@ -104,6 +109,8 @@ final class ChatModel {
 
     private var entries: [TranscriptEntry] = []
 
+    private var segmentStart = 0
+
     private var pendingSeed: String?
 
     private let isRestored: Bool
@@ -160,7 +167,17 @@ final class ChatModel {
         restorePreferences()
         loadKnobs()
         catalog = cache.rememberedCatalog(for: workingDirectory, harness: harness)
-        for entry in session.allEntries { render(entry, persist: false) }
+        for segment in session.segments {
+            writingHarness = segment.harness
+            for entry in segment.entries { render(entry, persist: false) }
+        }
+        writingHarness = nil
+        segmentStart = session.segments.dropLast().reduce(0) { $0 + $1.entries.count }
+        if let measured = session.segments.last?.context {
+            contextUsage = measured
+            contextWindow = measured.windowTokens
+            if contextTokens == 0 { contextTokens = measured.usedTokens }
+        }
 
         if let last = session.segments.last, last.seededBy != nil, last.entries.isEmpty {
             pendingSeed = HandoffSeed.make(entries)?.text
@@ -232,6 +249,7 @@ final class ChatModel {
             consumer = Task { [weak self] in
                 for await update in updates { self?.apply(update) }
             }
+            Task { await refreshContextUsage() }
         } catch {
             status = "falhou: \(error)"
 
@@ -411,6 +429,7 @@ final class ChatModel {
         do {
             try await session.apply(knob: id, value: value)
             knobs = await session.knobs()
+            await refreshContextUsage()
         } catch {
             append(.notice, "não consegui trocar \(id): \(error)")
         }
@@ -485,6 +504,10 @@ final class ChatModel {
         harness = newHarness
         harnessSessionID = ""
         model = ""
+        segmentStart = entries.count
+        contextTokens = 0
+        contextWindow = nil
+        contextUsage = nil
         hasLaunched = false
         settings = [:]
         loadKnobs()
@@ -568,8 +591,9 @@ final class ChatModel {
                 appendStreaming(text)
             case .notice(let subtype, let text):
                 if subtype == "status" { status = text }
-            case .contextUsage(let tokens):
+            case .contextUsage(let tokens, let window):
                 contextTokens = tokens
+                if let window { contextWindow = window }
             case .catalogUpdated(let updated):
                 if !updated.isEmpty { catalog = updated }
             case .compaction(let phase):
@@ -696,6 +720,7 @@ final class ChatModel {
             if relaunchAfterTurn { Task { await relaunchIfIdle() } }
             if !result.isError { isRateLimited = false }
             if let tokens = result.contextTokens { contextTokens = tokens }
+            if persist { Task { await refreshContextUsage() } }
             if result.isError {
                 append(.notice, "o turno falhou no harness"
                        + (result.stopReason.map { " (\($0))" } ?? ""), at: moment)
@@ -703,6 +728,7 @@ final class ChatModel {
         case .contextCompacted(let compaction):
             compactingSince = nil
             if compaction.tokensAfter > 0 { contextTokens = compaction.tokensAfter }
+            if persist { Task { await refreshContextUsage() } }
             awaitingCompactionSummary = true
             append(.compaction, TranscriptFormatter.headline(of: compaction), at: moment)
         case .permissionRequest, .unrecognized:
@@ -714,14 +740,42 @@ final class ChatModel {
         }
     }
 
+    func refreshContextUsage() async {
+        let live = session
+        let reported = await live?.contextUsage()
+        guard (session as AnyObject?) === (live as AnyObject?) else { return }
+
+        if let reported {
+            await keep(reported)
+        } else if let measured = contextUsage, !measured.isEstimate,
+                  live == nil || measured.usedTokens == contextTokens {
+            return
+        } else if let contextWindow, contextTokens > 0 {
+            await keep(.estimate(from: Array(entries[segmentStart...]),
+                                 used: contextTokens, window: contextWindow))
+        }
+    }
+
+    private func keep(_ usage: ContextUsage) async {
+        contextUsage = usage
+        contextTokens = usage.usedTokens
+        contextWindow = usage.windowTokens
+        guard let last = segments.indices.last, segments[last].context != usage else { return }
+        segments[last].context = usage
+        try? await store.saveMetadata(domainSession)
+    }
+
     private func append(_ role: ChatLine.Role, _ text: String,
                         at moment: Date = Date(), verb: CanonicalTool? = nil,
                         title: String? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         lines.append(ChatLine(id: UUID(), role: role, text: trimmed,
-                          timestamp: moment, verb: verb, title: title))
+                          timestamp: moment, verb: verb, title: title,
+                          harness: writingHarness ?? harness))
     }
+
+    private var writingHarness: HarnessID?
 
     // MARK: - System notices arriving as user messages
 

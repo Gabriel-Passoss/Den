@@ -63,7 +63,8 @@ final class ConversationUITests: XCTestCase {
 
     @MainActor
     private func sidebarRow(_ title: String, in app: XCUIApplication) -> XCUIElement {
-        app.outlines["Sidebar"].staticTexts[title]
+        app.descendants(matching: .any).matching(identifier: "Sidebar").firstMatch
+            .staticTexts[title]
     }
 
     @MainActor

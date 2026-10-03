@@ -55,10 +55,12 @@ struct PaneHoverCard: View {
         .padding(.vertical, 8)
         .frame(minWidth: 120, maxWidth: 240, alignment: .leading)
         .fixedSize()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .foregroundStyle(Theme.text)
+        .background(Color(hex: 0x1E222B), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .stroke(.quaternary, lineWidth: 1))
-        .shadow(color: .black.opacity(0.22), radius: 9, y: 3)
+            .strokeBorder(Theme.borderControl, lineWidth: 1))
+        .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
+        .environment(\.colorScheme, .dark)
         .padding(12)
     }
 }

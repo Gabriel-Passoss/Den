@@ -1,0 +1,40 @@
+{
+ "categories": [
+  {"name": "System prompt", "tokens": 6374, "color": "promptBorder", "kind": "used"},
+  {"name": "System tools", "tokens": 17456, "color": "inactive", "kind": "used"},
+  {"name": "MCP tools (deferred)", "tokens": 11610, "color": "inactive", "isDeferred": true, "kind": "deferred"},
+  {"name": "System tools (deferred)", "tokens": 23786, "color": "inactive", "isDeferred": true, "kind": "deferred"},
+  {"name": "Custom agents", "tokens": 49, "color": "permission", "kind": "used"},
+  {"name": "Memory files", "tokens": 268, "color": "claude", "kind": "used"},
+  {"name": "Skills", "tokens": 2261, "color": "warning", "kind": "used"},
+  {"name": "Messages", "tokens": 944, "color": "purple_FOR_SUBAGENTS_ONLY", "kind": "used"},
+  {"name": "Free space", "tokens": 172648, "color": "promptBorder", "kind": "free"}
+ ],
+ "totalTokens": 27352,
+ "maxTokens": 200000,
+ "rawMaxTokens": 200000,
+ "autocompactSource": "auto",
+ "percentage": 14,
+ "model": "claude-haiku-4-5-20251001",
+ "gridRows": [[{"color": "promptBorder", "isFilled": true, "categoryName": "System prompt", "tokens": 6374, "percentage": 3, "squareFullness": 1}]],
+ "memoryFiles": [
+  {"path": "/Users/someone/.claude/CLAUDE.md", "type": "User", "tokens": 12},
+  {"path": "/Users/someone/project/CLAUDE.md", "type": "Project", "tokens": 256}
+ ],
+ "mcpTools": [
+  {"name": "mcp__ai-memory__memory_query", "serverName": "ai-memory", "tokens": 1057, "isLoaded": false},
+  {"name": "mcp__ai-memory__memory_status", "serverName": "ai-memory", "tokens": 227, "isLoaded": true},
+  {"name": "mcp__context7__query-docs", "serverName": "context7", "tokens": 473, "isLoaded": false}
+ ],
+ "agents": [
+  {"agentType": "code-simplifier:code-simplifier", "source": "plugin", "tokens": 49}
+ ],
+ "slashCommands": {"totalCommands": 120, "includedCommands": 120, "tokens": 971},
+ "skills": {
+  "totalSkills": 2, "includedSkills": 2, "tokens": 9,
+  "skillFrontmatter": [
+   {"name": "tdd", "source": "userSettings", "tokens": 1},
+   {"name": "commit-commands:commit", "source": "plugin", "pluginName": "commit-commands", "tokens": 8}
+  ]
+ }
+}

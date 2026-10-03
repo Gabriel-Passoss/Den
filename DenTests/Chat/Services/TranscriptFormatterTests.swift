@@ -10,14 +10,6 @@ import HarnessCore
     #expect(TranscriptFormatter.unwrapped("  no envelope  ") == "no envelope")
 }
 
-@Test func tokensAbbreviateThousands() {
-    #expect(TranscriptFormatter.tokens(999) == "999")
-    #expect(TranscriptFormatter.tokens(1_000) == "1k")
-    #expect(TranscriptFormatter.tokens(1_499) == "1k")
-    #expect(TranscriptFormatter.tokens(1_500) == "2k")
-    #expect(TranscriptFormatter.tokens(155_000) == "155k")
-}
-
 @Test func elapsedSwitchesToMinutesAtSixty() {
     #expect(TranscriptFormatter.elapsed(45) == "45s")
     #expect(TranscriptFormatter.elapsed(59.4) == "59s")

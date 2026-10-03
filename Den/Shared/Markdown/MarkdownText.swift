@@ -4,7 +4,7 @@ struct MarkdownText: View {
     let text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(Self.blocks(for: text)) { block in
                 render(block)
             }
@@ -20,7 +20,8 @@ struct MarkdownText: View {
             MarkdownTableView(table: table)
 
         case .paragraph(let content):
-            InlineCode.text(content, size: 13)
+            InlineCode.text(content, size: 14)
+                .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .heading(let level, let content):
@@ -34,10 +35,11 @@ struct MarkdownText: View {
         case .listItem(let marker, let depth, let content):
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(marker)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textTertiary)
                     .frame(minWidth: 14, alignment: .trailing)
-                InlineCode.text(content, size: 13)
+                InlineCode.text(content, size: 14)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.leading, CGFloat(max(0, depth - 1)) * 16)
@@ -45,23 +47,23 @@ struct MarkdownText: View {
         case .quote(let content):
             HStack(alignment: .top, spacing: 8) {
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(.tertiary)
+                    .fill(Theme.borderControl)
                     .frame(width: 3)
-                InlineCode.text(content, size: 13)
-                    .foregroundStyle(.secondary)
+                InlineCode.text(content, size: 14)
+                    .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
         case .divider:
-            Divider()
+            Rectangle().fill(Theme.border).frame(height: 1)
         }
     }
 
     private static func headingSize(_ level: Int) -> CGFloat {
         switch level {
-        case 1: 17
-        case 2: 15
-        default: 13.5
+        case 1: 19
+        case 2: 16.5
+        default: 14.5
         }
     }
 

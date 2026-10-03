@@ -15,7 +15,7 @@ struct ChatComposer: View {
     private static let placeholder = "Peça uma alteração…"
 
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             slashSuggestions
             mentionSuggestions
 
@@ -30,105 +30,133 @@ struct ChatComposer: View {
                 .overlay(alignment: .topLeading) {
                     if chat.prompt.isEmpty {
                         Text(Self.placeholder)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color(nsColor: .placeholderTextColor))
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.textTertiary)
                             .allowsHitTesting(false)
                     }
                 }
+                .padding(.horizontal, 8)
+                .padding(.top, 6)
+                .padding(.bottom, 4)
 
-            HStack(spacing: 8) {
-                ForEach(chat.knobs.filter { $0.category == .mode }) { KnobBadge(knob: $0, chat: chat) }
-                locationBadge
-                if worktrees.isOffered(chat), !worktrees.isCreating(chat.sessionID) {
-                    WorktreeChip(chat: chat)
-                }
-                ForEach(chat.knobs.filter { $0.category != .mode }) { KnobBadge(knob: $0, chat: chat) }
-                if let phase = worktrees.phase(for: chat.sessionID) {
-                    phaseLabel(phase)
-                } else if chat.isBusy {
-                    ProgressView().controlSize(.mini)
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text(busyLabel(at: context.date))
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    if keys.escArmed {
-                        Text("Esc duas vezes interrompe")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.orange)
-                            .lineLimit(1)
-                            .fixedSize()
-                            .transition(.opacity)
-                    }
-                } else if chat.pending != nil || chat.pendingQuestion != nil {
-                    Text("Aguardando você").font(.system(size: 10)).foregroundStyle(.orange)
-                } else if let blocker = worktrees.blocker(for: chat) {
-                    Text(blocker).font(.system(size: 10)).foregroundStyle(.red).lineLimit(1)
-                } else if let status = visibleStatus {
-                    Text(status)
-                        .font(.system(size: 10))
-                        .foregroundStyle(status.hasPrefix("procurando")
-                                         ? AnyShapeStyle(.secondary)
-                                         : AnyShapeStyle(.orange))
-                        .lineLimit(1)
-                }
-                if let warning = worktrees.warnings[chat.sessionID] {
-                    Text(warning)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.orange)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(warning)
-                }
-                Spacer()
-                if let context = chat.contextLabel {
-                    Text(context)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .fixedSize()
-                        .help("Tokens no contexto agora")
-                }
-                Button(action: attachFiles) {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Anexar arquivos")
-                Button {
-                    if chat.isBusy {
-                        Task { await chat.stop() }
-                    } else {
-                        submit()
-                    }
-                } label: {
-                    Image(systemName: chat.isBusy ? "stop.circle.fill"
-                                                     : "arrow.up.circle.fill")
-                        .font(.system(size: 19))
-                        .contentTransition(.symbolEffect(.replace))
-                        .animation(.easeInOut(duration: 0.2), value: chat.isBusy)
-                }
-                .buttonStyle(.plain)
-                .disabled(!chat.isBusy
-                          && (chat.prompt.trimmingCharacters(in: .whitespaces).isEmpty
-                              && chat.pendingAttachments.isEmpty
-                              && chat.pendingPastes.isEmpty
-                              || !worktrees.canSend(chat)))
-                .help(chat.isBusy ? "Parar o que está rodando" : "Enviar mensagem")
+            ViewThatFits(in: .horizontal) {
+                controls(.full)
+                controls(.medium)
+                controls(.compact)
             }
         }
-        .padding(12)
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 11))
-        .overlay(RoundedRectangle(cornerRadius: 11).stroke(.quaternary, lineWidth: 1))
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 16)
-        .frame(maxWidth: 800)
+        .padding(8)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(Theme.borderControl, lineWidth: 1))
+        .shadow(color: .black.opacity(0.35), radius: 20, y: 4)
+        .overlay(alignment: .topLeading) { statusChip }
+        .padding(.horizontal, 32)
+        .padding(.top, 6)
+        .padding(.bottom, 20)
+        .frame(maxWidth: 784)
         .frame(maxWidth: .infinity)
         .task(id: chat.workingDirectory) { await worktrees.prepare(chat) }
+    }
+
+    enum Density { case full, medium, compact }
+
+    private func controls(_ density: Density) -> some View {
+        HStack(spacing: 6) {
+            locationChip(compact: density == .compact)
+            if worktrees.isOffered(chat), !worktrees.isCreating(chat.sessionID) {
+                WorktreeChip(chat: chat, nameWidth: density == .full ? 240 : density == .medium ? 160 : 100)
+            }
+            ForEach(chat.knobs.filter { $0.category == .mode }) {
+                KnobBadge(knob: $0, chat: chat, compact: density != .full)
+            }
+            Spacer(minLength: 6)
+            if chat.contextTokens > 0 || chat.contextWindow != nil {
+                ContextRing(chat: chat, showsLabel: density != .compact)
+            }
+            ForEach(chat.knobs.filter { $0.category != .mode }) { knob in
+                if knob.category == .effort, EffortPicker.fits(knob) {
+                    EffortPicker(knob: knob, chat: chat, showsLabel: density != .compact)
+                } else {
+                    KnobBadge(knob: knob, chat: chat, compact: density != .full)
+                }
+            }
+            Button(action: attachFiles) {
+                Image(systemName: "paperclip")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.textSecondary)
+                    .iconLabel(size: 32)
+            }
+            .buttonStyle(.denGhost(radius: 9))
+            .help("Anexar arquivos")
+            .accessibilityLabel("Anexar arquivos")
+            sendButton
+        }
+    }
+
+    private var sendButton: some View {
+        Button {
+            if chat.isBusy {
+                Task { await chat.stop() }
+            } else {
+                submit()
+            }
+        } label: {
+            Image(systemName: chat.isBusy ? "stop.fill" : "arrow.up")
+                .font(.system(size: chat.isBusy ? 12 : 15, weight: .bold))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 34, height: 34)
+        }
+        .buttonStyle(DenButtonStyle(kind: .primary, radius: 10))
+        .disabled(!chat.isBusy
+                  && (chat.prompt.trimmingCharacters(in: .whitespaces).isEmpty
+                      && chat.pendingAttachments.isEmpty
+                      && chat.pendingPastes.isEmpty
+                      || !worktrees.canSend(chat)))
+        .help(chat.isBusy ? "Parar o que está rodando" : "Enviar mensagem")
+        .accessibilityLabel(chat.isBusy ? "Parar" : "Enviar mensagem")
+    }
+
+    @ViewBuilder
+    private var statusChip: some View {
+        let waiting = chat.pending != nil || chat.pendingQuestion != nil
+        let interrupting = chat.isBusy && keys.escArmed
+        let note = worktreeNote
+        if !waiting, interrupting || note != nil || (!chat.isBusy && visibleStatus != nil) {
+            HStack(spacing: 7) {
+                if interrupting {
+                    Image(systemName: "escape")
+                        .foregroundStyle(Theme.accentSoft)
+                    Text("Esc de novo interrompe")
+                } else if let note {
+                    if note.isProgress {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(note.tint)
+                    }
+                    Text(note.text)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 520)
+                } else if let status = visibleStatus {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Theme.modified)
+                    Text(status)
+                        .lineLimit(1)
+                }
+            }
+            .transition(.opacity)
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 10)
+            .frame(height: 24)
+            .background(Theme.canvas.opacity(0.92), in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.borderStrong, lineWidth: 1))
+            .fixedSize()
+            .offset(x: 10, y: -30)
+            .allowsHitTesting(false)
+        }
     }
 
     @ViewBuilder
@@ -140,6 +168,9 @@ struct ChatComposer: View {
                              group: slash.group,
                              choose: { if slash.run($0, in: chat) { stickToBottom() } },
                              back: { slash.leaveGroup(in: chat) })
+                .padding(4)
+                .background(Theme.canvas.opacity(0.5),
+                            in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
     }
 
@@ -150,29 +181,30 @@ struct ChatComposer: View {
             let selected = min(mentions.selection, matches.count - 1)
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(Array(matches.enumerated()), id: \.element.id) { index, candidate in
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         Image(systemName: candidate.isDirectory ? "folder" : "doc.text")
-                            .font(.system(size: 10))
-                            .frame(width: 14)
-                            .foregroundStyle(index == selected ? .white : .secondary)
-                        Text(candidate.path)
                             .font(.system(size: 11))
+                            .frame(width: 14)
+                            .foregroundStyle(index == selected ? Theme.accent : Theme.textTertiary)
+                        Text(candidate.path)
+                            .font(.system(size: 12, design: .monospaced))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(index == selected
-                                ? AnyShapeStyle(Color.accentColor)
-                                : AnyShapeStyle(.clear),
-                                in: RoundedRectangle(cornerRadius: 5))
-                    .foregroundStyle(index == selected ? .white : .primary)
+                    .padding(.horizontal, 10)
+                    .frame(height: 28)
+                    .background(index == selected ? Theme.hoverRaised : .clear,
+                                in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .foregroundStyle(index == selected ? Theme.text : Theme.textSecondary)
                     .contentShape(Rectangle())
                     .onTapGesture { mentions.accept(candidate, in: chat) }
                 }
             }
+            .padding(4)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.canvas.opacity(0.5),
+                        in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         }
     }
 
@@ -193,27 +225,28 @@ struct ChatComposer: View {
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .clipShape(RoundedRectangle(cornerRadius: 9))
+                            .overlay(RoundedRectangle(cornerRadius: 9)
+                                .strokeBorder(Theme.borderStrong, lineWidth: 1))
                             .overlay(alignment: .topTrailing) {
                                 removeButton(help: "Remover imagem") {
                                     chat.removeAttachment(pending.id)
                                 }
                             }
                     } else {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 7) {
                             Image(systemName: "doc.fill")
                                 .font(.system(size: 14))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Theme.accent)
                             Text(pending.name ?? "arquivo")
-                                .font(.system(size: 11))
+                                .font(.system(size: 12))
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .frame(maxWidth: 160, alignment: .leading)
                         }
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, 12)
                         .frame(height: 56)
-                        .background(.quaternary.opacity(0.4),
-                                    in: RoundedRectangle(cornerRadius: 8))
+                        .background(Theme.hover, in: RoundedRectangle(cornerRadius: 9))
                         .overlay(alignment: .topTrailing) {
                             removeButton(help: "Remover arquivo") {
                                 chat.removeAttachment(pending.id)
@@ -224,6 +257,7 @@ struct ChatComposer: View {
                 ForEach(chat.pendingPastes) { pasteChip($0) }
             }
             .padding(.top, 2)
+            .padding(.horizontal, 4)
         }
         .frame(height: 62)
     }
@@ -236,24 +270,24 @@ struct ChatComposer: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Image(systemName: "doc.plaintext")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.accent)
                     Text("Texto colado")
                         .fontWeight(.medium)
                 }
-                .font(.system(size: 11))
+                .font(.system(size: 11.5))
                 Text(paste.headline)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text(LongText.lineLabel(paste.lineCount))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.textTertiary)
             }
             .padding(.horizontal, 10)
             .frame(width: 170, height: 56, alignment: .leading)
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .background(Theme.hover, in: RoundedRectangle(cornerRadius: 9))
+            .contentShape(RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
         .help("Clique para mostrar o texto inteiro no campo")
@@ -265,54 +299,67 @@ struct ChatComposer: View {
     private func removeButton(help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(.white, .black.opacity(0.6))
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.text, Theme.canvas.opacity(0.85))
         }
         .buttonStyle(.plain)
-        .padding(2)
+        .padding(3)
         .help(help)
+        .accessibilityLabel(help)
     }
 
     @ViewBuilder
-    private var locationBadge: some View {
+    private func locationChip(compact: Bool) -> some View {
         if let worktree = worktrees.worktree(for: chat.sessionID) {
-            BranchBadge(worktree: worktree)
+            BranchBadge(worktree: worktree, compact: compact)
         } else {
-            folderBadge.disabled(worktrees.isCreating(chat.sessionID))
+            folderChip(compact: compact).disabled(worktrees.isCreating(chat.sessionID))
         }
     }
 
-    @ViewBuilder
-    private func phaseLabel(_ phase: WorktreeModel.Phase) -> some View {
-        switch phase {
-        case .creating(let step):
-            ProgressView().controlSize(.mini)
-            Text(step).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-        case .failed(let message):
-            Text(message)
-                .font(.system(size: 10))
-                .foregroundStyle(.orange)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(message)
-        }
+    private struct Note {
+        let text: String
+        let isProgress: Bool
+        let tint: Color
     }
 
-    private var folderBadge: some View {
+    private var worktreeNote: Note? {
+        switch worktrees.phase(for: chat.sessionID) {
+        case .creating(let step): return Note(text: step, isProgress: true, tint: Theme.accentSoft)
+        case .failed(let message): return Note(text: message, isProgress: false, tint: Theme.modified)
+        case nil: break
+        }
+        if let blocker = worktrees.blocker(for: chat) {
+            return Note(text: blocker, isProgress: false, tint: Theme.removed)
+        }
+        if let warning = worktrees.warnings[chat.sessionID] {
+            return Note(text: warning, isProgress: false, tint: Theme.modified)
+        }
+        return nil
+    }
+
+    private func folderChip(compact: Bool) -> some View {
         Button(action: chooseSessionFolder) {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: "folder")
-                    .font(.system(size: 8))
-                Text(chat.workingDirectory.lastPathComponent)
+                    .font(.system(size: 12))
+                if !compact {
+                    Text(chat.workingDirectory.lastPathComponent)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 160)
+                }
+                Chevron(size: 8)
             }
-            .font(.system(size: 10))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(.quaternary.opacity(0.4), in: Capsule())
+            .foregroundStyle(Theme.textSecondary)
+            .chipLabel()
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Theme.borderStrong, lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.denGhost)
         .fixedSize()
         .help(chat.workingDirectory.path)
+        .accessibilityLabel("Pasta da sessão: \(chat.workingDirectory.lastPathComponent)")
     }
 
     private func attachFiles() {
@@ -364,15 +411,6 @@ struct ChatComposer: View {
         let status = chat.status
         guard status.hasPrefix("falhou") || status.hasPrefix("encerrada") else { return nil }
         return status.prefix(1).uppercased() + status.dropFirst()
-    }
-
-    private func busyLabel(at now: Date) -> String {
-        let verb = chat.compactingSince == nil ? "Pensando" : "Compactando"
-        guard let start = chat.compactingSince ?? chat.turnStartedAt else { return verb }
-        let seconds = max(0, Int(now.timeIntervalSince(start)))
-        return seconds < 60
-            ? "\(verb) · \(seconds)s"
-            : "\(verb) · \(seconds / 60)m \(seconds % 60)s"
     }
 
     private static let imageExtensions: Set<String> =

@@ -19,15 +19,11 @@ nonisolated enum TranscriptFormatter {
     static func headline(of compaction: ContextCompaction) -> String {
         var parts = ["Conversa compactada"]
         if compaction.tokensBefore > 0, compaction.tokensAfter > 0 {
-            parts.append("\(tokens(compaction.tokensBefore)) → "
-                         + "\(tokens(compaction.tokensAfter)) tokens")
+            parts.append("\(ContextFormat.tokens(compaction.tokensBefore)) → "
+                         + "\(ContextFormat.tokens(compaction.tokensAfter)) tokens")
         }
         if compaction.duration >= 1 { parts.append(elapsed(compaction.duration)) }
         return parts.joined(separator: " · ")
-    }
-
-    static func tokens(_ value: Int) -> String {
-        value >= 1_000 ? "\(Int((Double(value) / 1_000).rounded()))k" : String(value)
     }
 
     static func elapsed(_ duration: TimeInterval) -> String {

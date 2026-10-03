@@ -8,77 +8,97 @@ struct QuestionCard: View {
     @State private var selections: [String: Set<String>] = [:]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             ForEach(prompt.questions, id: \.text) { question in
-                VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: 8) {
                     if !question.header.isEmpty {
                         Text(question.header)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(.quaternary.opacity(0.5), in: Capsule())
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.accentSoft)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Theme.accentFill, in: Capsule())
                     }
                     Text(question.text)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 13.5, weight: .medium))
                         .fixedSize(horizontal: false, vertical: true)
 
-                    ForEach(question.options, id: \.label) { option in
-                        optionButton(question, option)
+                    VStack(spacing: 4) {
+                        ForEach(question.options, id: \.label) { option in
+                            OptionRow(option: option,
+                                      selected: selections[question.text]?.contains(option.label)
+                                        ?? false,
+                                      multiple: question.multiSelect) {
+                                select(question, option)
+                            }
+                        }
                     }
                 }
             }
 
-            HStack {
-                Button("Dispensar", action: dismiss)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Button(action: dismiss) {
+                    Text("Dispensar").pillLabel()
+                }
+                .buttonStyle(.denGhost)
+                .foregroundStyle(Theme.textSecondary)
                 Spacer()
                 if needsSubmit {
-                    Button("Responder", action: submit)
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(!allAnswered)
+                    Button(action: submit) {
+                        Text("Responder").pillLabel()
+                    }
+                    .buttonStyle(.denPrimary)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!allAnswered)
                 }
             }
         }
-        .padding(12)
-        .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .stroke(Color.accentColor.opacity(0.3), lineWidth: 1))
+        .padding(14)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(Theme.borderControl, lineWidth: 1))
     }
 
-    private func optionButton(_ question: QuestionPrompt.Question,
-                              _ option: QuestionPrompt.Option) -> some View {
-        let selected = selections[question.text]?.contains(option.label) ?? false
-        return Button {
-            select(question, option)
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(option.label)
-                        .font(.system(size: 12, weight: .medium))
-                    if !option.detail.isEmpty {
-                        Text(option.detail)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+    private struct OptionRow: View {
+        let option: QuestionPrompt.Option
+        let selected: Bool
+        let multiple: Bool
+        var action: () -> Void
+
+        @State private var hovering = false
+
+        var body: some View {
+            Button(action: action) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: selected
+                          ? (multiple ? "checkmark.square.fill" : "largecircle.fill.circle")
+                          : (multiple ? "square" : "circle"))
+                        .font(.system(size: 13))
+                        .foregroundStyle(selected ? Theme.accent : Theme.textTertiary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(option.label)
+                            .font(.system(size: 13, weight: .medium))
+                        if !option.detail.isEmpty {
+                            Text(option.detail)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.textMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
-                if selected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tint)
-                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(selected ? Theme.accentFill : hovering ? Theme.hover : Theme.raised,
+                            in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(selected ? Theme.accent.opacity(0.6) : Theme.borderStrong,
+                                  lineWidth: 1))
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? AnyShapeStyle(Color.accentColor.opacity(0.18))
-                                 : AnyShapeStyle(.quaternary.opacity(0.35)),
-                        in: RoundedRectangle(cornerRadius: 7))
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
         }
-        .buttonStyle(.plain)
     }
 
     private func select(_ question: QuestionPrompt.Question,

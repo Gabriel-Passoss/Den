@@ -4,15 +4,16 @@ import HarnessCore
 struct KnobBadge: View {
     let knob: HarnessKnob
     let chat: ChatModel
+    var compact = false
 
     static let modeLooks: [String: (symbol: String, color: Color)] = [
-        "auto": ("forward.fill", .yellow),
-        "plan": ("pause.fill", .blue),
-        "acceptEdits": ("forward.fill", .purple),
-        "manual": ("pause.fill", .gray),
-        "dontAsk": ("forward.fill", .orange),
-        "bypassPermissions": ("forward.fill", .red),
-        "build": ("hammer.fill", .green),
+        "auto": ("forward.fill", Theme.modified),
+        "plan": ("list.bullet.clipboard", Theme.hunk),
+        "acceptEdits": ("pencil.line", Theme.renamed),
+        "manual": ("shield", Theme.textSecondary),
+        "dontAsk": ("forward.fill", Theme.accent),
+        "bypassPermissions": ("exclamationmark.shield", Theme.removed),
+        "build": ("hammer", Theme.added),
     ]
 
     private func selection(for knob: HarnessKnob) -> Binding<String?> {
@@ -32,10 +33,7 @@ struct KnobBadge: View {
     }
 
     var body: some View {
-        let current = knob.currentValue
-        let look = knob.category == .mode ? Self.modeLooks[current ?? ""] : nil
-
-        Menu {
+        MenuChip(bordered: knob.category == .mode) {
             Picker(knob.name, selection: selection(for: knob)) {
                 ForEach(Array(knob.groupedOptions.enumerated()), id: \.offset) { _, bucket in
                     Section {
@@ -49,23 +47,29 @@ struct KnobBadge: View {
             }
             .pickerStyle(.inline)
         } label: {
-            HStack(spacing: 3) {
-                if let look {
-                    Image(systemName: look.symbol).font(.system(size: 8))
-                }
-                Text(knob.label(for: current) ?? knob.name)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 7))
-            }
-            .font(.system(size: 10))
-            .foregroundStyle(look.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(.secondary))
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(.quaternary.opacity(0.4), in: Capsule())
+            label
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Escolher \(knob.name.lowercased()) das próximas mensagens")
+        .help("\(knob.name): \(knob.label(for: knob.currentValue) ?? "—")")
+        .accessibilityLabel("\(knob.name): \(knob.label(for: knob.currentValue) ?? "—")")
+    }
+
+    private var label: some View {
+        let current = knob.currentValue
+        let look = knob.category == .mode ? Self.modeLooks[current ?? ""] : nil
+        return HStack(spacing: 6) {
+            if let look {
+                Image(systemName: look.symbol)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(look.color)
+            }
+            if !compact || knob.category == .model || (look == nil && knob.category == .mode) {
+                Text(knob.label(for: current) ?? knob.name)
+                    .foregroundStyle(knob.category == .model ? Theme.text : Theme.textSecondary)
+                    .fontWeight(knob.category == .model ? .medium : .regular)
+                    .lineLimit(1)
+            }
+            Chevron(size: 8)
+        }
+        .chipLabel()
     }
 }

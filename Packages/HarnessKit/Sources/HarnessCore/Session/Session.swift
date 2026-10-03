@@ -63,9 +63,12 @@ public struct Segment: Sendable, Equatable, Codable, Identifiable {
 
     public var seededBy: Handoff?
 
+    public var context: ContextUsage?
+
     public init(id: UUID = UUID(), harness: HarnessID, harnessSessionID: String,
                 model: String, entries: [TranscriptEntry] = [],
-                usage: UsageTotals = .zero, seededBy: Handoff? = nil) {
+                usage: UsageTotals = .zero, seededBy: Handoff? = nil,
+                context: ContextUsage? = nil) {
         self.id = id
         self.harness = harness
         self.harnessSessionID = harnessSessionID
@@ -73,6 +76,19 @@ public struct Segment: Sendable, Equatable, Codable, Identifiable {
         self.entries = entries
         self.usage = usage
         self.seededBy = seededBy
+        self.context = context
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        harness = try container.decode(HarnessID.self, forKey: .harness)
+        harnessSessionID = try container.decode(String.self, forKey: .harnessSessionID)
+        model = try container.decode(String.self, forKey: .model)
+        entries = try container.decode([TranscriptEntry].self, forKey: .entries)
+        usage = try container.decode(UsageTotals.self, forKey: .usage)
+        seededBy = try container.decodeIfPresent(Handoff.self, forKey: .seededBy)
+        context = try? container.decodeIfPresent(ContextUsage.self, forKey: .context)
     }
 }
 

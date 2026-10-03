@@ -167,3 +167,40 @@ private func sent(_ cli: FakeCLI, _ method: String) -> [String] {
         #expect(listed.summaries.first?.harnesses == [claudeCodeID, openCodeID])
     }
 }
+
+@Test func eachReplyKeepsTheHarnessThatWroteItAcrossAHandoffAndARelaunch() async throws {
+    let recorded = try recordedTurn()
+    try await withEndToEnd { e2e in
+        try e2e.claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
+        try handshake(e2e.openCode)
+        try e2e.openCode.on(FakeCLI.request("session/prompt"), reply: recorded.untilAsking)
+        try e2e.openCode.on(FakeCLI.answer, reply: recorded.afterAnswer)
+        let chat = try await e2e.newChat()
+        await chat.send(text: "Diga apenas OK e nada mais.")
+        await settle(within: processPatience) { !chat.isBusy }
+
+        await chat.switchHarness(to: openCodeID)
+        await chat.send(text: "Rode echo oi no bash.")
+        await settle(within: processPatience) { chat.pending != nil }
+        await chat.resolve(allow: true)
+        await settle(within: processPatience) { !chat.isBusy }
+
+        let authors = { (lines: [ChatLine]) in
+            lines.filter { $0.role == .assistant }.map { "\($0.text)@\($0.harness?.rawValue ?? "?")" }
+        }
+        #expect(authors(chat.lines) == ["OK@claude-code", "I'll run the command.@opencode", "oi@opencode"])
+        #expect(chat.lines.filter { $0.role == .tool }.allSatisfy { $0.harness == openCodeID })
+        let headers = ChatView.turnStarts(in: chat.blocks)
+        let authorsOfHeaders = chat.blocks.filter { headers.contains($0.id) }.map(ChatView.harness(of:))
+        #expect(authorsOfHeaders == [claudeCodeID, openCodeID])
+
+        await e2e.workspace.stopAll()
+        let reopened = e2e.relaunched()
+        await refresh(reopened) { reopened.summaries.first?.harnesses == [claudeCodeID, openCodeID] }
+        await reopened.select(chat.sessionID)
+        let restored = try #require(reopened.active)
+
+        #expect(restored.harness == openCodeID)
+        #expect(authors(restored.lines) == ["OK@claude-code", "I'll run the command.@opencode", "oi@opencode"])
+    }
+}

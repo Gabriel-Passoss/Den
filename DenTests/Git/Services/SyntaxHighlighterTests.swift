@@ -5,12 +5,12 @@ import SwiftUI
 
 private func shade(_ color: Color?) -> String {
     guard let color else { return "plain" }
-    if color == .pink { return "keyword" }
-    if color == .orange { return "string" }
-    if color == .purple { return "number" }
-    if color == .teal { return "type" }
-    if color == .secondary { return "comment" }
-    if color == .indigo { return "attribute" }
+    if color == SyntaxHighlighter.keywordColor { return "keyword" }
+    if color == SyntaxHighlighter.stringColor { return "string" }
+    if color == SyntaxHighlighter.numberColor { return "number" }
+    if color == SyntaxHighlighter.typeColor { return "type" }
+    if color == SyntaxHighlighter.commentColor { return "comment" }
+    if color == SyntaxHighlighter.attributeColor { return "attribute" }
     return "unknown"
 }
 

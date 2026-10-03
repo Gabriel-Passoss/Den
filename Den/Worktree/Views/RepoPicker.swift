@@ -28,7 +28,7 @@ struct RepoPicker: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .tint(InlineCode.color)
+        .tint(Theme.accent)
         .padding(12)
         .frame(width: 300)
     }

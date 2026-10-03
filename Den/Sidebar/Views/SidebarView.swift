@@ -11,6 +11,8 @@ struct SidebarView: View {
     @Bindable var workspace: WorkspaceModel
     @Environment(WorktreeModel.self) private var worktrees
     @Environment(PullRequestMonitor.self) private var monitor
+    var lightsInset: CGFloat = 0
+    var collapse: () -> Void = {}
 
     @State private var collapsed: Set<String> = []
     @State private var dropTarget: String?
@@ -20,130 +22,15 @@ struct SidebarView: View {
 
     @State private var tipTask: Task<Void, Never>?
 
+    @FocusState private var searchFocused: Bool
+
     var body: some View {
-        list
-            .safeAreaInset(edge: .top, spacing: 0) { caption }
-            .searchable(text: $workspace.search, placement: .sidebar, prompt: "Buscar sessões")
-            .navigationSplitViewColumnWidth(min: 148, ideal: 280, max: 360)
-            .background(SidebarColumnConfigurator())
-
-            .toolbar {
-                ToolbarItem { Spacer() }
-                ToolbarItem {
-                    Menu {
-                        Button("Nova sessão") { Task { await workspace.newSession() } }
-                        Menu("Nova sessão com") {
-                            ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
-                                Button {
-                                    Task { await workspace.newSession(harness: harness) }
-                                } label: {
-                                    Label {
-                                        Text(HarnessBadge.name(for: harness))
-                                    } icon: {
-                                        HarnessBadge(harness: harness, size: 13)
-                                    }
-                                }
-                            }
-                        }
-                        Button("Nova pasta") { workspace.addFolder() }
-                    } label: {
-                        Label("Nova", systemImage: "plus")
-                    }
-                    .help("Nova sessão ou nova pasta")
-                }
-            }
-    }
-
-    // MARK: - List
-
-    @ViewBuilder
-    private var list: some View {
-        List(selection: selectionBinding) {
-            ForEach(workspace.folderGroups) { group in
-                Section(isExpanded: expansion(group.id)) {
-                    ForEach(group.sessions) { summary in
-                        row(for: summary, in: group.id)
-                    }
-                    if group.sessions.isEmpty {
-                        Text("nenhuma conversa")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
-                    }
-                } header: {
-                    FolderHeader(
-                        name: group.name,
-                        count: group.sessions.count,
-                        isOpen: !collapsed.contains(group.id),
-                        isDropTarget: dropTarget == group.id,
-                        toggle: { toggleCollapse(group.id) },
-                        rename: { workspace.renameFolder(group.id, to: $0) },
-                        newSession: { Task { await workspace.newSession(assignedTo: group.id) } },
-                        remove: { workspace.removeFolder(group.id) }
-                    )
-                    .onDrop(of: [.plainText], isTargeted: dropBinding(group.id)) { providers in
-                        receiveDrop(providers, into: group.id)
-                    }
-                    .onDrag {
-                        dragging = nil
-                        return NSItemProvider(object: ("folder:" + group.id) as NSString)
-                    } preview: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "folder.fill")
-                            Text(group.name).font(.system(size: 13, weight: .semibold))
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7))
-                        .environment(\.colorScheme, .dark)
-                    }
-                    .hoverTip({ anchor in
-                        PaneTip(title: group.name,
-                                detail: group.sessions.count == 1
-                                    ? "1 sessão" : "\(group.sessions.count) sessões",
-                                indicator: nil, anchor: anchor)
-                    }, update: { scheduleTip($0) })
-                }
-            }
-
-            if !workspace.folderGroups.isEmpty {
-                Divider()
-                    .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
-                    .selectionDisabled()
-            }
-
-            Button {
-                Task { await workspace.newSession() }
-            } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .medium))
-                    Text("Nova sessão")
-                        .font(.system(size: 13))
-                    Spacer(minLength: 0)
-                }
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 3)
-                .contentShape(Rectangle())
-            }
-                        .contextMenu {
-                ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
-                    Button("Nova sessão com \(HarnessBadge.name(for: harness))") {
-                        Task { await workspace.newSession(harness: harness) }
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .selectionDisabled()
-            .help("Iniciar uma sessão nova")
-
-            ForEach(workspace.looseSessions) { summary in
-                row(for: summary, in: nil)
-            }
+        VStack(spacing: 0) {
+            header
+            search
+            list
         }
-        .listStyle(.sidebar)
-        .onDrop(of: [.plainText], isTargeted: nil) { providers in
-            receiveDrop(providers, into: nil)
-        }
+        .background(Theme.sidebar)
         .confirmationDialog(
             "Apagar \"\(pendingDelete?.title ?? "")\"?",
             isPresented: Binding(
@@ -163,33 +50,244 @@ struct SidebarView: View {
         } message: {
             Text(deleteMessage)
         }
-        .overlay {
-            if workspace.folderGroups.isEmpty, workspace.looseSessions.isEmpty {
-                if workspace.search.isEmpty {
-                    ContentUnavailableView(
-                        "Nenhuma conversa",
-                        systemImage: "bubble.left.and.bubble.right",
-                        description: Text("Crie uma sessão nova para começar.")
-                    )
-                } else {
-                    ContentUnavailableView.search(text: workspace.search)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 4)
+            MenuChip {
+                Button("Nova sessão") { Task { await workspace.newSession() } }
+                Menu("Nova sessão com") {
+                    ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
+                        Button {
+                            Task { await workspace.newSession(harness: harness) }
+                        } label: {
+                            Label {
+                                Text(HarnessBadge.name(for: harness))
+                            } icon: {
+                                HarnessBadge.menuIcon(for: harness)
+                            }
+                        }
+                    }
                 }
+                Button("Nova pasta") { workspace.addFolder() }
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textMuted)
+                    .iconLabel()
+            }
+            .help("Nova sessão ou nova pasta")
+            .accessibilityLabel("Nova")
+            SidebarButton(title: "Recolher barra lateral", action: collapse)
+        }
+        .padding(.leading, lightsInset + 6)
+        .padding(.trailing, 10)
+        .frame(height: Theme.headerHeight)
+        .windowDragArea()
+    }
+
+    private var search: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textTertiary)
+            TextField("Buscar sessões…", text: $workspace.search)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .focused($searchFocused)
+                .onExitCommand {
+                    workspace.search = ""
+                    searchFocused = false
+                }
+            if !workspace.search.isEmpty {
+                Button {
+                    workspace.search = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Limpar busca")
+                .accessibilityLabel("Limpar busca")
             }
         }
+        .padding(.horizontal, 12)
+        .frame(height: 34)
+        .background(Theme.field, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(searchFocused ? Theme.accent.opacity(0.55) : .clear, lineWidth: 1))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
+        .onKeyboardShortcut("f", modifiers: [.command, .shift]) { searchFocused = true }
+    }
+
+    // MARK: - List
+
+    private var list: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 1) {
+                sectionTitle("Pastas") {
+                    Button {
+                        workspace.addFolder()
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.textTertiary)
+                            .iconLabel(size: 22)
+                    }
+                    .buttonStyle(.denGhost(radius: 6))
+                    .help("Nova pasta")
+                    .accessibilityLabel("Nova pasta")
+                }
+
+                ForEach(workspace.folderGroups) { group in
+                    folder(group)
+                }
+
+                sectionTitle("Sessões") { EmptyView() }
+                    .padding(.top, workspace.folderGroups.isEmpty ? 0 : 14)
+
+                newSessionRow
+
+                ForEach(workspace.looseSessions) { summary in
+                    row(for: summary, in: nil)
+                }
+
+                if workspace.folderGroups.isEmpty, workspace.looseSessions.isEmpty {
+                    emptyList
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 12)
+        }
+        .scrollIndicators(.never)
+        .frame(maxHeight: .infinity)
+        .onDrop(of: [.plainText], isTargeted: nil) { providers in
+            receiveDrop(providers, into: nil)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("Sidebar")
         .onChange(of: workspace.summaries, initial: true) {
             monitor.noteActivity(Dictionary(workspace.summaries.map { ($0.id, $0.updatedAt) },
                                             uniquingKeysWith: { max($0, $1) }))
         }
     }
 
-    private var caption: some View {
-        Text("Sessões")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 2)
+    private func sectionTitle(_ title: String,
+                              @ViewBuilder trailing: () -> some View) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textTertiary)
+            Spacer(minLength: 0)
+            trailing()
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .frame(height: 28)
+    }
+
+    @ViewBuilder
+    private func folder(_ group: WorkspaceModel.Group) -> some View {
+        let isOpen = !collapsed.contains(group.id)
+        FolderHeader(
+            name: group.name,
+            count: group.sessions.count,
+            isOpen: isOpen,
+            isDropTarget: dropTarget == group.id,
+            toggle: { toggleCollapse(group.id) },
+            rename: { workspace.renameFolder(group.id, to: $0) },
+            newSession: { Task { await workspace.newSession(assignedTo: group.id) } },
+            remove: { workspace.removeFolder(group.id) }
+        )
+        .onDrop(of: [.plainText], isTargeted: dropBinding(group.id)) { providers in
+            receiveDrop(providers, into: group.id)
+        }
+        .onDrag {
+            dragging = nil
+            return NSItemProvider(object: ("folder:" + group.id) as NSString)
+        } preview: {
+            HStack(spacing: 6) {
+                Image(systemName: "folder.fill")
+                    .foregroundStyle(Theme.accent)
+                Text(group.name).font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundStyle(Theme.text)
+            .padding(.vertical, 7)
+            .padding(.horizontal, 12)
+            .background(Theme.hoverRaised, in: RoundedRectangle(cornerRadius: 8))
+        }
+        .hoverTip({ anchor in
+            PaneTip(title: group.name,
+                    detail: group.sessions.count == 1
+                        ? "1 sessão" : "\(group.sessions.count) sessões",
+                    indicator: nil, anchor: anchor)
+        }, update: { scheduleTip($0) })
+
+        if isOpen {
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(group.sessions) { summary in
+                    row(for: summary, in: group.id)
+                }
+                if group.sessions.isEmpty {
+                    Text("nenhuma conversa")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textFaint)
+                        .padding(.leading, 10)
+                        .frame(height: 28)
+                }
+            }
+            .padding(.leading, 22)
             .padding(.bottom, 4)
+            .transition(.opacity)
+        }
+    }
+
+    private var newSessionRow: some View {
+        Button {
+            Task { await workspace.newSession() }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 18)
+                Text("Nova sessão")
+                    .font(.system(size: 13, weight: .medium))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.denGhost)
+        .contextMenu {
+            ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
+                Button("Nova sessão com \(HarnessBadge.name(for: harness))") {
+                    Task { await workspace.newSession(harness: harness) }
+                }
+            }
+        }
+        .help("Iniciar uma sessão nova")
+    }
+
+    @ViewBuilder
+    private var emptyList: some View {
+        VStack(spacing: 6) {
+            Image(systemName: workspace.search.isEmpty ? "bubble.left.and.bubble.right"
+                                                      : "magnifyingglass")
+                .font(.system(size: 20))
+                .foregroundStyle(Theme.textFaint)
+            Text(workspace.search.isEmpty ? "Nenhuma conversa"
+                                          : "Nada encontrado para \"\(workspace.search)\"")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
     }
 
     private func scheduleTip(_ next: PaneTip?) {
@@ -206,18 +304,6 @@ struct SidebarView: View {
         }
     }
 
-    // MARK: - Selection
-
-    private var selectionBinding: Binding<UUID?> {
-        Binding(
-            get: { workspace.selectedID },
-            set: { id in
-                guard let id else { return }
-                Task { await workspace.select(id) }
-            }
-        )
-    }
-
     private func badge(for summary: SessionSummary) -> TaskBadge? {
         guard let worktree = worktrees.worktree(for: summary.id) else { return nil }
         let found = monitor.pullRequests(for: summary.id).map(\.pullRequest)
@@ -225,7 +311,7 @@ struct SidebarView: View {
             return TaskBadge(detail: "⑂ " + worktree.folderName)
         }
         let head = found.count == 1 ? "#\(worst.number)" : "\(found.count) PRs"
-        return TaskBadge(tone: PullRequestStatus.tone(worst),
+        return TaskBadge(tone: PullRequestStatus.tone(worst), tag: head,
                          detail: "\(head) · \(PullRequestStatus.label(worst))")
     }
 
@@ -252,6 +338,7 @@ struct SidebarView: View {
             summary: summary,
             indicator: workspace.indicator(for: summary.id),
             task: badge(for: summary),
+            isSelected: workspace.selectedID == summary.id,
             select: { Task { await workspace.select(summary.id) } },
             rename: { name in
                 Task { await workspace.renameSession(summary.id, to: name) }
@@ -268,6 +355,9 @@ struct SidebarView: View {
             if inFolder, let group = workspace.folderGroups.first(where: {
                 $0.id == workspace.membership[summary.id.uuidString]
             }) { detail.append(group.name) }
+            if let harness = summary.harnesses.last {
+                detail.append(HarnessBadge.name(for: harness))
+            }
             detail.append(summary.updatedAt.formatted(.relative(presentation: .named)))
             return PaneTip(title: summary.title,
                            detail: detail.joined(separator: " · "),
@@ -295,16 +385,12 @@ struct SidebarView: View {
             SessionRow(
                 summary: summary,
                 indicator: workspace.indicator(for: summary.id),
+                isSelected: true,
                 select: {}, rename: { _ in }
             )
-            .padding(.vertical, 5)
-            .padding(.horizontal, 10)
             .frame(width: 250, alignment: .leading)
-            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7))
-            .environment(\.colorScheme, .dark)
+            .background(Theme.hoverRaised, in: RoundedRectangle(cornerRadius: 8))
         }
-        .padding(.leading, folderID != nil ? 10 : 0)
-        .tag(summary.id)
     }
 
     private struct SessionDropDelegate: DropDelegate {
@@ -379,42 +465,11 @@ struct SidebarView: View {
         return true
     }
 
-    private func expansion(_ id: String) -> Binding<Bool> {
-        Binding(
-            get: { !collapsed.contains(id) },
-            set: { open in
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    if open { collapsed.remove(id) } else { collapsed.insert(id) }
-                }
-            }
-        )
-    }
-
     private func toggleCollapse(_ id: String) {
         Task { @MainActor in
             withAnimation(.easeInOut(duration: 0.22)) {
                 if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
             }
-        }
-    }
-
-}
-
-private struct SidebarColumnConfigurator: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
-
-    func updateNSView(_ view: NSView, context: Context) {
-        DispatchQueue.main.async {
-            var probe: NSView? = view
-            while let current = probe, !(current is NSSplitView) {
-                probe = current.superview
-            }
-            guard let split = probe as? NSSplitView,
-                  let controller = split.delegate as? NSSplitViewController,
-                  let item = controller.splitViewItems.first else { return }
-            item.canCollapse = false
-            item.minimumThickness = 148
-            item.maximumThickness = 360
         }
     }
 }
