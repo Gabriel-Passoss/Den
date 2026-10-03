@@ -6,12 +6,17 @@ struct ComposerTextView: NSViewRepresentable {
     @Binding var focusRequested: Bool
     /// Drawn over the view by the caller; given here so VoiceOver reads it.
     var placeholder: String
+    var ghost = ""
     var onSubmit: () -> Void
     var onPaste: (String) -> Bool
+    var onAcceptGhost: () -> Void = {}
+    var onDismissGhost: () -> Void = {}
 
     static let font = NSFont.systemFont(ofSize: 13)
     static let maxLines = 6
     static let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
+    static let ghostTrailing: CGFloat = 30
+    static let ghostMaxLines = 3
 
     static func height(of text: String, width: CGFloat) -> CGFloat {
         let cap = lineHeight * CGFloat(maxLines)
@@ -77,7 +82,12 @@ struct ComposerTextView: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView,
                       context: Context) -> CGSize? {
         guard let width = proposal.width else { return nil }
-        return CGSize(width: width, height: Self.height(of: text, width: width))
+        guard text.isEmpty, !ghost.isEmpty else {
+            return CGSize(width: width, height: Self.height(of: text, width: width))
+        }
+        let measured = Self.height(of: ghost, width: width - Self.ghostTrailing)
+        return CGSize(width: width,
+                      height: min(measured, Self.lineHeight * CGFloat(Self.ghostMaxLines)))
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -102,7 +112,12 @@ struct ComposerTextView: NSViewRepresentable {
             case #selector(NSResponder.insertTab(_:)):
                 textView.window?.selectNextKeyView(nil)
                 return true
+            case #selector(NSResponder.moveRight(_:)):
+                guard textView.string.isEmpty, !parent.ghost.isEmpty else { return false }
+                parent.onAcceptGhost()
+                return true
             case #selector(NSResponder.cancelOperation(_:)):
+                if !parent.ghost.isEmpty { parent.onDismissGhost() }
                 return true
             default:
                 return false
