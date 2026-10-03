@@ -57,6 +57,33 @@ jobs:
           name: app-xcresult
           path: build/app.xcresult
 
+  sanitizer:
+    name: Thread Sanitizer
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+      # A data race fails either command on its own; no sanitizer option is needed.
+      - name: Test the package under Thread Sanitizer
+        run: swift test --package-path Packages/HarnessKit --sanitize=thread
+      - name: Test the app under Thread Sanitizer
+        run: |
+          # shellcheck disable=SC2086 # $SIGNING is a list of build settings
+          xcodebuild test \
+            -project Den.xcodeproj -scheme Den \
+            -destination 'platform=macOS' \
+            -enableThreadSanitizer YES \
+            -resultBundlePath build/tsan.xcresult \
+            $SIGNING
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: tsan-xcresult
+          path: build/tsan.xcresult
+
   ui:
     name: UI (XCUITest)
     runs-on: macos-26

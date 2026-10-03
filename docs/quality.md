@@ -18,6 +18,7 @@ mesmas versões das ferramentas.
 | Warnings do compilador viram erro (concorrência, deprecações, valores não usados, código inalcançável) | `swiftc` / `xcodebuild` — `Scripts/quality/build-strict` | | ✓ |
 | Código não usado: declarações, parâmetros, imports, propriedades só atribuídas | Periphery 3.8.0 — `.periphery.yml` e `Packages/HarnessKit/.periphery.yml` | | ✓ |
 | Piso de cobertura de linhas, por alvo do HarnessKit e para o app fora das pastas `Views` | `Scripts/quality/coverage` — `.coverage-floor.json` | | ✓ |
+| Corridas de dados nos testes do pacote e do app | Thread Sanitizer — job `sanitizer` em `tests.yml` | | ✓ |
 | Segredos (chaves, tokens) | gitleaks 8.30.1 | ✓ no que está staged | ✓ no histórico inteiro |
 | Mensagem de commit no formato Conventional Commits (`feat(app): …`) | conventional-pre-commit | ✓ | ✓ nos commits do PR |
 | Scripts shell | shellcheck | ✓ | ✓ |
@@ -106,6 +107,17 @@ alvo do HarnessKit e um para o app fora das pastas `Views`, que os testes de
 UI exercitam. Abaixo do piso, falha. Depois de aumentar a cobertura, suba o
 piso com `--write-floor` e commite o arquivo. Ele grava meio ponto abaixo do
 medido, porque a cobertura oscila um pouco de uma execução para outra.
+
+### Thread Sanitizer
+
+```sh
+swift test --package-path Packages/HarnessKit --sanitize=thread
+xcodebuild test -project Den.xcodeproj -scheme Den -destination 'platform=macOS' \
+  -enableThreadSanitizer YES
+```
+
+Uma corrida de dados derruba o comando, e o relatório mostra as duas pilhas
+que tocaram a mesma memória. Corrija a corrida; não existe baseline para isso.
 
 ## Dívida registrada (baselines)
 
