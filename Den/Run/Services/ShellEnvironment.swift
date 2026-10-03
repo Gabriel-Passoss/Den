@@ -14,6 +14,7 @@ actor ShellEnvironment {
     nonisolated static let fallbackWarning =
         "Não consegui carregar o ambiente do seu shell; usando o PATH padrão"
     nonisolated private static let dropped: Set<String> = ["PWD", "OLDPWD", "SHLVL", "_"]
+    nonisolated static let shared = ShellEnvironment()
 
     nonisolated let shell: String
     private let base: [String: String]
@@ -105,56 +106,7 @@ extension ShellEnvironment.Resolved {
 }
 
 nonisolated enum ShellProbe {
-    private final class Collector: @unchecked Sendable {
-        private let lock = NSLock()
-        private var data = Data()
-        private var ended = false
-
-        func append(_ chunk: Data) { lock.withLock { data.append(chunk) } }
-        func end() { lock.withLock { ended = true } }
-        var isEnded: Bool { lock.withLock { ended } }
-        var collected: Data { lock.withLock { data } }
-    }
-
     static func run(shell: String, arguments: [String], timeout: Duration) async -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: shell)
-        process.arguments = arguments
-        process.standardInput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        let collector = Collector()
-        pipe.fileHandleForReading.readabilityHandler = { handle in
-            let chunk = handle.availableData
-            if chunk.isEmpty {
-                handle.readabilityHandler = nil
-                collector.end()
-            } else {
-                collector.append(chunk)
-            }
-        }
-        do {
-            try process.run()
-        } catch {
-            pipe.fileHandleForReading.readabilityHandler = nil
-            return nil
-        }
-
-        let deadline = ContinuousClock.now + timeout
-        while process.isRunning, ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        guard !process.isRunning else {
-            kill(process.processIdentifier, SIGKILL)
-            pipe.fileHandleForReading.readabilityHandler = nil
-            return nil
-        }
-        let drainDeadline = ContinuousClock.now + .milliseconds(500)
-        while !collector.isEnded, ContinuousClock.now < drainDeadline {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        pipe.fileHandleForReading.readabilityHandler = nil
-        return collector.collected
+        await TimedProcess.run(shell, arguments, timeout: timeout)?.stdout
     }
 }

@@ -4,6 +4,7 @@ import HarnessCore
 struct SessionRow: View {
     let summary: SessionSummary
     let indicator: WorkspaceModel.SessionIndicator?
+    var task: TaskBadge?
     var isSelected = false
     var select: () -> Void
     var rename: (String) -> Void
@@ -15,7 +16,12 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            HarnessBadge(harness: summary.harnesses.last, size: 18)
+            HStack(spacing: 5) {
+                if let task {
+                    TaskGlyph(tone: task.tone, size: 18)
+                }
+                HarnessBadge(harness: summary.harnesses.last, size: 18)
+            }
 
             if isEditing {
                 InlineRenameField(initial: summary.title, commit: rename) {
@@ -28,6 +34,7 @@ struct SessionRow: View {
                     .foregroundStyle(isSelected ? Theme.text : Theme.text.opacity(0.88))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .accessibilityValue(task?.detail ?? "")
             }
 
             Spacer(minLength: 4)

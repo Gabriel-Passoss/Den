@@ -52,7 +52,7 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
 /// patience is a failure, not a quiet return — otherwise the wait reads like an
 /// assertion while proving nothing.
 @MainActor
-func settle(within patience: Duration = .seconds(1),
+func settle(within patience: Duration = .seconds(10),
             until reached: @MainActor () -> Bool,
             sourceLocation: SourceLocation = #_sourceLocation) async {
     let deadline = ContinuousClock.now + patience

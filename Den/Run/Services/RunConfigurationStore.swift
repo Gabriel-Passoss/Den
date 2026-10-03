@@ -15,7 +15,7 @@ nonisolated struct RunConfigurationStore: Sendable {
             return Dictionary(projects.map { (ProjectRoot(URL(fileURLWithPath: $0.key)), $0.value) },
                               uniquingKeysWith: +)
         } catch {
-            setAside(because: error)
+            UnreadableFile.setAside(url, holding: "configurações de execução", because: error)
             return [:]
         }
     }
@@ -27,13 +27,5 @@ nonisolated struct RunConfigurationStore: Sendable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let file = File(version: 1, projects: Dictionary(uniqueKeysWithValues: projects.map { ($0.key.path, $0.value) }))
         try encoder.encode(file).write(to: url, options: .atomic)
-    }
-
-    private func setAside(because error: Error) {
-        let stamp = Int(Date().timeIntervalSince1970)
-        let target = url.deletingLastPathComponent()
-            .appending(path: "run-configurations.corrupt-\(stamp).json")
-        try? FileManager.default.moveItem(at: url, to: target)
-        print("configurações de execução ilegíveis em \(url.path): \(error)")
     }
 }

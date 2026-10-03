@@ -10,6 +10,7 @@ struct ChatComposer: View {
     var stickToBottom: () -> Void
 
     @State private var focusRequested = false
+    @Environment(WorktreeModel.self) private var worktrees
 
     private static let placeholder = "Peça uma alteração…"
 
@@ -40,19 +41,23 @@ struct ChatComposer: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
             .strokeBorder(Theme.borderControl, lineWidth: 1))
         .shadow(color: .black.opacity(0.35), radius: 20, y: 4)
-        .overlay(alignment: .topLeading) { statusChip }
+        .overlay(alignment: .topLeading) { ComposerStatusChip(chat: chat, keys: keys) }
         .padding(.horizontal, 32)
         .padding(.top, 6)
         .padding(.bottom, 20)
         .frame(maxWidth: 784)
         .frame(maxWidth: .infinity)
+        .task(id: chat.workingDirectory) { await worktrees.prepare(chat) }
     }
 
     enum Density { case full, medium, compact }
 
     private func controls(_ density: Density) -> some View {
         HStack(spacing: 6) {
-            folderChip(compact: density == .compact)
+            LocationChip(chat: chat, compact: density == .compact)
+            if worktrees.isOffered(chat), !worktrees.isCreating(chat.sessionID) {
+                WorktreeChip(chat: chat, compact: density == .compact)
+            }
             ForEach(chat.knobs.filter { $0.category == .mode }) {
                 KnobBadge(knob: $0, chat: chat, compact: density != .full)
             }
@@ -95,41 +100,12 @@ struct ChatComposer: View {
         }
         .buttonStyle(DenButtonStyle(kind: .primary, radius: 10))
         .disabled(!chat.isBusy
-                  && chat.prompt.trimmingCharacters(in: .whitespaces).isEmpty
-                  && chat.pendingAttachments.isEmpty
-                  && chat.pendingPastes.isEmpty)
+                  && (chat.prompt.trimmingCharacters(in: .whitespaces).isEmpty
+                      && chat.pendingAttachments.isEmpty
+                      && chat.pendingPastes.isEmpty
+                      || !worktrees.canSend(chat)))
         .help(chat.isBusy ? "Parar o que está rodando" : "Enviar mensagem")
         .accessibilityLabel(chat.isBusy ? "Parar" : "Enviar mensagem")
-    }
-
-    @ViewBuilder
-    private var statusChip: some View {
-        let waiting = chat.pending != nil || chat.pendingQuestion != nil
-        let interrupting = chat.isBusy && keys.escArmed
-        if !waiting, interrupting || (!chat.isBusy && visibleStatus != nil) {
-            HStack(spacing: 7) {
-                if interrupting {
-                    Image(systemName: "escape")
-                        .foregroundStyle(Theme.accentSoft)
-                    Text("Esc de novo interrompe")
-                } else if let status = visibleStatus {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Theme.modified)
-                    Text(status)
-                        .lineLimit(1)
-                }
-            }
-            .transition(.opacity)
-            .font(.system(size: 11.5, weight: .medium))
-            .foregroundStyle(Theme.textSecondary)
-            .padding(.horizontal, 10)
-            .frame(height: 24)
-            .background(Theme.canvas.opacity(0.92), in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.borderStrong, lineWidth: 1))
-            .fixedSize()
-            .offset(x: 10, y: -30)
-            .allowsHitTesting(false)
-        }
     }
 
     @ViewBuilder
@@ -182,10 +158,11 @@ struct ChatComposer: View {
     }
 
     private func submit() {
+        guard worktrees.canSend(chat) else { return }
         let text = chat.prompt
         chat.prompt = ""
         stickToBottom()
-        Task { await chat.send(text: text) }
+        Task { await worktrees.launch(chat, text: text) }
     }
 
     private var pendingAttachmentRow: some View {
@@ -280,30 +257,6 @@ struct ChatComposer: View {
         .accessibilityLabel(help)
     }
 
-    private func folderChip(compact: Bool) -> some View {
-        Button(action: chooseSessionFolder) {
-            HStack(spacing: 6) {
-                Image(systemName: "folder")
-                    .font(.system(size: 12))
-                if !compact {
-                    Text(chat.workingDirectory.lastPathComponent)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(maxWidth: 160)
-                }
-                Chevron(size: 8)
-            }
-            .foregroundStyle(Theme.textSecondary)
-            .chipLabel()
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Theme.borderStrong, lineWidth: 1))
-        }
-        .buttonStyle(.denGhost)
-        .fixedSize()
-        .help(chat.workingDirectory.path)
-        .accessibilityLabel("Pasta da sessão: \(chat.workingDirectory.lastPathComponent)")
-    }
-
     private func attachFiles() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -337,22 +290,6 @@ struct ChatComposer: View {
         var prompt = chat.prompt
         if !prompt.isEmpty, !prompt.hasSuffix(" ") { prompt += " " }
         chat.prompt = prompt + "@" + path + " "
-    }
-
-    private func chooseSessionFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.prompt = "Usar"
-        panel.directoryURL = chat.workingDirectory
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await chat.choose(directory: url) }
-    }
-
-    private var visibleStatus: String? {
-        let status = chat.status
-        guard status.hasPrefix("falhou") || status.hasPrefix("encerrada") else { return nil }
-        return status.prefix(1).uppercased() + status.dropFirst()
     }
 
     private static let imageExtensions: Set<String> =
