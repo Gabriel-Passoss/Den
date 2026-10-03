@@ -112,9 +112,9 @@ struct LogRenderer {
     static func color(_ color: LogColor) -> NSColor {
         switch color {
         case .rgb(let red, let green, let blue):
-            return LogPalette.color(LogPalette.RGB(red: red, green: green, blue: blue))
+            LogPalette.color(LogPalette.RGB(red: red, green: green, blue: blue))
         case .palette(let index):
-            return index < 16 ? standard[Int(index)] : LogPalette.color(LogPalette.rgb(forIndex: index))
+            index < 16 ? standard[Int(index)] : LogPalette.color(LogPalette.rgb(forIndex: index))
         }
     }
 }

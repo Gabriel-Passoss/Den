@@ -1,5 +1,4 @@
 import SwiftUI
-import HarnessCore
 
 struct MessageBubble: View {
     enum Style { case user, assistant }

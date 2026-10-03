@@ -13,6 +13,7 @@ struct ChatLine: Identifiable {
             }
         }
     }
+
     let id: UUID
     let role: Role
     let text: String

@@ -1,5 +1,4 @@
 import Foundation
-import HarnessCore
 
 enum Digest {
     static let summary = "Resumo da conversa anterior"

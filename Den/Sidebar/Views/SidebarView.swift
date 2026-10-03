@@ -9,6 +9,8 @@ private final class DragTracker: NSItemProvider {
 
 struct SidebarView: View {
     @Bindable var workspace: WorkspaceModel
+    @Environment(WorktreeModel.self) private var worktrees
+    @Environment(PullRequestMonitor.self) private var monitor
     var lightsInset: CGFloat = 0
     var collapse: () -> Void = {}
 
@@ -20,12 +22,10 @@ struct SidebarView: View {
 
     @State private var tipTask: Task<Void, Never>?
 
-    @FocusState private var searchFocused: Bool
-
     var body: some View {
         VStack(spacing: 0) {
-            header
-            search
+            SidebarHeader(workspace: workspace, lightsInset: lightsInset, collapse: collapse)
+            SidebarSearch(workspace: workspace)
             list
         }
         .background(Theme.sidebar)
@@ -40,88 +40,14 @@ struct SidebarView: View {
             Button("Apagar", role: .destructive) {
                 if let summary = pendingDelete {
                     Task { await workspace.deleteSession(summary.id) }
+                    worktrees.forget(summary.id)
                 }
                 pendingDelete = nil
             }
             Button("Cancelar", role: .cancel) { pendingDelete = nil }
         } message: {
-            Text("A conversa e o histórico dela serão removidos permanentemente.")
+            Text(deleteMessage)
         }
-    }
-
-    private var newSections: [DenMenuSection] {
-        let harnesses = workspace.availableHarnesses.map { harness in
-            DenMenuItem(id: harness.rawValue,
-                        title: HarnessBadge.name(for: harness),
-                        icon: .image(HarnessBadge.menuIcon(for: harness))) {
-                Task { await workspace.newSession(harness: harness) }
-            }
-        }
-        return [DenMenuSection(items: [
-            DenMenuItem(id: "new-session", title: "Nova sessão") {
-                Task { await workspace.newSession() }
-            },
-            DenMenuItem(id: "new-session-with", title: "Nova sessão com",
-                        children: [DenMenuSection(items: harnesses)]),
-            DenMenuItem(id: "new-folder", title: "Nova pasta") {
-                workspace.addFolder()
-            },
-        ])]
-    }
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            Spacer(minLength: 4)
-            DenMenuChip(sections: newSections) {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.textMuted)
-                    .iconLabel()
-            }
-            .help("Nova sessão ou nova pasta")
-            .accessibilityLabel("Nova")
-            SidebarButton(title: "Recolher barra lateral", action: collapse)
-        }
-        .padding(.leading, lightsInset + 6)
-        .padding(.trailing, 10)
-        .frame(height: Theme.headerHeight)
-        .windowDragArea()
-    }
-
-    private var search: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.textTertiary)
-            TextField("Buscar sessões…", text: $workspace.search)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .focused($searchFocused)
-                .onExitCommand {
-                    workspace.search = ""
-                    searchFocused = false
-                }
-            if !workspace.search.isEmpty {
-                Button {
-                    workspace.search = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .help("Limpar busca")
-                .accessibilityLabel("Limpar busca")
-            }
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 34)
-        .background(Theme.field, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .strokeBorder(searchFocused ? Theme.accent.opacity(0.55) : .clear, lineWidth: 1))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 10)
-        .onKeyboardShortcut("f", modifiers: [.command, .shift]) { searchFocused = true }
     }
 
     // MARK: - List
@@ -150,14 +76,14 @@ struct SidebarView: View {
                 sectionTitle("Sessões") { EmptyView() }
                     .padding(.top, workspace.folderGroups.isEmpty ? 0 : 14)
 
-                newSessionRow
+                NewSessionRow(workspace: workspace)
 
                 ForEach(workspace.looseSessions) { summary in
                     row(for: summary, in: nil)
                 }
 
                 if workspace.folderGroups.isEmpty, workspace.looseSessions.isEmpty {
-                    emptyList
+                    SidebarEmptyList(search: workspace.search)
                 }
             }
             .padding(.horizontal, 8)
@@ -170,6 +96,10 @@ struct SidebarView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("Sidebar")
+        .onChange(of: workspace.summaries, initial: true) {
+            monitor.noteActivity(Dictionary(workspace.summaries.map { ($0.id, $0.updatedAt) },
+                                            uniquingKeysWith: { max($0, $1) }))
+        }
     }
 
     private func sectionTitle(_ title: String,
@@ -242,51 +172,6 @@ struct SidebarView: View {
         }
     }
 
-    private var newSessionRow: some View {
-        Button {
-            Task { await workspace.newSession() }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 18)
-                Text("Nova sessão")
-                    .font(.system(size: 13, weight: .medium))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(Theme.accent)
-            .padding(.horizontal, 10)
-            .frame(height: 32)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.denGhost)
-        .denContextMenu([DenMenuSection(items: workspace.availableHarnesses.map { harness in
-            DenMenuItem(id: harness.rawValue,
-                        title: "Nova sessão com \(HarnessBadge.name(for: harness))",
-                        icon: .image(HarnessBadge.menuIcon(for: harness))) {
-                Task { await workspace.newSession(harness: harness) }
-            }
-        })])
-        .help("Iniciar uma sessão nova")
-    }
-
-    @ViewBuilder
-    private var emptyList: some View {
-        VStack(spacing: 6) {
-            Image(systemName: workspace.search.isEmpty ? "bubble.left.and.bubble.right"
-                                                      : "magnifyingglass")
-                .font(.system(size: 20))
-                .foregroundStyle(Theme.textFaint)
-            Text(workspace.search.isEmpty ? "Nenhuma conversa"
-                                          : "Nada encontrado para \"\(workspace.search)\"")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.textTertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
-    }
-
     private func scheduleTip(_ next: PaneTip?) {
         tipTask?.cancel()
         guard let next else {
@@ -301,11 +186,32 @@ struct SidebarView: View {
         }
     }
 
+    private func badge(for summary: SessionSummary) -> TaskBadge? {
+        worktrees.worktree(for: summary.id).map {
+            TaskBadge.make(worktree: $0, pullRequests: monitor.pullRequests(for: summary.id).map(\.pullRequest))
+        }
+    }
+
+    private func hoverLines(for summary: SessionSummary) -> [PaneTip.Line] {
+        worktrees.worktree(for: summary.id).map {
+            PaneTip.Line.task($0, bars: monitor.pullRequests(for: summary.id))
+        } ?? []
+    }
+
+    private var deleteMessage: String {
+        var text = "A conversa e o histórico dela serão removidos permanentemente."
+        if let summary = pendingDelete, let worktree = worktrees.worktree(for: summary.id) {
+            text += " As worktrees em \(worktree.displayLocation) continuam no disco."
+        }
+        return text
+    }
+
     private func row(for summary: SessionSummary, in folderID: String?) -> some View {
         let inFolder = workspace.membership[summary.id.uuidString] != nil
         return SessionRow(
             summary: summary,
             indicator: workspace.indicator(for: summary.id),
+            task: badge(for: summary),
             isSelected: workspace.selectedID == summary.id,
             select: { Task { await workspace.select(summary.id) } },
             rename: { name in
@@ -330,7 +236,8 @@ struct SidebarView: View {
             return PaneTip(title: summary.title,
                            detail: detail.joined(separator: " · "),
                            indicator: workspace.indicator(for: summary.id),
-                           anchor: anchor)
+                           anchor: anchor,
+                           lines: hoverLines(for: summary))
         }, update: { scheduleTip($0) })
         .opacity(dragging == summary.id ? 0 : 1)
         .onDrop(of: [.plainText], delegate: SessionDropDelegate(
@@ -357,47 +264,6 @@ struct SidebarView: View {
             )
             .frame(width: 250, alignment: .leading)
             .background(Theme.hoverRaised, in: RoundedRectangle(cornerRadius: 8))
-        }
-    }
-
-    private struct SessionDropDelegate: DropDelegate {
-        let target: UUID
-        let areaFolderID: String?
-        let workspace: WorkspaceModel
-        @Binding var dragging: UUID?
-
-        func dropEntered(info: DropInfo) {
-            guard let dragging, dragging != target else { return }
-            withAnimation(.easeInOut(duration: 0.18)) {
-                workspace.placeSession(dragging, near: target)
-            }
-        }
-
-        func dropUpdated(info: DropInfo) -> DropProposal? {
-            DropProposal(operation: .move)
-        }
-
-        func performDrop(info: DropInfo) -> Bool {
-            defer { dragging = nil }
-            if dragging != nil { return true }
-
-            let providers = info.itemProviders(for: [.plainText])
-            guard !providers.isEmpty else { return false }
-            let workspace = self.workspace
-            let areaFolderID = self.areaFolderID
-            for provider in providers {
-                _ = provider.loadObject(ofClass: NSString.self) { object, _ in
-                    guard let string = object as? String,
-                          string.hasPrefix("folder:") else { return }
-                    Task { @MainActor in
-                        withAnimation(.easeInOut(duration: 0.22)) {
-                            workspace.moveFolder(String(string.dropFirst(7)),
-                                                 before: areaFolderID)
-                        }
-                    }
-                }
-            }
-            return true
         }
     }
 
@@ -438,5 +304,46 @@ struct SidebarView: View {
                 if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
             }
         }
+    }
+}
+
+private struct SessionDropDelegate: DropDelegate {
+    let target: UUID
+    let areaFolderID: String?
+    let workspace: WorkspaceModel
+    @Binding var dragging: UUID?
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != target else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            workspace.placeSession(dragging, near: target)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer { dragging = nil }
+        if dragging != nil { return true }
+
+        let providers = info.itemProviders(for: [.plainText])
+        guard !providers.isEmpty else { return false }
+        let workspace = self.workspace
+        let areaFolderID = self.areaFolderID
+        for provider in providers {
+            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                guard let string = object as? String,
+                      string.hasPrefix("folder:") else { return }
+                Task { @MainActor in
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        workspace.moveFolder(String(string.dropFirst(7)),
+                                             before: areaFolderID)
+                    }
+                }
+            }
+        }
+        return true
     }
 }

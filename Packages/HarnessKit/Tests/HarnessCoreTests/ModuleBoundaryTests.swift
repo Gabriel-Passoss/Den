@@ -21,7 +21,7 @@ import HarnessTestSupport
     #expect(failure.exitCode == 3)
 }
 
-@Test func theNeutralPermissionTypesLiveInHarnessCore() throws {
+@Test func theNeutralPermissionTypesLiveInHarnessCore() {
     let request = PermissionRequest(
         id: "r-1",
         toolName: "Bash",

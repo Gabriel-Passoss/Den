@@ -15,14 +15,16 @@ if [ ! -f "$state/next" ]; then
   echo 1 > "$state/next"
 fi
 
-# A session is `acp …` (OpenCode) or `-p --output-format …` (Claude Code);
-# any other `-p` run is a one-shot title request.
+# A session is `acp …` (OpenCode) or `-p --output-format …` (Claude Code).
 case "$1 $2" in
   "--version "*) echo "0.0.0"; exit 0 ;;
   "acp "*|"-p --output-format") ;;
+  *NENHUMA*) cat "$state/reply" 2>/dev/null; exit 0 ;;
   *) cat "$state/title" 2>/dev/null; exit 0 ;;
 esac
 
+# Launches are numbered files, and ls skips the dot-prefixed one being written.
+# shellcheck disable=SC2012
 launch=$(( $(ls "$state/launches" | wc -l) + 1 ))
 { pwd -P; printf '%s\n' "$@"; } > "$state/launches/.$launch"
 mv "$state/launches/.$launch" "$state/launches/$launch"

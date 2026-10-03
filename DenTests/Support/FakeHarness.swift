@@ -28,13 +28,11 @@ actor FakeSession: HarnessSession {
     private var stream: AsyncStream<SessionUpdate>.Continuation?
 
     var sendFailure: HarnessFailure?
-    var applyFailure: HarnessFailure?
     var resolveFailure: HarnessFailure?
 
     func offer(knobs: [HarnessKnob]) { offered = knobs }
     func offer(usage: ContextUsage?) { offeredUsage = usage }
     func failSend(_ failure: HarnessFailure?) { sendFailure = failure }
-    func failApply(_ failure: HarnessFailure?) { applyFailure = failure }
     func failResolve(_ failure: HarnessFailure?) { resolveFailure = failure }
 
     func start(_ start: SessionStart) async throws -> AsyncStream<SessionUpdate> {
@@ -45,8 +43,6 @@ actor FakeSession: HarnessSession {
     }
 
     func emit(_ update: SessionUpdate) { stream?.yield(update) }
-
-    func finish() { stream?.finish() }
 
     func send(_ turn: UserTurn) async throws {
         if let sendFailure { throw sendFailure }
@@ -61,7 +57,6 @@ actor FakeSession: HarnessSession {
     func interrupt() async throws { interrupts += 1 }
 
     func apply(knob id: String, value: String?) async throws {
-        if let applyFailure { throw applyFailure }
         appliedKnobs.append((id, value))
     }
 
@@ -86,6 +81,7 @@ struct FakeHarness: Harness {
     var declaredCapabilities = HarnessCapabilities()
     var declaredKnobs: [HarnessKnob] = []
     var discoveryFailure: HarnessFailure?
+    var quickPrompt: [String]?
 
     init(id: String = "fake", displayName: String = "Fake",
          session: FakeSession = FakeSession(), log: HarnessLog = HarnessLog()) {
@@ -115,5 +111,9 @@ struct FakeHarness: Harness {
         log.lastSettings = settings
         log.lastWorkingDirectory = workingDirectory
         return session
+    }
+
+    func quickPromptArguments(for instruction: String) -> [String]? {
+        quickPrompt.map { $0 + [instruction] }
     }
 }

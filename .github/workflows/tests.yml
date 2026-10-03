@@ -9,9 +9,11 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
-# CI builds with the newest stable Xcode the runner image has, and without the team's
-# signing identity, so everything is signed ad hoc.
+# CI builds with the Xcode named here, so a new compiler arrives as a change to
+# this line and not with the runner image. There is no team signing identity
+# on CI, so everything is signed ad hoc.
 env:
+  XCODE_VERSION: "26.6"
   SIGNING: CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
 
 jobs:
@@ -23,9 +25,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: ${{ env.XCODE_VERSION }}
       - name: Test the package
-        run: swift test --package-path Packages/HarnessKit
+        run: swift test --package-path Packages/HarnessKit --enable-code-coverage
+      - name: Check the coverage floor
+        run: Scripts/quality/coverage package
 
   app:
     name: App (unit + pipeline E2E)
@@ -35,19 +39,50 @@ jobs:
       - uses: actions/checkout@v4
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: ${{ env.XCODE_VERSION }}
       - name: Test the app
         run: |
+          # shellcheck disable=SC2086 # $SIGNING is a list of build settings
           xcodebuild test \
             -project Den.xcodeproj -scheme Den \
             -destination 'platform=macOS' \
+            -enableCodeCoverage YES \
             -resultBundlePath build/app.xcresult \
             $SIGNING
+      - name: Check the coverage floor
+        run: Scripts/quality/coverage app build/app.xcresult
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: app-xcresult
           path: build/app.xcresult
+
+  sanitizer:
+    name: Thread Sanitizer
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+      # A data race fails either command on its own; no sanitizer option is needed.
+      - name: Test the package under Thread Sanitizer
+        run: swift test --package-path Packages/HarnessKit --sanitize=thread
+      - name: Test the app under Thread Sanitizer
+        run: |
+          # shellcheck disable=SC2086 # $SIGNING is a list of build settings
+          xcodebuild test \
+            -project Den.xcodeproj -scheme Den \
+            -destination 'platform=macOS' \
+            -enableThreadSanitizer YES \
+            -resultBundlePath build/tsan.xcresult \
+            $SIGNING
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: tsan-xcresult
+          path: build/tsan.xcresult
 
   ui:
     name: UI (XCUITest)
@@ -57,7 +92,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: ${{ env.XCODE_VERSION }}
       # Under sudo the tool asks for root's password and waits forever, so run
       # it as the runner's user, bounded, and let the UI tests report the rest.
       - name: Allow UI automation without a password prompt
@@ -66,6 +101,7 @@ jobs:
         continue-on-error: true
       - name: Test the UI
         run: |
+          # shellcheck disable=SC2086 # $SIGNING is a list of build settings
           xcodebuild test \
             -project Den.xcodeproj -scheme DenUITests \
             -destination 'platform=macOS' \

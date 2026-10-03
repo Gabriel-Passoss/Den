@@ -10,6 +10,7 @@ public protocol Harness: Sendable {
 
     func capabilities(for installation: HarnessInstallation) -> HarnessCapabilities
 
+    // periphery:ignore:parameters installation
     func knobs(for installation: HarnessInstallation,
                workingDirectory: URL) -> [HarnessKnob]
 
@@ -17,9 +18,9 @@ public protocol Harness: Sendable {
                      workingDirectory: URL,
                      settings: [String: String]) -> any HarnessSession
 
-    func titleArguments(for instruction: String) -> [String]?
+    func quickPromptArguments(for instruction: String) -> [String]?
 }
 
 public extension Harness {
-    func titleArguments(for instruction: String) -> [String]? { nil }
+    func quickPromptArguments(for instruction: String) -> [String]? { nil }
 }

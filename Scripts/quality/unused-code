@@ -1,0 +1,50 @@
+#!/bin/sh
+# Finds code nothing uses with Periphery: declarations, parameters, imports and
+# properties that are only ever assigned. It scans the app (.periphery.yml) and
+# HarnessKit (Packages/HarnessKit/.periphery.yml), and fails on any finding.
+#
+#   Scripts/quality/unused-code                  build and scan
+#   Scripts/quality/unused-code --skip-build     scan the index of the last
+#                                                CI-style build in build/DerivedData
+#   Scripts/quality/unused-code --write-baseline accept today's findings; later
+#                                                scans report only new ones
+#
+# A finding that is a false positive gets a `// periphery:ignore` comment on
+# the declaration; anything else is code to delete.
+set -eu
+
+root=$(cd "$(dirname "$0")/../.." && pwd -P)
+tool="$root/Scripts/quality/tool"
+index="$root/build/DerivedData/Index.noindex/DataStore"
+skip_build=false
+write_baseline=false
+for arg in "$@"; do
+    case $arg in
+    --skip-build) skip_build=true ;;
+    --write-baseline) write_baseline=true ;;
+    *) echo "usage: Scripts/quality/unused-code [--skip-build] [--write-baseline]" >&2; exit 64 ;;
+    esac
+done
+
+# scan <directory> <extra periphery arguments…>
+scan() {
+    directory=$1
+    shift
+    baseline="$directory/.periphery-baseline.json"
+    if $write_baseline; then
+        set -- "$@" --write-baseline "$baseline"
+    else
+        set -- "$@" --strict
+        if [ -f "$baseline" ]; then set -- "$@" --baseline "$baseline"; fi
+    fi
+    (cd "$directory" && "$tool" periphery scan --disable-update-check "$@")
+}
+
+failed=0
+if $skip_build; then
+    scan "$root" --index-store-path "$index" || failed=1
+else
+    scan "$root" || failed=1
+fi
+scan "$root/Packages/HarnessKit" || failed=1
+exit $failed

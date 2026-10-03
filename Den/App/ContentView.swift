@@ -163,9 +163,13 @@ private struct EmptyHeader: View {
 
 #Preview {
     let environment = DevEnvironment()
+    let ledger = TaskLedger(store: TaskWorktreeStore(url: environment.worktreesFile))
     ContentView(environment: environment)
         .environment(RunManager())
         .environment(RunConfigurationsModel(
             store: RunConfigurationStore(url: environment.runConfigurationsFile)))
+        .environment(WorktreeModel(ledger: ledger, root: environment.worktreesRoot,
+                                   defaults: environment.defaults))
+        .environment(PullRequestMonitor(ledger: ledger, fetcher: GitHubCLI()))
         .defaultAppStorage(environment.defaults)
 }

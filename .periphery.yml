@@ -1,0 +1,13 @@
+# Periphery: code nothing uses in the app, its tests and the UI tests
+# (unused declarations, parameters, imports and assign-only properties).
+# Run it with `Scripts/quality/unused-code`; HarnessKit has its own config.
+project: Den.xcodeproj
+schemes:
+  - Den
+  - DenUITests
+# HarnessKit is scanned on its own, where its tests count as users too.
+report_exclude:
+  - Packages/**
+# Properties of Codable types are read by the encoder, which Periphery can't see.
+retain_codable_properties: true
+relative_results: true

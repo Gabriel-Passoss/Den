@@ -33,6 +33,11 @@ final class ChatModel {
         }
     }
 
+    private func turnBegan() {
+        resetStreaming()
+        dismissSuggestion()
+    }
+
     private func resetStreaming() {
         streamFlush?.cancel()
         streamFlush = nil
@@ -70,6 +75,10 @@ final class ChatModel {
 
     var pendingQuestion: QuestionPrompt?
 
+    var suggestedReply: String?
+
+    var suggestionTurn = 0
+
     var branch: String?
 
     var catalog: CommandCatalog = .empty {
@@ -98,8 +107,10 @@ final class ChatModel {
 
     private let store: FileTranscriptStore
     private let cache: SessionCache
-    private let registry: HarnessRegistry
+    let registry: HarnessRegistry
     private let attachmentsRoot: URL
+    var runner: any CommandRunner = SystemCommandRunner()
+    var installation: HarnessInstallation?
     private var session: (any HarnessSession)?
     private var consumer: Task<Void, Never>?
     private var hasTitle = false
@@ -112,8 +123,6 @@ final class ChatModel {
     private var segmentStart = 0
 
     private var pendingSeed: String?
-
-    private let isRestored: Bool
 
     private var hasLaunched = false
 
@@ -138,7 +147,6 @@ final class ChatModel {
         self.segments = [Segment(harness: harness, harnessSessionID: "", model: "")]
 
         self.harnessSessionID = ""
-        self.isRestored = false
         restorePreferences()
         loadKnobs()
         catalog = cache.rememberedCatalog(for: workingDirectory, harness: harness)
@@ -162,7 +170,6 @@ final class ChatModel {
         self.hasTitle = true
         self.harnessSessionID = session.segments.last?.harnessSessionID ?? ""
         self.harness = session.segments.last?.harness ?? registry.fallback
-        self.isRestored = true
         self.status = "fria"
         restorePreferences()
         loadKnobs()
@@ -226,6 +233,7 @@ final class ChatModel {
         status = "procurando o \(adapter.displayName)…"
         do {
             let installation = try await adapter.discover()
+            self.installation = installation
             capabilities = adapter.capabilities(for: installation)
 
             let resumable = capabilities.canResumeSession
@@ -316,6 +324,7 @@ final class ChatModel {
         let text = ([typed] + pasted).filter { !$0.isEmpty }.joined(separator: "\n\n")
         let attached = pendingAttachments
         guard !text.isEmpty || !attached.isEmpty else { return }
+        dismissSuggestion()
         prompt = ""
         if !keepingPastes { pendingPastes = [] }
         pendingAttachments = []
@@ -498,6 +507,7 @@ final class ChatModel {
 
         let seed = HandoffSeed.make(entries)
         await stop()
+        installation = nil
 
         segments.append(Segment(harness: newHarness, harnessSessionID: "",
                                 model: "", seededBy: seed?.handoff))
@@ -521,6 +531,7 @@ final class ChatModel {
     }
 
     func stop() async {
+        dismissSuggestion()
         consumer?.cancel()
         consumer = nil
         await session?.stop()
@@ -544,28 +555,7 @@ final class ChatModel {
         generateTitle(from: text)
     }
 
-    private func generateTitle(from text: String) {
-        guard let adapter = registry.harness(for: harness) else { return }
-        let instruction = "Gere um título curto (3 a 5 palavras, sem aspas e sem "
-            + "ponto final) que resuma o pedido a seguir, na mesma língua dele. "
-            + "Responda somente o título.\n\nPedido: \(text.prefix(600))"
-
-        guard let arguments = adapter.titleArguments(for: instruction) else { return }
-
-        Task { [weak self] in
-            guard let installation = try? await adapter.discover() else { return }
-            guard let output = try? await SystemCommandRunner().run(
-                installation.executable, arguments
-            ) else { return }
-            let cleaned = output
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’"))
-            guard !cleaned.isEmpty, cleaned.count <= 80, !cleaned.contains("\n") else { return }
-            await self?.applyGeneratedTitle(cleaned)
-        }
-    }
-
-    private func applyGeneratedTitle(_ generated: String) async {
+    func applyGeneratedTitle(_ generated: String) async {
         guard !userRenamed else { return }
         title = generated
         await persistMetadata()
@@ -586,7 +576,7 @@ final class ChatModel {
                 }
                 Task { await persistMetadata() }
             case .turnStarted:
-                resetStreaming()
+                turnBegan()
             case .textDelta(_, let text):
                 appendStreaming(text)
             case .notice(let subtype, let text):
@@ -720,7 +710,7 @@ final class ChatModel {
             if relaunchAfterTurn { Task { await relaunchIfIdle() } }
             if !result.isError { isRateLimited = false }
             if let tokens = result.contextTokens { contextTokens = tokens }
-            if persist { Task { await refreshContextUsage() } }
+            if persist { turnEnded(result) }
             if result.isError {
                 append(.notice, "o turno falhou no harness"
                        + (result.stopReason.map { " (\($0))" } ?? ""), at: moment)

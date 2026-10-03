@@ -29,7 +29,7 @@ private func notices(_ chat: ChatModel) -> [String] {
     }
 }
 
-@Test func anUnknownHarnessFailsLoudly() async throws {
+@Test func anUnknownHarnessFailsLoudly() async {
     let store = FileTranscriptStore(root: FileManager.default.temporaryDirectory)
     let chat = ChatModel(store: store,
                          workingDirectory: FileManager.default.temporaryDirectory,
@@ -223,13 +223,7 @@ private let request = PermissionRequest(
 }
 
 @Test func dismissingAQuestionDeniesItWithAMessage() async throws {
-    let prompt = try #require(QuestionPrompt(from: PermissionRequest(
-        id: "q-1", toolName: "AskUserQuestion",
-        input: .object(["questions": .array([.object([
-            "question": .string("Qual caminho?"),
-            "header": .string("Rota"),
-            "options": .array([.object(["label": .string("A")])]),
-        ])])]))))
+    let prompt = try #require(QuestionPrompt(from: routeQuestion(id: "q-1")))
 
     try await withLiveChat { live in
         await live.chat.start()
@@ -492,13 +486,7 @@ private let effortKnob = HarnessKnob(
 }
 
 @Test func anAskUserQuestionPermissionOpensTheQuestionCard() async throws {
-    let asking = PermissionRequest(
-        id: "req-3", toolName: "AskUserQuestion",
-        input: .object(["questions": .array([.object([
-            "question": .string("Qual caminho?"),
-            "header": .string("Rota"),
-            "options": .array([.object(["label": .string("A")])]),
-        ])])]))
+    let asking = routeQuestion(id: "req-3")
 
     try await withLiveChat { live in
         await live.chat.start()

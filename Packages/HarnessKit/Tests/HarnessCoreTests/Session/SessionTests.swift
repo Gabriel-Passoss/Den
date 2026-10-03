@@ -63,7 +63,7 @@ private func segment(
     #expect(session.totalUsage.costUSD == 1.5)
 }
 
-@Test func aHandoffRecordsHowTheNextSegmentWasSeeded() throws {
+@Test func aHandoffRecordsHowTheNextSegmentWasSeeded() {
     let briefed = segment(harnessA, seededBy: .briefing("what has been done so far"))
     let target = UUID()
     let replayed = segment(harnessA, seededBy: .replay(throughEntry: target))

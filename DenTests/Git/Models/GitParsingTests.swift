@@ -67,7 +67,8 @@ import Foundation
 }
 
 @Test func fingerprintIsStableAndOrderSensitive() {
-    #expect(GitParsing.fingerprint(of: ["a", "b"]) == GitParsing.fingerprint(of: ["a", "b"]))
+    let fingerprint = GitParsing.fingerprint(of: ["a", "b"])
+    #expect(GitParsing.fingerprint(of: ["a", "b"]) == fingerprint)
     #expect(GitParsing.fingerprint(of: ["a", "b"]) != GitParsing.fingerprint(of: ["ab"]))
     #expect(GitParsing.fingerprint(of: ["a", "b"]) != GitParsing.fingerprint(of: ["b", "a"]))
 }

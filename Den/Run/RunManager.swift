@@ -14,7 +14,7 @@ final class RunManager {
     @ObservationIgnored private let logInterval: Duration
 
     init(launcher: any ProcessLaunching = PTYLauncher(),
-         environment: ShellEnvironment = ShellEnvironment(),
+         environment: ShellEnvironment = .shared,
          stopGrace: Duration = .seconds(5),
          logInterval: Duration = .milliseconds(60)) {
         self.launcher = launcher

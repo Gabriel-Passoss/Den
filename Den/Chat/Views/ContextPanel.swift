@@ -4,8 +4,6 @@ import HarnessCore
 struct ContextPanel: View {
     let chat: ChatModel
 
-    @State private var listHeight: CGFloat = 0
-
     private static let maxListHeight: CGFloat = 440
 
     var body: some View {
@@ -13,7 +11,7 @@ struct ContextPanel: View {
             header
             if let usage = chat.contextUsage {
                 ContextBar(usage: usage)
-                ScrollView {
+                FittedScroll(maxHeight: Self.maxListHeight) {
                     VStack(alignment: .leading, spacing: 12) {
                         categories(of: usage)
                         if !usage.details.isEmpty {
@@ -25,12 +23,7 @@ struct ContextPanel: View {
                             }
                         }
                     }
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                        listHeight = $0
-                    }
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(height: min(max(listHeight, 1), Self.maxListHeight))
                 if usage.isEstimate {
                     footnote("A divisão é estimada a partir da conversa; o total vem do \(chat.harnessName).")
                 }

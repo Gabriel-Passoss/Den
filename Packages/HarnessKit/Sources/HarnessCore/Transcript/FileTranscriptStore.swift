@@ -79,7 +79,7 @@ public actor FileTranscriptStore: TranscriptStore {
             guard bytesRead >= 0 else {
                 throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
-            if bytesRead == 1 && lastByte != 0x0A {
+            if bytesRead == 1, lastByte != 0x0A {
                 line.insert(0x0A, at: line.startIndex)
             }
         }

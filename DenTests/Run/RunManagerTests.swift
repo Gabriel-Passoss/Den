@@ -140,7 +140,7 @@ private func command(_ name: String = "API", _ command: String = "npm run dev",
     #expect(launcher.requests.isEmpty)
 }
 
-@Test func aLaunchErrorBecomesAFailure() async throws {
+@Test func aLaunchErrorBecomesAFailure() async {
     let launcher = FakeLauncher()
     launcher.fail(with: .spawnFailed(ENOENT))
     let manager = makeManager(launcher)
@@ -166,7 +166,7 @@ private func command(_ name: String = "API", _ command: String = "npm run dev",
     #expect(instance.log.lines.first?.text == ShellEnvironment.fallbackWarning)
 }
 
-@Test func stoppingWhileTheEnvironmentResolvesCancelsTheStart() async throws {
+@Test func stoppingWhileTheEnvironmentResolvesCancelsTheStart() async {
     let launcher = FakeLauncher()
     let manager = makeManager(launcher) { _, _, _ in
         try? await Task.sleep(for: .milliseconds(300))
@@ -183,7 +183,7 @@ private func command(_ name: String = "API", _ command: String = "npm run dev",
     #expect(launcher.requests.isEmpty)
 }
 
-@Test func stopAllTerminatesEverything() async throws {
+@Test func stopAllTerminatesEverything() async {
     let launcher = FakeLauncher()
     let manager = makeManager(launcher)
     await manager.start(command("API"), in: project)
@@ -196,7 +196,7 @@ private func command(_ name: String = "API", _ command: String = "npm run dev",
     #expect(!manager.hasActiveProcesses)
 }
 
-@Test func forgetDropsAnIdleInstanceOnly() async throws {
+@Test func forgetDropsAnIdleInstanceOnly() async {
     let launcher = FakeLauncher()
     let manager = makeManager(launcher)
     let api = command()
@@ -224,7 +224,7 @@ private func command(_ name: String = "API", _ command: String = "npm run dev",
     #expect(instance.log.lines.first?.spans.first?.style.foreground == .palette(2))
 }
 
-@Test func isActiveFollowsTheConfigurationsRun() async throws {
+@Test func isActiveFollowsTheConfigurationsRun() async {
     let launcher = FakeLauncher()
     let manager = makeManager(launcher)
     let api = command()
@@ -290,7 +290,7 @@ private func settle() async {
     #expect(instance.state == .running(pid: 101))
 }
 
-@Test func stopAllWaitsForStopsAlreadyUnderWay() async throws {
+@Test func stopAllWaitsForStopsAlreadyUnderWay() async {
     let launcher = FakeLauncher()
     let manager = makeManager(launcher)
     let api = command()

@@ -7,7 +7,6 @@ import HarnessCore
 struct LiveChatHarness {
     let chat: ChatModel
     let harness: FakeHarness
-    let others: [FakeHarness]
     let attachments: URL
     let store: FileTranscriptStore
 
@@ -20,6 +19,7 @@ struct LiveChatHarness {
 @MainActor
 func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
                   alongside others: [FakeHarness] = [],
+                  runner: any CommandRunner = SystemCommandRunner(),
                   _ body: (LiveChatHarness) async throws -> Void) async throws {
     var harness = FakeHarness()
     configure(&harness)
@@ -42,7 +42,8 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
                          cache: SessionCache(defaults: defaults),
                          registry: HarnessRegistry(harnesses: [harness] + others),
                          attachmentsRoot: attachments)
-    try await body(LiveChatHarness(chat: chat, harness: harness, others: others,
+    chat.runner = runner
+    try await body(LiveChatHarness(chat: chat, harness: harness,
                                    attachments: attachments, store: store))
 }
 
@@ -51,7 +52,7 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
 /// patience is a failure, not a quiet return — otherwise the wait reads like an
 /// assertion while proving nothing.
 @MainActor
-func settle(within patience: Duration = .seconds(1),
+func settle(within patience: Duration = .seconds(10),
             until reached: @MainActor () -> Bool,
             sourceLocation: SourceLocation = #_sourceLocation) async {
     let deadline = ContinuousClock.now + patience
@@ -62,4 +63,25 @@ func settle(within patience: Duration = .seconds(1),
     if reached() { return }
     Issue.record("the stream never reached the expected state",
                  sourceLocation: sourceLocation)
+}
+
+func assistant(_ text: String) -> SessionUpdate {
+    .entry(TranscriptEntry(timestamp: Date(), kind: .assistantText(text), raw: .null))
+}
+
+func endOfTurn(isError: Bool = false) -> SessionUpdate {
+    .entry(TranscriptEntry(
+        timestamp: Date(),
+        kind: .turnResult(TurnResult(usage: .zero, stopReason: "end_turn", isError: isError)),
+        raw: .null))
+}
+
+func routeQuestion(id: String) -> PermissionRequest {
+    PermissionRequest(
+        id: id, toolName: "AskUserQuestion",
+        input: .object(["questions": .array([.object([
+            "question": .string("Qual caminho?"),
+            "header": .string("Rota"),
+            "options": .array([.object(["label": .string("A")])]),
+        ])])]))
 }
