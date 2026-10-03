@@ -100,6 +100,9 @@ e commite os arquivos gerados — o diff mostra exatamente o que entrou ou saiu.
 - Hooks do pre-commit (jscpd, gitleaks, shellcheck, actionlint…):
   `pre-commit autoupdate`, e ajuste a versão do jscpd em
   `additional_dependencies` e em `Scripts/quality/baseline`.
+- Xcode do CI: troque `XCODE_VERSION` no topo de `.github/workflows/tests.yml`
+  e de `.github/workflows/quality.yml`. Com warnings como erro, um compilador
+  novo pode pedir correções; faça a troca num PR próprio.
 
 Depois rode `Scripts/quality/check` e commite o que a nova versão pedir.
 
