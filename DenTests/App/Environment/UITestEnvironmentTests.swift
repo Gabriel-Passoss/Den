@@ -77,7 +77,7 @@ private func scratchRoot() -> URL {
 }
 
 @MainActor
-@Test func aProjectSetupWaitsWithoutServingTheMainRunLoop() throws {
+@Test func aProjectSetupWaitsWithoutServingTheMainRunLoop() {
     let root = scratchRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     final class Probe { var served = false }

@@ -29,7 +29,7 @@ private func notices(_ chat: ChatModel) -> [String] {
     }
 }
 
-@Test func anUnknownHarnessFailsLoudly() async throws {
+@Test func anUnknownHarnessFailsLoudly() async {
     let store = FileTranscriptStore(root: FileManager.default.temporaryDirectory)
     let chat = ChatModel(store: store,
                          workingDirectory: FileManager.default.temporaryDirectory,

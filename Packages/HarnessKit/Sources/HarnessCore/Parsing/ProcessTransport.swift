@@ -98,7 +98,7 @@ final class StreamIO: @unchecked Sendable {
             var poller = pollfd(fd: descriptor, events: Int16(POLLIN), revents: 0)
             guard poll(&poller, 1, 0) > 0 else { break }
             let count = buffer.withUnsafeMutableBytes { read(descriptor, $0.baseAddress, $0.count) }
-            if count < 0 && errno == EINTR { continue }
+            if count < 0, errno == EINTR { continue }
             guard count > 0 else { break }
             pending.append(contentsOf: buffer[0..<count])
         }

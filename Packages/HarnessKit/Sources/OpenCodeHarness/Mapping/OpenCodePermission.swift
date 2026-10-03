@@ -45,15 +45,14 @@ enum OpenCodePermission {
 
     static func outcome(for decision: PermissionDecision,
                         offered: [PermissionOption]) -> JSONValue {
-        let chosen: String?
-        switch decision {
+        let chosen: String? = switch decision {
         case .option(let id):
-            chosen = id
+            id
         case .allow:
-            chosen = offered.first { $0.kind == .allowOnce }?.id
+            offered.first { $0.kind == .allowOnce }?.id
                 ?? offered.first { $0.isAllow }?.id
         case .deny:
-            chosen = offered.first { $0.kind == .rejectOnce }?.id
+            offered.first { $0.kind == .rejectOnce }?.id
                 ?? offered.first { !$0.isAllow }?.id
         }
         guard let chosen else { return .object(["outcome": .string("cancelled")]) }

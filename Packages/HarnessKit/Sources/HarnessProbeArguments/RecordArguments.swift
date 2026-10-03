@@ -23,13 +23,13 @@ public enum RecordArgumentError: Error, Equatable, Sendable {
     public var message: String {
         switch self {
         case .missingValue(let flag):
-            return "\(flag) foi informado sem um valor válido."
+            "\(flag) foi informado sem um valor válido."
         case .emptyValue(let flag):
-            return "\(flag) foi informado com um valor vazio (ou só espaços) — confira se a variável de shell usada não está vazia."
+            "\(flag) foi informado com um valor vazio (ou só espaços) — confira se a variável de shell usada não está vazia."
         case .unknownFlag(let flag):
-            return "flag desconhecida: \(flag)"
+            "flag desconhecida: \(flag)"
         case .missingRequired(let flag):
-            return "\(flag) é obrigatório."
+            "\(flag) é obrigatório."
         }
     }
 }
@@ -107,9 +107,9 @@ public func parsePermissionAnswer(_ line: String?) -> PermissionAnswer {
     return yes.contains(normalized) ? .allow : .deny
 }
 
-extension String {
+private extension String {
 
-    fileprivate var isBlankValue: Bool {
+    var isBlankValue: Bool {
         allSatisfy(\.isWhitespace)
     }
 }

@@ -7,7 +7,7 @@ struct SessionRow: View {
     var isSelected = false
     var select: () -> Void
     var rename: (String) -> Void
-    var unfile: (() -> Void)? = nil
+    var unfile: (() -> Void)?
     var delete: () -> Void = {}
 
     @State private var isEditing = false

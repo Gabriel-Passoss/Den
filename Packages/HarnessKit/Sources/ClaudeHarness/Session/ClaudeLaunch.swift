@@ -96,6 +96,7 @@ public enum ClaudeLaunch {
         )
     }
 
+    // periphery:ignore:parameters installation
     public static func capabilities(for installation: HarnessInstallation) -> HarnessCapabilities {
         HarnessCapabilities(
             routesPermissionRequests: true,

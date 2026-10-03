@@ -116,7 +116,7 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
             _ = fcntl(descriptor, F_SETFD, FD_CLOEXEC)
         }
 
-        var attributes: posix_spawnattr_t? = nil
+        var attributes: posix_spawnattr_t?
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
         let flags = POSIX_SPAWN_SETSID | POSIX_SPAWN_CLOEXEC_DEFAULT
@@ -131,7 +131,7 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
         sigemptyset(&mask)
         posix_spawnattr_setsigmask(&attributes, &mask)
 
-        var actions: posix_spawn_file_actions_t? = nil
+        var actions: posix_spawn_file_actions_t?
         posix_spawn_file_actions_init(&actions)
         defer { posix_spawn_file_actions_destroy(&actions) }
         posix_spawn_file_actions_adddup2(&actions, inputPipe[0], 0)

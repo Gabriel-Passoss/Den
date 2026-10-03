@@ -102,7 +102,7 @@ struct MarkdownTableView: View {
         var compact: Set<Int> = []
         for column in 0..<columns {
             var longest = 0
-            for row in ([table.header] + table.rows) where column < row.count {
+            for row in [table.header] + table.rows where column < row.count {
                 longest = max(longest, row[column].characters.count)
             }
             if longest <= 14 { compact.insert(column) }

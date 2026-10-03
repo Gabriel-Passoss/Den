@@ -6,8 +6,8 @@ nonisolated enum LogColor: Hashable, Sendable {
 }
 
 nonisolated struct LogStyle: Hashable, Sendable {
-    var foreground: LogColor? = nil
-    var background: LogColor? = nil
+    var foreground: LogColor?
+    var background: LogColor?
     var bold = false
     var dim = false
     var italic = false

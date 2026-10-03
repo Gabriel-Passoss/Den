@@ -1,0 +1,261 @@
+[
+  {
+    "file": "Packages/HarnessKit/Sources/ClaudeHarness/Control/ControlFrames.swift",
+    "code": ": .deny(message: \"o usuário negou\", interrupt: false)",
+    "original": "false",
+    "replacement": "true",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/ClaudeHarness/Control/ControlFrames.swift",
+    "code": "id == allowID",
+    "original": "==",
+    "replacement": "!=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/ClaudeHarness/Mapping/ClaudeContextUsage.swift",
+    "code": "isDeferred: !(tool[\"isLoaded\"]?.boolValue ?? true))",
+    "original": "true",
+    "replacement": "false",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/ClaudeHarness/Mapping/ClaudeContextUsage.swift",
+    "code": "let isDeferred = category[\"isDeferred\"]?.boolValue == true || kind == \"deferred\"",
+    "original": "true",
+    "replacement": "false",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/ClaudeHarness/Mapping/ClaudeContextUsage.swift",
+    "code": "let isDeferred = category[\"isDeferred\"]?.boolValue == true || kind == \"deferred\"",
+    "original": "||",
+    "replacement": "&&",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/ClaudeHarness/Mapping/ClaudeEventMapper.swift",
+    "code": "if let date = try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {",
+    "original": "true",
+    "replacement": "false",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/ClaudeHarness/Mapping/ClaudeEventMapper.swift",
+    "code": "isError: line[\"is_error\"]?.boolValue ?? false,",
+    "original": "false",
+    "replacement": "true",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/ClaudeHarness/Session/ClaudeSession.swift",
+    "code": "guard id == ClaudeKnobs.mode,",
+    "original": "==",
+    "replacement": "!=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Command/CommandCatalog.swift",
+    "code": "skills.isEmpty && servers.isEmpty && !supportsCompact",
+    "original": "&&",
+    "replacement": "||",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Command/CommandCatalog.swift",
+    "code": "skills.isEmpty && servers.isEmpty && !supportsCompact",
+    "original": "&&",
+    "replacement": "||",
+    "occurrence": 1
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Parsing/ProcessTransport.swift",
+    "code": "hasFinished = true",
+    "original": "true",
+    "replacement": "false",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Parsing/ProcessTransport.swift",
+    "code": "hasFramingFailed = true",
+    "original": "true",
+    "replacement": "false",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Parsing/ProcessTransport.swift",
+    "code": "if !process.isRunning { return true }",
+    "original": "true",
+    "replacement": "false",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Parsing/ProcessTransport.swift",
+    "code": "if count < 0, errno == EINTR { continue }",
+    "original": "<",
+    "replacement": ">=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Parsing/ProcessTransport.swift",
+    "code": "if count < 0, errno == EINTR { continue }",
+    "original": "==",
+    "replacement": "!=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Session/ContextUsage.swift",
+    "code": "public init(name: String, group: String? = nil, tokens: Int, isDeferred: Bool = false) {",
+    "original": "false",
+    "replacement": "true",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Session/Permission/PermissionOption.swift",
+    "code": "public var isAllow: Bool { kind == .allowOnce || kind == .allowAlways }",
+    "original": "==",
+    "replacement": "!=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Session/Permission/PermissionOption.swift",
+    "code": "public var isAllow: Bool { kind == .allowOnce || kind == .allowAlways }",
+    "original": "==",
+    "replacement": "!=",
+    "occurrence": 1
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Session/Permission/PermissionOption.swift",
+    "code": "public var isAllow: Bool { kind == .allowOnce || kind == .allowAlways }",
+    "original": "||",
+    "replacement": "&&",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Transcript/FileTranscriptStore.swift",
+    "code": "? $0.id.uuidString < $1.id.uuidString",
+    "original": "<",
+    "replacement": ">=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Transcript/FileTranscriptStore.swift",
+    "code": "if errno == EINTR { continue }",
+    "original": "==",
+    "replacement": "!=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/HarnessCore/Transcript/FileTranscriptStore.swift",
+    "code": "var openLine = false",
+    "original": "false",
+    "replacement": "true",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Mapping/OpenCodeEventMapper.swift",
+    "code": "if contextTokens == 0, read > 0 {",
+    "original": ">",
+    "replacement": "<=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Mapping/OpenCodeEventMapper.swift",
+    "code": "if let open = pending, open.id != id || open.isThought != isThought {",
+    "original": "||",
+    "replacement": "&&",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Mapping/OpenCodeEventMapper.swift",
+    "code": "isError: stopReason == \"refusal\" || stopReason == \"error\",",
+    "original": "||",
+    "replacement": "&&",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Mapping/OpenCodeEventMapper.swift",
+    "code": "let context = contextTokens > 0 ? contextTokens : nil",
+    "original": ">",
+    "replacement": "<=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "\"readTextFile\": .bool(false),",
+    "original": "false",
+    "replacement": "true",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "\"terminal\": .bool(false),",
+    "original": "false",
+    "replacement": "true",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "\"writeTextFile\": .bool(false),",
+    "original": "false",
+    "replacement": "true",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "== CommandCatalog.compactCommand {",
+    "original": "==",
+    "replacement": "!=",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "catalog: CommandCatalog(supportsCompact: true))))",
+    "original": "true",
+    "replacement": "false",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "defer { isReplaying = false; _ = mapper.flush() }",
+    "original": "false",
+    "replacement": "true",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "if !turn.text.isEmpty || blocks.isEmpty {",
+    "original": "||",
+    "replacement": "&&",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "isReplaying = true",
+    "original": "true",
+    "replacement": "false",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "let replied = (try? await channel.refuse(id, Self.refusalMessage)) != nil",
+    "original": "!=",
+    "replacement": "==",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "private var isReplaying = false",
+    "original": "false",
+    "replacement": "true",
+    "occurrence": 0
+  },
+  {
+    "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Session/OpenCodeSession.swift",
+    "code": "usage: .zero, stopReason: String(describing: error), isError: true)),",
+    "original": "true",
+    "replacement": "false",
+    "occurrence": 0
+  }
+]

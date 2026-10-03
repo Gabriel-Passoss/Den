@@ -21,17 +21,17 @@ private func mapFixture(_ name: String) throws -> MappedOutput {
 
 private func kindName(_ kind: TranscriptEntry.Kind) -> String {
     switch kind {
-    case .userMessage: return "userMessage"
-    case .assistantText: return "assistantText"
-    case .assistantThinking: return "assistantThinking"
-    case .toolCall: return "toolCall"
-    case .toolResult: return "toolResult"
-    case .permissionRequest: return "permissionRequest"
-    case .permissionDecision: return "permissionDecision"
-    case .systemNotice: return "systemNotice"
-    case .turnResult: return "turnResult"
-    case .contextCompacted: return "contextCompacted"
-    case .unrecognized(let discriminator, _): return "unrecognized(\(discriminator))"
+    case .userMessage: "userMessage"
+    case .assistantText: "assistantText"
+    case .assistantThinking: "assistantThinking"
+    case .toolCall: "toolCall"
+    case .toolResult: "toolResult"
+    case .permissionRequest: "permissionRequest"
+    case .permissionDecision: "permissionDecision"
+    case .systemNotice: "systemNotice"
+    case .turnResult: "turnResult"
+    case .contextCompacted: "contextCompacted"
+    case .unrecognized(let discriminator, _): "unrecognized(\(discriminator))"
     }
 }
 
