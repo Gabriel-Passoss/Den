@@ -3,7 +3,7 @@ import Foundation
 @testable import Den
 
 @Test func theChecksSummaryIgnoresSkippedOnes() {
-    #expect(PullRequestStatus.checks(makePullRequest()) == ChecksSummary.none)
+    #expect(PullRequestStatus.checks(makePullRequest()) == ChecksSummary.absent)
     #expect(PullRequestStatus.checks(makePullRequest(checks: [.passed, .skipped, .passed]))
             == .passing(total: 2))
     #expect(PullRequestStatus.checks(makePullRequest(checks: [.passed, .running, .queued]))

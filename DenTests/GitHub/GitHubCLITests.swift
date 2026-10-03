@@ -2,11 +2,14 @@ import Testing
 import Foundation
 @testable import Den
 
-private func fakeGh(_ body: String) throws -> URL {
-    let folder = try makeTree(["bin"])
-    let file = folder.appending(path: "bin/gh")
+private func install(_ body: String, at file: URL) throws {
     try ("#!/bin/sh\n" + body + "\n").write(to: file, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+}
+
+private func fakeGh(_ body: String) throws -> URL {
+    let file = try makeTree(["bin"]).appending(path: "bin/gh")
+    try install(body, at: file)
     return file
 }
 
@@ -31,6 +34,16 @@ private func shell(path: String) -> ShellEnvironment {
 }
 
 private let plainPath = "/usr/bin:/bin"
+
+private let loggedOut = healthy.replacingOccurrences(of: "auth) exit 0", with: "auth) exit 1")
+
+private func configured(_ gh: URL) -> GitHubCLI {
+    GitHubCLI(configured: gh.path, shell: shell(path: plainPath), candidates: [])
+}
+
+private func isReady(_ cli: GitHubCLI, at gh: URL) async -> Bool {
+    await cli.status(hosts: ["github.com"]).state == .ready(path: gh.path, version: "9.9.9")
+}
 
 @Test func withoutAnyGhTheStateIsMissing() async {
     let cli = GitHubCLI(shell: shell(path: plainPath), candidates: [])
@@ -65,10 +78,9 @@ private let plainPath = "/usr/bin:/bin"
 }
 
 @Test func aMissingLoginIsReportedForGitHub() async throws {
-    let gh = try fakeGh(healthy.replacingOccurrences(of: "auth) exit 0", with: "auth) exit 1"))
+    let gh = try fakeGh(loggedOut)
     defer { cleanUp(gh) }
-    let cli = GitHubCLI(configured: gh.path, shell: shell(path: plainPath), candidates: [])
-    #expect(await cli.status(hosts: ["github.com"]).state == .notLoggedIn(host: "github.com"))
+    #expect(await configured(gh).status(hosts: ["github.com"]).state == .notLoggedIn(host: "github.com"))
 }
 
 @Test func anEnterpriseHostWithoutLoginIsLeftOut() async throws {
@@ -144,22 +156,20 @@ private let plainPath = "/usr/bin:/bin"
     let cli = GitHubCLI(shell: shell(path: plainPath), candidates: [gh.path])
     #expect(await cli.status(hosts: ["github.com"]).state == .missing)
 
-    try ("#!/bin/sh\n" + healthy + "\n").write(to: gh, atomically: true, encoding: .utf8)
-    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: gh.path)
+    try install(healthy, at: gh)
     await cli.refresh()
 
-    #expect(await cli.status(hosts: ["github.com"]).state == .ready(path: gh.path, version: "9.9.9"))
+    #expect(await isReady(cli, at: gh))
 }
 
 @Test func aRefreshNoticesALoginMadeMeanwhile() async throws {
-    let gh = try fakeGh(healthy.replacingOccurrences(of: "auth) exit 0", with: "auth) exit 1"))
+    let gh = try fakeGh(loggedOut)
     defer { cleanUp(gh) }
-    let cli = GitHubCLI(configured: gh.path, shell: shell(path: plainPath), candidates: [])
+    let cli = configured(gh)
     #expect(await cli.status(hosts: ["github.com"]).state == .notLoggedIn(host: "github.com"))
 
-    try ("#!/bin/sh\n" + healthy + "\n").write(to: gh, atomically: true, encoding: .utf8)
-    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: gh.path)
+    try install(healthy, at: gh)
     await cli.refresh()
 
-    #expect(await cli.status(hosts: ["github.com"]).state == .ready(path: gh.path, version: "9.9.9"))
+    #expect(await isReady(cli, at: gh))
 }

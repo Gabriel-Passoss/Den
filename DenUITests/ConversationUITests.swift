@@ -116,12 +116,19 @@ final class ConversationUITests: XCTestCase {
         require(badge, in: app)
         XCTAssertEqual(badge.label, "feat/saudacao-curta")
         require(text(containing: "⑂ feat/saudacao-curta", in: app), in: app)
-        XCTAssertTrue(claude.launches.last?.directory
-            .hasSuffix("/worktrees/project/feat-saudacao-curta") == true,
-            "launched in \(claude.launches.last?.directory ?? "nowhere")")
+        let directory = claude.launches.last?.directory ?? ""
+        XCTAssertTrue(directory.hasSuffix("/worktrees/project/feat-saudacao-curta"), "launched in \(directory)")
     }
 
-    private let failingPullRequest = #"[{"number":80,"title":"Diga apenas OK","url":"https://github.com/den/fixture/pull/80","state":"OPEN","isDraft":false,"additions":3,"deletions":1,"baseRefName":"main","reviewDecision":"","mergeable":"MERGEABLE","updatedAt":"2026-10-01T10:01:00Z","statusCheckRollup":[{"__typename":"CheckRun","name":"lint","workflowName":"CI","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/den/fixture/actions/runs/1","startedAt":"2026-10-01T10:00:00Z","completedAt":"2026-10-01T10:00:42Z"}]}]"#
+    private let failingPullRequest = #"""
+        [{"number":80,"title":"Diga apenas OK","url":"https://github.com/den/fixture/pull/80",
+          "state":"OPEN","isDraft":false,"additions":3,"deletions":1,"baseRefName":"main",
+          "reviewDecision":"","mergeable":"MERGEABLE","updatedAt":"2026-10-01T10:01:00Z",
+          "statusCheckRollup":[{"__typename":"CheckRun","name":"lint","workflowName":"CI",
+          "status":"COMPLETED","conclusion":"FAILURE",
+          "detailsUrl":"https://github.com/den/fixture/actions/runs/1",
+          "startedAt":"2026-10-01T10:00:00Z","completedAt":"2026-10-01T10:00:42Z"}]}]
+        """#
 
     @MainActor
     func testThePullRequestOfTheTaskShowsAboveTheComposerAndInTheSidebar() throws {

@@ -36,7 +36,7 @@ nonisolated struct TaskWorktreeStore: Sendable {
                 UUID(uuidString: key).map { ($0, entry) }
             })
         } catch {
-            setAside(because: error)
+            UnreadableFile.setAside(url, holding: "worktrees de tarefa", because: error)
             return [:]
         }
     }
@@ -50,13 +50,5 @@ nonisolated struct TaskWorktreeStore: Sendable {
             ($0.key.uuidString, $0.value)
         }))
         try encoder.encode(file).write(to: url, options: .atomic)
-    }
-
-    private func setAside(because error: Error) {
-        let stamp = Int(Date().timeIntervalSince1970)
-        let target = url.deletingLastPathComponent()
-            .appending(path: "task-worktrees.corrupt-\(stamp).json")
-        try? FileManager.default.moveItem(at: url, to: target)
-        print("worktrees de tarefa ilegíveis em \(url.path): \(error)")
     }
 }

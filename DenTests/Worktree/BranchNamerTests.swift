@@ -55,9 +55,9 @@ import Foundation
     #expect(BranchNamer.name(for: "ns-1472 algo", prefix: "den/") == "den/ns-1472-algo")
 }
 
-@Test func theFolderDropsThePrefixAndSlashes() {
-    #expect(BranchNamer.folder(for: "den/NS-1-x", prefix: "den/") == "NS-1-x")
-    #expect(BranchNamer.folder(for: "feat/a/b", prefix: "den/") == "feat-a-b")
+@Test func theFolderTurnsSlashesIntoDashes() {
+    #expect(BranchNamer.folder(for: "feat/NS-1-x") == "feat-NS-1-x")
+    #expect(BranchNamer.folder(for: "feat/a/b") == "feat-a-b")
 }
 
 @Test func aGivenStemGetsThePrefixAndTheNextFreeSuffix() {

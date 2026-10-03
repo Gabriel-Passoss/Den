@@ -38,7 +38,7 @@ nonisolated enum BranchNamer {
 
     static func stem(for message: String) -> String? {
         var text = message
-        text = text.replacing(#/https?://\S+/#, with: " ")
+        text = text.replacing(#/https?:\/\/\S+/#, with: " ")
         text = text.replacing(#/(?m)^\s*/\S+/#, with: " ")
         text = text.replacing(#/@\S+/#, with: " ")
         var parts: [String] = []
@@ -63,10 +63,8 @@ nonisolated enum BranchNamer {
         return parts.isEmpty ? nil : parts.joined(separator: "-")
     }
 
-    static func folder(for branch: String, prefix: String) -> String {
-        let bare = !prefix.isEmpty && branch.hasPrefix(prefix)
-            ? String(branch.dropFirst(prefix.count)) : branch
-        return bare.replacingOccurrences(of: "/", with: "-")
+    static func folder(for branch: String) -> String {
+        branch.replacingOccurrences(of: "/", with: "-")
     }
 
     static func randomSuffix() -> String {

@@ -28,7 +28,7 @@ struct ChecksRing: View {
 
     private var arc: Double {
         switch summary {
-        case .none: 0
+        case .absent: 0
         case .running: 0.3
         case .passing: 1
         case .failing(let passed, let total): max(Double(passed) / Double(max(total, 1)), 0.04)
@@ -39,7 +39,7 @@ struct ChecksRing: View {
 extension ChecksSummary {
     var color: Color {
         switch self {
-        case .none: Theme.textTertiary
+        case .absent: Theme.textTertiary
         case .running: Theme.modified
         case .passing: Theme.added
         case .failing: Theme.removed
@@ -48,7 +48,7 @@ extension ChecksSummary {
 
     var count: String {
         switch self {
-        case .none: ""
+        case .absent: ""
         case .running(let passed, let total), .failing(let passed, let total): "\(passed)/\(total)"
         case .passing(let total): "\(total)/\(total)"
         }
@@ -72,8 +72,6 @@ struct ChecksPanel: View {
     let checkedAt: Date?
     var refresh: () -> Void
 
-    @State private var listHeight: CGFloat = 0
-
     private static let maxListHeight: CGFloat = 320
 
     var body: some View {
@@ -95,18 +93,13 @@ struct ChecksPanel: View {
             .frame(height: 8)
             .background(Theme.borderStrong)
             .clipShape(Capsule())
-            ScrollView {
+            FittedScroll(maxHeight: Self.maxListHeight) {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(Array(checks.enumerated()), id: \.offset) { _, check in
                         CheckRow(check: check)
                     }
                 }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                    listHeight = $0
-                }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(height: min(max(listHeight, 1), Self.maxListHeight))
             HStack {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(PullRequestStatus.updatedLabel(since: checkedAt, now: context.date))

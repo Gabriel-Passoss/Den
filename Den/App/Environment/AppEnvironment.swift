@@ -16,6 +16,19 @@ extension AppEnvironment {
     var ghOverride: String? { nil }
 }
 
+protocol RootedEnvironment: AppEnvironment {
+    var root: URL { get }
+}
+
+extension RootedEnvironment {
+    var sessionsRoot: URL { root.appending(path: "sessions") }
+    var attachmentsRoot: URL { root.appending(path: "attachments") }
+    var runConfigurationsFile: URL { root.appending(path: "run-configurations.json") }
+    var worktreesRoot: URL { root.appending(path: "worktrees") }
+    var worktreesFile: URL { root.appending(path: "task-worktrees.json") }
+    var workingDirectory: URL { root.appending(path: "project") }
+}
+
 #if DEBUG
 let isDebugBuild = true
 #else

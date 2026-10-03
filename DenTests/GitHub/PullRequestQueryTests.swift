@@ -87,7 +87,7 @@ private func parse(_ text: String) throws -> PullRequest? {
     #expect(try parse("[\(entry(number: 1, state: "CLOSED", updatedAt: "2026-09-30T12:00:00Z"))]")?.state == .closed)
     let draft = try #require(try parse("[\(entry(number: 1, state: "OPEN", updatedAt: "2026-09-30T12:00:00Z", isDraft: true))]"))
     #expect(draft.isDraft)
-    #expect(draft.review == .none)
+    #expect(draft.review == .undecided)
     #expect(draft.mergeable == .unknown)
     #expect(draft.checks.isEmpty)
 }
@@ -110,7 +110,7 @@ private func parse(_ text: String) throws -> PullRequest? {
     }
     #expect(try review("CHANGES_REQUESTED") == .changesRequested)
     #expect(try review("REVIEW_REQUIRED") == .required)
-    #expect(try review("") == PullRequest.Review.none)
+    #expect(try review("") == PullRequest.Review.undecided)
     #expect(try parse(rich.replacingOccurrences(of: "\"MERGEABLE\"", with: "\"CONFLICTING\""))?
         .mergeable == .conflicting)
 }

@@ -1,13 +1,15 @@
 import Foundation
 
-nonisolated enum WorktreePlanner {
-    static func plan(layout: WorktreeLayout, sessionDirectory: URL, chosen: Set<String>,
-                     branch: String, prefix: String, root: URL, entries: [URL]) -> WorktreePlan {
-        let folder = BranchNamer.folder(for: branch, prefix: prefix)
+nonisolated struct WorktreePlanner {
+    let root: URL
+
+    func plan(layout: WorktreeLayout, sessionDirectory: URL, chosen: Set<String>,
+              branch: String, entries: [URL]) -> WorktreePlan {
+        let folder = BranchNamer.folder(for: branch)
         switch layout {
         case .single(let repo):
             let worktree = root.appending(path: repo.name).appending(path: folder)
-            let relative = relativePath(of: sessionDirectory, under: repo.toplevel)
+            let relative = Self.relativePath(of: sessionDirectory, under: repo.toplevel)
             return WorktreePlan(
                 branch: branch,
                 sessionDirectory: relative.isEmpty ? worktree : worktree.appending(path: relative),
@@ -15,10 +17,10 @@ nonisolated enum WorktreePlanner {
                 entries: [.init(name: repo.name, main: repo.main, worktree: worktree)],
                 links: [])
         case .multiple(let base, let repos):
-            let mirror = root.appending(path: group(for: base, root: root)).appending(path: folder)
+            let mirror = root.appending(path: group(for: base)).appending(path: folder)
             let planned = repos.filter { chosen.contains($0.id) }.map { repo in
                 WorktreePlan.Entry(name: repo.name, main: repo.main,
-                                   worktree: mirror.appending(path: relativePath(of: repo.toplevel, under: base)))
+                                   worktree: mirror.appending(path: Self.relativePath(of: repo.toplevel, under: base)))
             }
             let links = entries.map(\.standardizedFileURL).filter { entry in
                 let name = entry.lastPathComponent
@@ -35,7 +37,7 @@ nonisolated enum WorktreePlanner {
         }
     }
 
-    static func group(for folder: URL, root: URL) -> String {
+    func group(for folder: URL) -> String {
         let path = folder.standardizedFileURL.path
         let base = root.standardizedFileURL.path + "/"
         if path.hasPrefix(base), let first = path.dropFirst(base.count).split(separator: "/").first {

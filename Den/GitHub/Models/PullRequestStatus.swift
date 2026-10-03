@@ -7,14 +7,14 @@ nonisolated enum PullRequestTone: Int, Comparable, Sendable {
 }
 
 nonisolated enum ChecksSummary: Equatable, Sendable {
-    case none
+    case absent
     case running(passed: Int, total: Int)
     case passing(total: Int)
     case failing(passed: Int, total: Int)
 
     var key: String {
         switch self {
-        case .none: "none"
+        case .absent: "none"
         case .running: "running"
         case .passing: "passing"
         case .failing: "failing"
@@ -25,7 +25,7 @@ nonisolated enum ChecksSummary: Equatable, Sendable {
 nonisolated enum PullRequestStatus {
     static func checks(_ pr: PullRequest) -> ChecksSummary {
         let counted = pr.checks.filter { $0.state != .skipped }
-        guard !counted.isEmpty else { return .none }
+        guard !counted.isEmpty else { return .absent }
         let passed = counted.filter { $0.state == .passed }.count
         if counted.contains(where: { $0.state == .failed }) {
             return .failing(passed: passed, total: counted.count)

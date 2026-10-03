@@ -121,7 +121,7 @@ struct ChatComposer: View {
     private var statusChip: some View {
         let waiting = chat.pending != nil || chat.pendingQuestion != nil
         let interrupting = chat.isBusy && keys.escArmed
-        let note = worktreeNote
+        let note = worktrees.note(for: chat)
         if !waiting, interrupting || note != nil || (!chat.isBusy && visibleStatus != nil) {
             HStack(spacing: 7) {
                 if interrupting {
@@ -129,16 +129,7 @@ struct ChatComposer: View {
                         .foregroundStyle(Theme.accentSoft)
                     Text("Esc de novo interrompe")
                 } else if let note {
-                    if note.isProgress {
-                        ProgressView().controlSize(.mini)
-                    } else {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(note.tint)
-                    }
-                    Text(note.text)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(maxWidth: 520)
+                    WorktreeNoteLabel(note: note)
                 } else if let status = visibleStatus {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(Theme.modified)
@@ -315,27 +306,6 @@ struct ChatComposer: View {
         } else {
             folderChip(compact: compact).disabled(worktrees.isCreating(chat.sessionID))
         }
-    }
-
-    private struct Note {
-        let text: String
-        let isProgress: Bool
-        let tint: Color
-    }
-
-    private var worktreeNote: Note? {
-        switch worktrees.phase(for: chat.sessionID) {
-        case .creating(let step): return Note(text: step, isProgress: true, tint: Theme.accentSoft)
-        case .failed(let message): return Note(text: message, isProgress: false, tint: Theme.modified)
-        case nil: break
-        }
-        if let blocker = worktrees.blocker(for: chat) {
-            return Note(text: blocker, isProgress: false, tint: Theme.removed)
-        }
-        if let warning = worktrees.warnings[chat.sessionID] {
-            return Note(text: warning, isProgress: false, tint: Theme.modified)
-        }
-        return nil
     }
 
     private func folderChip(compact: Bool) -> some View {

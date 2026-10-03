@@ -66,16 +66,8 @@ private struct GitHubSettings: View {
     }
 
     private func choose() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.prompt = "Usar"
-        panel.directoryURL = URL(fileURLWithPath: "/opt/homebrew/bin")
-        guard panel.runModal() == .OK, let url = panel.url else { return }
         Task {
-            guard await GitHubCLI.version(at: url.path) != nil else { return }
-            path = url.path
-            await monitor.reconfigure(path: url.path)
+            if let chosen = await GhPathPicker.pick(for: monitor) { path = chosen }
         }
     }
 }

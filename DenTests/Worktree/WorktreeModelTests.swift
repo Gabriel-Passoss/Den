@@ -12,6 +12,12 @@ private struct Bench {
     let checkout: URL
     let defaults: UserDefaults
 
+    func launched(_ text: String = "ajusta o login") async throws -> TaskWorktree {
+        worktrees.setEnabled(true, for: chat)
+        await worktrees.launch(chat, text: text)
+        return try #require(worktrees.worktree(for: chat.sessionID))
+    }
+
     func chat(in directory: URL) -> ChatModel {
         ChatModel(store: FileTranscriptStore(root: scratch.appending(path: "sessions")),
                   workingDirectory: directory, harness: harness.id,
@@ -285,9 +291,7 @@ private func gatedMaker(_ gate: Gate) -> WorktreeMaker {
 @MainActor
 @Test func aRenameMadeByTheAgentMovesTheSessionAndItsRecord() async throws {
     try await withBench { bench in
-        bench.worktrees.setEnabled(true, for: bench.chat)
-        await bench.worktrees.launch(bench.chat, text: "ajusta o login")
-        let made = try #require(bench.worktrees.worktree(for: bench.chat.sessionID))
+        let made = try await bench.launched()
         let old = try #require(made.repos.first?.worktree)
         let moved = old.deletingLastPathComponent().appending(path: "feat-fix-sign-in")
         try await runGit(["branch", "-m", made.branch, "feat/fix-sign-in"], in: bench.checkout)
@@ -308,9 +312,7 @@ private func gatedMaker(_ gate: Gate) -> WorktreeMaker {
 @MainActor
 @Test func aBranchRenameAloneRefreshesTheSessionBranch() async throws {
     try await withBench { bench in
-        bench.worktrees.setEnabled(true, for: bench.chat)
-        await bench.worktrees.launch(bench.chat, text: "ajusta o login")
-        let made = try #require(bench.worktrees.worktree(for: bench.chat.sessionID))
+        let made = try await bench.launched()
         let folder = bench.chat.workingDirectory
         try await runGit(["branch", "-m", made.branch, "feat/fix-sign-in"], in: bench.checkout)
 

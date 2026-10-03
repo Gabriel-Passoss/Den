@@ -60,8 +60,8 @@ final class PullRequestMonitor {
         guard loop == nil else { return }
         loop = Task { [weak self] in
             while !Task.isCancelled {
-                guard let monitor = self else { return }
-                Task { await monitor.tick() }
+                guard let self else { return }
+                Task { await self.tick() }
                 try? await Task.sleep(for: .seconds(1))
             }
         }

@@ -129,9 +129,9 @@ final class WorktreeModel {
         let branch = BranchNamer.name(stem: suggestion.stem, prefix: suggestion.type + "/") { name in
             owner(of: name, for: chat) != nil || folderExists(name, for: chat)
         }
-        let plan = WorktreePlanner.plan(layout: layout, sessionDirectory: chat.workingDirectory,
-                                        chosen: draft(for: chat).chosen, branch: branch,
-                                        prefix: "", root: root, entries: entries)
+        let plan = WorktreePlanner(root: root).plan(layout: layout, sessionDirectory: chat.workingDirectory,
+                                                    chosen: draft(for: chat).chosen, branch: branch,
+                                                    entries: entries)
         do {
             let made = try await maker.make(plan) { [weak self] progress in
                 await self?.show(progress, for: id)
@@ -226,10 +226,10 @@ final class WorktreeModel {
         let group: String
         switch layout(for: chat) {
         case .single(let repo): group = repo.name
-        case .multiple(let base, _): group = WorktreePlanner.group(for: base, root: root)
+        case .multiple(let base, _): group = WorktreePlanner(root: root).group(for: base)
         case nil: return false
         }
-        let folder = BranchNamer.folder(for: name, prefix: "")
+        let folder = BranchNamer.folder(for: name)
         return FileManager.default.fileExists(atPath: root.appending(path: group).appending(path: folder).path)
     }
 }

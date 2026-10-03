@@ -13,6 +13,7 @@ nonisolated struct BranchSuggester: Sendable {
     var run: Run = { executable, arguments, timeout in
         await TimedProcess.run(executable, arguments, timeout: timeout)
     }
+
     var timeout: Duration = .seconds(20)
 
     static func instruction(for message: String) -> String {

@@ -159,10 +159,9 @@ nonisolated struct WorktreeMaker: Sendable {
         }
         let candidates = (remote.map { ["\($0)/main", "\($0)/master"] } ?? []) + ["main", "master"]
         for candidate in candidates {
-            if await git(["rev-parse", "--verify", "--quiet", candidate + "^{commit}"], repo,
-                         commandTimeout)?.succeeded == true {
-                return candidate
-            }
+            let found = await git(["rev-parse", "--verify", "--quiet", candidate + "^{commit}"], repo,
+                                  commandTimeout)
+            if found?.succeeded == true { return candidate }
         }
         return nil
     }

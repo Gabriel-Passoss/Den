@@ -4,7 +4,7 @@ import HarnessCore
 struct SessionRow: View {
     let summary: SessionSummary
     let indicator: WorkspaceModel.SessionIndicator?
-    var task: TaskBadge? = nil
+    var task: TaskBadge?
     var isSelected = false
     var select: () -> Void
     var rename: (String) -> Void

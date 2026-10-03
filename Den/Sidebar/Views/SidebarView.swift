@@ -304,23 +304,15 @@ struct SidebarView: View {
     }
 
     private func badge(for summary: SessionSummary) -> TaskBadge? {
-        guard let worktree = worktrees.worktree(for: summary.id) else { return nil }
-        let found = monitor.pullRequests(for: summary.id).map(\.pullRequest)
-        guard let worst = PullRequestStatus.worst(found) else {
-            return TaskBadge(detail: "⑂ " + worktree.branch)
+        worktrees.worktree(for: summary.id).map {
+            TaskBadge.make(worktree: $0, pullRequests: monitor.pullRequests(for: summary.id).map(\.pullRequest))
         }
-        let head = found.count == 1 ? "#\(worst.number)" : "\(found.count) PRs"
-        return TaskBadge(tone: PullRequestStatus.tone(worst),
-                         detail: "\(head) · \(PullRequestStatus.label(worst))")
     }
 
     private func hoverLines(for summary: SessionSummary) -> [PaneTip.Line] {
-        guard let worktree = worktrees.worktree(for: summary.id) else { return [] }
-        return monitor.pullRequests(for: summary.id).map { bar in
-            PaneTip.Line(color: PullRequestStatus.tone(bar.pullRequest).color,
-                         text: "\(bar.repo.name) #\(bar.pullRequest.number) · "
-                             + PullRequestStatus.label(bar.pullRequest))
-        } + [PaneTip.Line(color: nil, text: worktree.branch)]
+        worktrees.worktree(for: summary.id).map {
+            PaneTip.Line.task($0, bars: monitor.pullRequests(for: summary.id))
+        } ?? []
     }
 
     private var deleteMessage: String {

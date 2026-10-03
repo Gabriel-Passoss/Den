@@ -19,7 +19,7 @@ nonisolated struct PullRequest: Codable, Equatable, Sendable {
     }
 
     enum Review: String, Codable, Sendable {
-        case none, required, approved, changesRequested
+        case undecided = "none", required, approved, changesRequested
     }
 
     enum Mergeable: String, Codable, Sendable {

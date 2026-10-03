@@ -20,7 +20,6 @@ struct ChatView: View {
     @Environment(RunConfigurationsModel.self) private var runConfigurations
     @Environment(WorktreeModel.self) private var worktrees
     @Environment(PullRequestMonitor.self) private var monitor
-    @AppStorage(GitHubCLI.pathKey) private var ghPath = ""
     @Environment(\.chrome) private var chrome
     let gitChanges: GitChangesModel
 
@@ -350,7 +349,7 @@ struct ChatView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 0) {
-                    taskBars
+                    TaskBars(chat: chat)
                     transientCards
                 }
             }
@@ -421,59 +420,6 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    private var taskBars: some View {
-        let id = chat.sessionID
-        let bars = monitor.bars(for: id)
-        let setup = monitor.setupNeeded(for: id)
-        if setup != nil || !bars.isEmpty {
-            VStack(spacing: 6) {
-                if let setup {
-                    GitHubSetupBar(state: setup, choose: chooseGh,
-                                   retry: { Task { await monitor.reconfigure(path: ghPath.isEmpty ? nil : ghPath) } },
-                                   dismiss: { monitor.hideSetup(for: id) })
-                }
-                ForEach(bars) { bar in
-                    PullRequestBar(repo: bar.repo,
-                                   branch: worktrees.worktree(for: id)?.branch ?? "",
-                                   pullRequest: bar.pullRequest,
-                                   checkedAt: monitor.checkedAt(id, repo: bar.repo),
-                                   refresh: { monitor.refresh(id, repo: bar.repo) },
-                                   dismiss: {
-                                       withAnimation(.easeOut(duration: 0.2)) {
-                                           monitor.dismiss(id, repo: bar.repo)
-                                       }
-                                   })
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-            .padding(.horizontal, 32)
-            .frame(maxWidth: 784)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-            .background {
-                LinearGradient(colors: [Theme.canvas.opacity(0), Theme.canvas],
-                               startPoint: .top, endPoint: .init(x: 0.5, y: 0.25))
-            }
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: bars.map(\.id))
-        }
-    }
-
-    private func chooseGh() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.prompt = "Usar"
-        panel.directoryURL = URL(fileURLWithPath: "/opt/homebrew/bin")
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task {
-            guard await GitHubCLI.version(at: url.path) != nil else { return }
-            ghPath = url.path
-            await monitor.reconfigure(path: url.path)
-        }
-    }
-
-    @ViewBuilder
     private var transientCards: some View {
         if chat.pending != nil || chat.pendingQuestion != nil {
             VStack(spacing: 8) {
@@ -495,15 +441,7 @@ struct ChatView: View {
                     .id(question.id)
                 }
             }
-            .padding(.horizontal, 32)
-            .frame(maxWidth: 784)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-            .background {
-                LinearGradient(colors: [Theme.canvas.opacity(0), Theme.canvas],
-                               startPoint: .top, endPoint: .init(x: 0.5, y: 0.12))
-            }
+            .aboveComposer(fade: 0.12)
         }
     }
 

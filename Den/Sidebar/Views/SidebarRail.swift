@@ -11,6 +11,14 @@ struct PaneTip: Equatable {
     struct Line: Equatable {
         let color: Color?
         let text: String
+
+        static func task(_ worktree: TaskWorktree, bars: [PullRequestMonitor.Bar]) -> [Line] {
+            bars.map { bar in
+                Line(color: PullRequestStatus.tone(bar.pullRequest).color,
+                     text: "\(bar.repo.name) #\(bar.pullRequest.number) · "
+                         + PullRequestStatus.label(bar.pullRequest))
+            } + [Line(color: nil, text: worktree.branch)]
+        }
     }
 }
 

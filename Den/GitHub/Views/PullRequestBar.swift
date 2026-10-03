@@ -46,15 +46,8 @@ struct PullRequestBar: View {
             .buttonStyle(.plain)
             .help("Abrir no GitHub · \(branch)")
             trailing
-            Button(action: dismiss) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Theme.textTertiary)
-                    .iconLabel(size: 24)
-            }
-            .buttonStyle(.denGhost(radius: 6))
-            .help("Dispensar até o PR mudar")
-            .accessibilityLabel("Dispensar")
+            BarDismissButton(action: dismiss)
+                .help("Dispensar até o PR mudar")
         }
         .padding(.leading, 12)
         .padding(.trailing, 6)
@@ -81,7 +74,7 @@ struct PullRequestBar: View {
         if pullRequest.state == .open, !pullRequest.isDraft {
             reviewPill
             diffPill
-            if PullRequestStatus.checks(pullRequest) != .none { checksChip }
+            if PullRequestStatus.checks(pullRequest) != .absent { checksChip }
         } else {
             diffPill
             Text(PullRequestStatus.label(pullRequest))

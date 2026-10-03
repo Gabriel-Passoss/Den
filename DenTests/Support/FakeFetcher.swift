@@ -9,17 +9,14 @@ actor FakeFetcher: PullRequestFetching {
     private(set) var peak = 0
     private(set) var refreshes = 0
     private var state: GitHubCLIState = .ready(path: "/fake/gh", version: "1.0")
-    private var loggedIn: Set<String> = ["github.com"]
-    private var results: [String: FetchResult] = [:]
+    private let loggedIn: Set<String> = ["github.com"]
     private var fallback: FetchResult = .found(nil)
     private var holdingFetches = false
     private var holdingStatus = false
     private var waiting: [CheckedContinuation<Void, Never>] = []
 
     func set(state: GitHubCLIState) { self.state = state }
-    func set(loggedIn: Set<String>) { self.loggedIn = loggedIn }
     func answer(_ result: FetchResult) { fallback = result }
-    func answer(_ result: FetchResult, for directory: String) { results[directory] = result }
     func holdFetches() { holdingFetches = true }
     func holdStatus() { holdingStatus = true }
 
@@ -43,7 +40,7 @@ actor FakeFetcher: PullRequestFetching {
         peak = max(peak, running)
         if holdingFetches { await withCheckedContinuation { waiting.append($0) } }
         running -= 1
-        return results[directory.path] ?? fallback
+        return fallback
     }
 
     func configure(path: String?) async { configured.append(path) }

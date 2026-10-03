@@ -74,7 +74,8 @@ actor GitHubCLI: PullRequestFetching {
         guard let location = await locate() else { return GitHubCLIStatus(state: .missing, hosts: []) }
         var loggedIn: Set<String> = []
         for host in hosts.sorted() {
-            if await isLoggedIn(host, with: location.path) { loggedIn.insert(host) }
+            let isIn = await isLoggedIn(host, with: location.path)
+            if isIn { loggedIn.insert(host) }
         }
         if hosts.contains("github.com"), !loggedIn.contains("github.com") {
             return GitHubCLIStatus(state: .notLoggedIn(host: "github.com"), hosts: loggedIn)

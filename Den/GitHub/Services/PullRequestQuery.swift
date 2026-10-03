@@ -84,7 +84,7 @@ nonisolated enum PullRequestQuery {
         case "APPROVED": .approved
         case "CHANGES_REQUESTED": .changesRequested
         case "REVIEW_REQUIRED": .required
-        default: .none
+        default: .undecided
         }
     }
 

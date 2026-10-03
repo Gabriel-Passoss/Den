@@ -8,6 +8,21 @@ private func temporaryFile() -> URL {
         .appending(path: "task-worktrees.json")
 }
 
+private struct Shelf {
+    let url = temporaryFile()
+    let id = UUID()
+
+    var ledger: TaskLedger { TaskLedger(store: TaskWorktreeStore(url: url)) }
+
+    func write(_ text: String) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: url)
+    }
+
+    func remove() { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+}
+
 func sampleWorktree(branch: String = "den/NS-1-fix") -> TaskWorktree {
     let worktree = URL(fileURLWithPath: "/wt/api/NS-1-fix")
     return TaskWorktree(
@@ -36,28 +51,25 @@ func sampleWorktree(branch: String = "den/NS-1-fix") -> TaskWorktree {
 }
 
 @Test func aCorruptWorktreeFileIsSetAside() throws {
-    let url = temporaryFile()
-    let folder = url.deletingLastPathComponent()
-    defer { try? FileManager.default.removeItem(at: folder) }
-    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-    try Data("{nope".utf8).write(to: url)
+    let shelf = Shelf()
+    defer { shelf.remove() }
+    try shelf.write("{nope")
 
-    #expect(TaskWorktreeStore(url: url).load().isEmpty)
-    let siblings = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+    #expect(TaskWorktreeStore(url: shelf.url).load().isEmpty)
+    let siblings = try FileManager.default.contentsOfDirectory(atPath: shelf.url.deletingLastPathComponent().path)
     #expect(siblings.contains { $0.hasPrefix("task-worktrees.corrupt-") })
 }
 
-@Test func theLedgerWritesThroughAndForgets() throws {
-    let url = temporaryFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let id = UUID()
-    let ledger = TaskLedger(store: TaskWorktreeStore(url: url))
+@Test func theLedgerWritesThroughAndForgets() {
+    let shelf = Shelf()
+    defer { shelf.remove() }
+    let ledger = shelf.ledger
 
-    ledger.record(sampleWorktree(), for: id)
-    #expect(TaskLedger(store: TaskWorktreeStore(url: url)).worktree(for: id) == sampleWorktree())
+    ledger.record(sampleWorktree(), for: shelf.id)
+    #expect(shelf.ledger.worktree(for: shelf.id) == sampleWorktree())
 
-    ledger.forget(id)
-    #expect(TaskLedger(store: TaskWorktreeStore(url: url)).worktree(for: id) == nil)
+    ledger.forget(shelf.id)
+    #expect(shelf.ledger.worktree(for: shelf.id) == nil)
 }
 
 @Test func aWorktreeNamesItsFolderAndLocation() {
@@ -72,78 +84,64 @@ func sampleWorktree(branch: String = "den/NS-1-fix") -> TaskWorktree {
 }
 
 @Test func aFileFromTheFirstDeliveryStillLoads() throws {
-    let url = temporaryFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    let id = UUID()
-    let json = """
-        {"version": 1, "sessions": {"\(id.uuidString)": {"worktree": {"branch": "den/x",
+    let shelf = Shelf()
+    defer { shelf.remove() }
+    try shelf.write("""
+        {"version": 1, "sessions": {"\(shelf.id.uuidString)": {"worktree": {"branch": "den/x",
          "sessionDirectory": "file:///wt/api/x", "repos": []}}}}
-        """
-    try Data(json.utf8).write(to: url)
+        """)
 
-    let entry = try #require(TaskWorktreeStore(url: url).load()[id])
+    let entry = try #require(TaskWorktreeStore(url: shelf.url).load()[shelf.id])
 
     #expect(entry.worktree.branch == "den/x")
     #expect(entry.pullRequests.isEmpty)
     #expect(entry.dismissed.isEmpty)
 }
 
-@Test func theLedgerKeepsPullRequestsAndDismissals() throws {
-    let url = temporaryFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let id = UUID()
+@Test func theLedgerKeepsPullRequestsAndDismissals() {
+    let shelf = Shelf()
+    defer { shelf.remove() }
     let path = "/wt/api/NS-1-fix"
-    let ledger = TaskLedger(store: TaskWorktreeStore(url: url))
-    ledger.record(sampleWorktree(), for: id)
+    let ledger = shelf.ledger
+    ledger.record(sampleWorktree(), for: shelf.id)
 
-    ledger.setPullRequest(makePullRequest(number: 80), for: id, worktree: path)
-    ledger.dismiss(id, worktree: path, signature: "open|false|none|none|mergeable")
+    ledger.setPullRequest(makePullRequest(number: 80), for: shelf.id, worktree: path)
+    ledger.dismiss(shelf.id, worktree: path, signature: "open|false|none|none|mergeable")
 
-    let reopened = TaskLedger(store: TaskWorktreeStore(url: url))
-    #expect(reopened.pullRequests(for: id)[path]?.number == 80)
-    #expect(reopened.dismissedSignature(for: id, worktree: path) == "open|false|none|none|mergeable")
+    let reopened = shelf.ledger
+    #expect(reopened.pullRequests(for: shelf.id)[path]?.number == 80)
+    #expect(reopened.dismissedSignature(for: shelf.id, worktree: path) == "open|false|none|none|mergeable")
 
-    ledger.setPullRequest(nil, for: id, worktree: path)
-    #expect(TaskLedger(store: TaskWorktreeStore(url: url)).pullRequests(for: id).isEmpty)
+    ledger.setPullRequest(nil, for: shelf.id, worktree: path)
+    #expect(shelf.ledger.pullRequests(for: shelf.id).isEmpty)
 }
 
-@Test func aMovedWorktreeKeepsItsPullRequestAndDismissalUnderTheNewPath() throws {
-    let url = temporaryFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let id = UUID()
-    let ledger = TaskLedger(store: TaskWorktreeStore(url: url))
-    ledger.record(sampleWorktree(), for: id)
-    ledger.setPullRequest(makePullRequest(number: 80), for: id, worktree: "/wt/api/NS-1-fix")
-    ledger.dismiss(id, worktree: "/wt/api/NS-1-fix", signature: "open")
+@Test func aMovedWorktreeKeepsItsPullRequestAndDismissalUnderTheNewPath() {
+    let shelf = Shelf()
+    defer { shelf.remove() }
+    let ledger = shelf.ledger
+    ledger.record(sampleWorktree(), for: shelf.id)
+    ledger.setPullRequest(makePullRequest(number: 80), for: shelf.id, worktree: "/wt/api/NS-1-fix")
+    ledger.dismiss(shelf.id, worktree: "/wt/api/NS-1-fix", signature: "open")
     var moved = sampleWorktree(branch: "fix/NS-1-login")
     moved.repos[0].worktree = URL(fileURLWithPath: "/wt/api/fix-NS-1-login")
     moved.sessionDirectory = URL(fileURLWithPath: "/wt/api/fix-NS-1-login/apps/web")
 
-    ledger.update(moved, for: id)
+    ledger.update(moved, for: shelf.id)
 
-    let reopened = TaskLedger(store: TaskWorktreeStore(url: url))
-    #expect(reopened.worktree(for: id) == moved)
-    #expect(reopened.pullRequests(for: id).mapValues(\.number) == ["/wt/api/fix-NS-1-login": 80])
-    #expect(reopened.dismissedSignature(for: id, worktree: "/wt/api/fix-NS-1-login") == "open")
-    #expect(reopened.dismissedSignature(for: id, worktree: "/wt/api/NS-1-fix") == nil)
+    let reopened = shelf.ledger
+    #expect(reopened.worktree(for: shelf.id) == moved)
+    #expect(reopened.pullRequests(for: shelf.id).mapValues(\.number) == ["/wt/api/fix-NS-1-login": 80])
+    #expect(reopened.dismissedSignature(for: shelf.id, worktree: "/wt/api/fix-NS-1-login") == "open")
+    #expect(reopened.dismissedSignature(for: shelf.id, worktree: "/wt/api/NS-1-fix") == nil)
 }
 
-@Test func updatingAnUnknownSessionRecordsNothing() throws {
-    let url = temporaryFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let ledger = TaskLedger(store: TaskWorktreeStore(url: url))
+@Test func aRecordForAnUnknownSessionIsNeverInvented() {
+    let shelf = Shelf()
+    defer { shelf.remove() }
+    let ledger = shelf.ledger
 
     ledger.update(sampleWorktree(), for: UUID())
-
-    #expect(ledger.entries.isEmpty)
-}
-
-@Test func aPullRequestForAnUnknownSessionIsIgnored() throws {
-    let url = temporaryFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let ledger = TaskLedger(store: TaskWorktreeStore(url: url))
-
     ledger.setPullRequest(makePullRequest(), for: UUID(), worktree: "/wt/x")
 
     #expect(ledger.entries.isEmpty)

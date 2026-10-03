@@ -7,17 +7,24 @@ private func scratchFolder() throws -> URL {
 }
 
 private func singlePlan(_ checkout: URL, branch: String, root: URL) -> WorktreePlan {
-    WorktreePlanner.plan(layout: .single(RepoCandidate(toplevel: checkout)),
-                         sessionDirectory: checkout, chosen: [], branch: branch,
-                         prefix: "den/", root: root, entries: [])
+    WorktreePlanner(root: root).plan(layout: .single(RepoCandidate(toplevel: checkout)),
+                                     sessionDirectory: checkout, chosen: [], branch: branch, entries: [])
 }
 
 private func severalPlan(_ folder: URL, branch: String, root: URL) throws -> WorktreePlan {
     let layout = try #require(WorktreeLayout.detect(folder))
     let entries = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
-    return WorktreePlanner.plan(layout: layout, sessionDirectory: folder,
-                                chosen: Set(layout.repos.map(\.id)), branch: branch,
-                                prefix: "den/", root: root, entries: entries)
+    return WorktreePlanner(root: root).plan(layout: layout, sessionDirectory: folder,
+                                            chosen: Set(layout.repos.map(\.id)), branch: branch,
+                                            entries: entries)
+}
+
+private func makeSeveral(in scratch: URL, repos: [String]) async throws -> URL {
+    let folder = scratch.appending(path: "scalemed")
+    for repo in repos {
+        try await makeRepository(at: folder.appending(path: repo), scratch: scratch)
+    }
+    return folder
 }
 
 @Test func aWorktreeStartsFromTheFreshDefaultBranchWithoutUpstream() async throws {
@@ -29,29 +36,29 @@ private func severalPlan(_ folder: URL, branch: String, root: URL) throws -> Wor
     let newest = try await runGit(["rev-parse", "HEAD"], in: repo.seed)
 
     let made = try await WorktreeMaker().make(
-        singlePlan(repo.checkout, branch: "den/task", root: scratch.appending(path: "worktrees")))
+        singlePlan(repo.checkout, branch: "feat/task", root: scratch.appending(path: "worktrees")))
 
-    let worktree = scratch.appending(path: "worktrees/api/task")
+    let worktree = scratch.appending(path: "worktrees/api/feat-task")
     #expect(made.worktree.repos.map(\.worktree.path) == [worktree.path])
     #expect(made.worktree.repos.first?.base == "origin/main")
     #expect(made.worktree.repos.first?.remote == nil)
     #expect(made.worktree.repos.first?.gitDirectory?.resolvingSymlinksInPath().path
-            == repo.checkout.appending(path: ".git/worktrees/task").resolvingSymlinksInPath().path)
+            == repo.checkout.appending(path: ".git/worktrees/feat-task").resolvingSymlinksInPath().path)
     #expect(made.warnings.isEmpty)
-    #expect(try await runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: worktree) == "den/task")
+    #expect(try await runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: worktree) == "feat/task")
     #expect(try await runGit(["rev-parse", "HEAD"], in: worktree) == newest)
     #expect(!(await gitSucceeds(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
                                 in: worktree)))
 }
 
-@Test func masterIsFoundThroughOriginHead() async throws {
+@Test func anotherDefaultBranchIsFoundThroughOriginHead() async throws {
     let scratch = try scratchFolder()
     defer { try? FileManager.default.removeItem(at: scratch.deletingLastPathComponent()) }
     let repo = try await makeRepository(at: scratch.appending(path: "api"), scratch: scratch,
                                         defaultBranch: "master")
 
     let made = try await WorktreeMaker().make(
-        singlePlan(repo.checkout, branch: "den/task", root: scratch.appending(path: "worktrees")))
+        singlePlan(repo.checkout, branch: "feat/task", root: scratch.appending(path: "worktrees")))
 
     #expect(made.worktree.repos.first?.base == "origin/master")
 }
@@ -65,7 +72,7 @@ private func severalPlan(_ folder: URL, branch: String, root: URL) throws -> Wor
     try await runGit(["commit", "-q", "--allow-empty", "-m", "initial"], in: checkout)
 
     let made = try await WorktreeMaker().make(
-        singlePlan(checkout, branch: "den/task", root: scratch.appending(path: "worktrees")))
+        singlePlan(checkout, branch: "feat/task", root: scratch.appending(path: "worktrees")))
 
     #expect(made.worktree.repos.first?.base == "main")
     #expect(made.warnings.isEmpty)
@@ -79,7 +86,7 @@ private func severalPlan(_ folder: URL, branch: String, root: URL) throws -> Wor
                      in: repo.checkout)
 
     let made = try await WorktreeMaker().make(
-        singlePlan(repo.checkout, branch: "den/task", root: scratch.appending(path: "worktrees")))
+        singlePlan(repo.checkout, branch: "feat/task", root: scratch.appending(path: "worktrees")))
 
     #expect(made.worktree.repos.first?.base == "origin/main")
     #expect(made.warnings.first?.hasPrefix("Sem rede: api partiu de origin/main") == true)
@@ -99,7 +106,7 @@ private func severalPlan(_ folder: URL, branch: String, root: URL) throws -> Wor
     }
 
     let made = try await maker.make(
-        singlePlan(repo.checkout, branch: "den/task", root: scratch.appending(path: "worktrees")))
+        singlePlan(repo.checkout, branch: "feat/task", root: scratch.appending(path: "worktrees")))
 
     #expect(made.warnings.first?.hasPrefix("Sem rede: api") == true)
 }
@@ -107,24 +114,22 @@ private func severalPlan(_ folder: URL, branch: String, root: URL) throws -> Wor
 @Test func severalReposAreMirroredAndTheLooseFilesLinked() async throws {
     let scratch = try scratchFolder()
     defer { try? FileManager.default.removeItem(at: scratch.deletingLastPathComponent()) }
-    let folder = scratch.appending(path: "scalemed")
-    try await makeRepository(at: folder.appending(path: "backend"), scratch: scratch)
-    try await makeRepository(at: folder.appending(path: "apps/frontend"), scratch: scratch)
+    let folder = try await makeSeveral(in: scratch, repos: ["backend", "apps/frontend"])
     try "regras\n".write(to: folder.appending(path: "CLAUDE.md"), atomically: true, encoding: .utf8)
 
     let recorder = ProgressRecorder()
     let made = try await WorktreeMaker().make(
-        try severalPlan(folder, branch: "den/NS-1-fix", root: scratch.appending(path: "worktrees")),
+        try severalPlan(folder, branch: "feat/NS-1-fix", root: scratch.appending(path: "worktrees")),
         progress: { await recorder.add($0) })
     let progress = await recorder.steps
 
-    let mirror = scratch.appending(path: "worktrees/scalemed/NS-1-fix")
+    let mirror = scratch.appending(path: "worktrees/scalemed/feat-NS-1-fix")
     #expect(made.worktree.mirrorRoot?.path == mirror.path)
     #expect(made.worktree.sessionDirectory.path == mirror.path)
     #expect(try await runGit(["rev-parse", "--abbrev-ref", "HEAD"], in: mirror.appending(path: "backend"))
-            == "den/NS-1-fix")
+            == "feat/NS-1-fix")
     #expect(try await runGit(["rev-parse", "--abbrev-ref", "HEAD"],
-                             in: mirror.appending(path: "apps/frontend")) == "den/NS-1-fix")
+                             in: mirror.appending(path: "apps/frontend")) == "feat/NS-1-fix")
     let link = try FileManager.default.destinationOfSymbolicLink(
         atPath: mirror.appending(path: "CLAUDE.md").path)
     #expect(URL(fileURLWithPath: link).resolvingSymlinksInPath().path
@@ -141,23 +146,21 @@ private actor ProgressRecorder {
 @Test func aFailureInOneRepoUndoesTheOthers() async throws {
     let scratch = try scratchFolder()
     defer { try? FileManager.default.removeItem(at: scratch.deletingLastPathComponent()) }
-    let folder = scratch.appending(path: "scalemed")
-    try await makeRepository(at: folder.appending(path: "backend"), scratch: scratch)
-    try await makeRepository(at: folder.appending(path: "frontend"), scratch: scratch)
-    try await runGit(["branch", "den/task"], in: folder.appending(path: "frontend"))
+    let folder = try await makeSeveral(in: scratch, repos: ["backend", "frontend"])
+    try await runGit(["branch", "feat/task"], in: folder.appending(path: "frontend"))
 
     do {
         _ = try await WorktreeMaker().make(
-            try severalPlan(folder, branch: "den/task", root: scratch.appending(path: "worktrees")))
+            try severalPlan(folder, branch: "feat/task", root: scratch.appending(path: "worktrees")))
         Issue.record("the creation should have failed")
     } catch let failure as WorktreeMaker.Failure {
         #expect(failure.repo == "frontend")
     }
 
-    #expect(!FileManager.default.fileExists(atPath: scratch.appending(path: "worktrees/scalemed/task").path))
-    #expect(!(await gitSucceeds(["show-ref", "--verify", "--quiet", "refs/heads/den/task"],
+    #expect(!FileManager.default.fileExists(atPath: scratch.appending(path: "worktrees/scalemed/feat-task").path))
+    #expect(!(await gitSucceeds(["show-ref", "--verify", "--quiet", "refs/heads/feat/task"],
                                 in: folder.appending(path: "backend"))))
-    #expect(await gitSucceeds(["show-ref", "--verify", "--quiet", "refs/heads/den/task"],
+    #expect(await gitSucceeds(["show-ref", "--verify", "--quiet", "refs/heads/feat/task"],
                               in: folder.appending(path: "frontend")))
 }
 
@@ -179,34 +182,32 @@ private actor ProgressRecorder {
 @Test func anExistingMirrorIsNeverTouched() async throws {
     let scratch = try scratchFolder()
     defer { try? FileManager.default.removeItem(at: scratch.deletingLastPathComponent()) }
-    let folder = scratch.appending(path: "scalemed")
-    try await makeRepository(at: folder.appending(path: "backend"), scratch: scratch)
-    let mirror = scratch.appending(path: "worktrees/scalemed/task")
+    let folder = try await makeSeveral(in: scratch, repos: ["backend"])
+    let mirror = scratch.appending(path: "worktrees/scalemed/feat-task")
     try FileManager.default.createDirectory(at: mirror, withIntermediateDirectories: true)
     try "trabalho em andamento\n".write(to: mirror.appending(path: "notes.md"), atomically: true, encoding: .utf8)
 
     await #expect(throws: WorktreeMaker.Failure.self) {
         try await WorktreeMaker().make(
-            try severalPlan(folder, branch: "den/task", root: scratch.appending(path: "worktrees")))
+            try severalPlan(folder, branch: "feat/task", root: scratch.appending(path: "worktrees")))
     }
 
     #expect(FileManager.default.fileExists(atPath: mirror.appending(path: "notes.md").path))
-    #expect(!(await gitSucceeds(["show-ref", "--verify", "--quiet", "refs/heads/den/task"],
+    #expect(!(await gitSucceeds(["show-ref", "--verify", "--quiet", "refs/heads/feat/task"],
                                 in: folder.appending(path: "backend"))))
 }
 
 @Test func aDotDotFolderIsRefusedBeforeAnythingHappens() async throws {
     let scratch = try scratchFolder()
     defer { try? FileManager.default.removeItem(at: scratch.deletingLastPathComponent()) }
-    let folder = scratch.appending(path: "scalemed")
-    try await makeRepository(at: folder.appending(path: "backend"), scratch: scratch)
+    let folder = try await makeSeveral(in: scratch, repos: ["backend"])
     let root = scratch.appending(path: "worktrees")
     let keep = root.appending(path: "scalemed/other/keep.md")
     try FileManager.default.createDirectory(at: keep.deletingLastPathComponent(), withIntermediateDirectories: true)
     try "keep\n".write(to: keep, atomically: true, encoding: .utf8)
 
     await #expect(throws: WorktreeMaker.Failure.self) {
-        try await WorktreeMaker().make(try severalPlan(folder, branch: "den/..", root: root))
+        try await WorktreeMaker().make(try severalPlan(folder, branch: "..", root: root))
     }
 
     #expect(FileManager.default.fileExists(atPath: keep.path))

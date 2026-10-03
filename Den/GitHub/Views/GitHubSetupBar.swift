@@ -55,14 +55,7 @@ struct GitHubSetupBar: View {
             }
             .buttonStyle(.denGhost(radius: 7))
             .fixedSize()
-            Button(action: dismiss) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Theme.textTertiary)
-                    .iconLabel(size: 24)
-            }
-            .buttonStyle(.denGhost(radius: 6))
-            .accessibilityLabel("Dispensar")
+            BarDismissButton(action: dismiss)
         }
         .padding(.leading, 12)
         .padding(.trailing, 6)

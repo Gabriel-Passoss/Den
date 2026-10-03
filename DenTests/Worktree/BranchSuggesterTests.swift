@@ -3,7 +3,7 @@ import Foundation
 import HarnessCore
 @testable import Den
 
-private func outcome(_ text: String, status: Int32 = 0) -> ProcessOutcome {
+private nonisolated func outcome(_ text: String, status: Int32 = 0) -> ProcessOutcome {
     ProcessOutcome(status: status, stdout: Data(text.utf8), stderr: Data())
 }
 

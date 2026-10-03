@@ -18,7 +18,14 @@ private struct Rig {
     let file: URL
 
     func repo(_ index: Int) -> TaskWorktree.Repo {
-        ledger.worktree(for: ids[index])!.repos[0]
+        ledger.worktree(for: ids[index])?.repos.first
+            ?? TaskWorktree.Repo(name: "", original: file, worktree: file, base: "", remote: nil)
+    }
+
+    func ticked(after seconds: TimeInterval) async -> Int {
+        clock.advance(seconds)
+        await monitor.tick()
+        return await fetcher.calls.count
     }
 }
 
@@ -58,13 +65,9 @@ private func eventually(_ condition: () async -> Bool) async -> Bool {
     rig.monitor.appear(rig.ids[0])
 
     await rig.monitor.tick()
-    rig.clock.advance(19)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 1)
+    #expect(await rig.ticked(after: 19) == 1)
 
-    rig.clock.advance(1)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 2)
+    #expect(await rig.ticked(after: 1) == 2)
 }
 
 @MainActor
@@ -74,13 +77,9 @@ private func eventually(_ condition: () async -> Bool) async -> Bool {
     await rig.fetcher.answer(.found(makePullRequest()))
 
     await rig.monitor.tick()
-    rig.clock.advance(119)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 1)
+    #expect(await rig.ticked(after: 119) == 1)
 
-    rig.clock.advance(1)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 2)
+    #expect(await rig.ticked(after: 1) == 2)
 }
 
 @MainActor
@@ -102,13 +101,9 @@ private func eventually(_ condition: () async -> Bool) async -> Bool {
     rig.monitor.noteActivity([rig.ids[0]: rig.clock.now.addingTimeInterval(-24 * 3600)])
 
     await rig.monitor.tick()
-    rig.clock.advance(119)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 1)
+    #expect(await rig.ticked(after: 119) == 1)
 
-    rig.clock.advance(1)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 2)
+    #expect(await rig.ticked(after: 1) == 2)
 }
 
 @MainActor
@@ -122,13 +117,9 @@ private func eventually(_ condition: () async -> Bool) async -> Bool {
     await rig.monitor.tick()
     #expect(await rig.fetcher.calls.count == 2)
 
-    rig.clock.advance(9)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 2)
+    #expect(await rig.ticked(after: 9) == 2)
 
-    rig.clock.advance(1)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 3)
+    #expect(await rig.ticked(after: 1) == 3)
 }
 
 @MainActor
@@ -138,9 +129,7 @@ private func eventually(_ condition: () async -> Bool) async -> Bool {
     rig.monitor.appear(rig.ids[0])
     await rig.monitor.tick()
 
-    rig.clock.advance(600)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 1)
+    #expect(await rig.ticked(after: 600) == 1)
 
     rig.monitor.disappear(rig.ids[0])
     rig.monitor.appear(rig.ids[0])
@@ -156,14 +145,10 @@ private func eventually(_ condition: () async -> Bool) async -> Bool {
     await rig.monitor.tick()
 
     rig.monitor.disappear(rig.ids[0])
-    rig.clock.advance(20)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 2)
+    #expect(await rig.ticked(after: 20) == 2)
 
     rig.monitor.disappear(rig.ids[0])
-    rig.clock.advance(20)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 2)
+    #expect(await rig.ticked(after: 20) == 2)
 }
 
 @MainActor
@@ -209,24 +194,14 @@ private func eventually(_ condition: () async -> Bool) async -> Bool {
     rig.monitor.appear(rig.ids[0])
     await rig.monitor.tick()
 
-    rig.clock.advance(20)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 1)
-    rig.clock.advance(20)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 2)
+    #expect(await rig.ticked(after: 20) == 1)
+    #expect(await rig.ticked(after: 20) == 2)
 
     await rig.fetcher.answer(.found(nil))
-    rig.clock.advance(79)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 2)
-    rig.clock.advance(1)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 3)
+    #expect(await rig.ticked(after: 79) == 2)
+    #expect(await rig.ticked(after: 1) == 3)
 
-    rig.clock.advance(20)
-    await rig.monitor.tick()
-    #expect(await rig.fetcher.calls.count == 4)
+    #expect(await rig.ticked(after: 20) == 4)
 }
 
 @MainActor
