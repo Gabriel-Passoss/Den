@@ -3,8 +3,8 @@ import Testing
 import HarnessCore
 @testable import Den
 
-let claudeCodeID = HarnessID(rawValue: "claude-code")
-let openCodeID = HarnessID(rawValue: "opencode")
+nonisolated let claudeCodeID = HarnessID(rawValue: "claude-code")
+nonisolated let openCodeID = HarnessID(rawValue: "opencode")
 
 /// How long an end-to-end wait tolerates: real processes start, so this is
 /// generous, and it only runs out when something is actually wrong.
