@@ -111,6 +111,18 @@ class MissingInputs(unittest.TestCase):
         self.assertEqual(profile.name, "default.profdata")
         self.assertEqual([bundle.name for bundle in bundles], ["ClaudeHarnessTests", "HarnessCoreTests"])
 
+    def test_the_debug_symbols_beside_a_test_bundle_are_not_taken_for_an_object(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            products = Path(scratch) / "arm64-apple-macosx/debug"
+            (products / "codecov").mkdir(parents=True)
+            (products / "codecov/default.profdata").touch()
+            binaries = products / "HarnessKitPackageTests.xctest/Contents/MacOS"
+            binaries.mkdir(parents=True)
+            (binaries / "HarnessKitPackageTests").touch()
+            (binaries / "HarnessKitPackageTests.dSYM/Contents").mkdir(parents=True)
+            _, bundles = coverage.profile_and_bundles(products / "codecov/HarnessKit.json")
+        self.assertEqual([bundle.name for bundle in bundles], ["HarnessKitPackageTests"])
+
     def test_a_tool_that_fails_is_reported_with_what_it_said(self):
         with self.assertRaises(SystemExit) as stopped:
             coverage.output_of("/bin/sh", "-c", "echo no such bundle >&2; exit 3")

@@ -81,7 +81,7 @@ def output_of(*command):
 
 def profile_and_bundles(report):
     profile = report.parent / "default.profdata"
-    bundles = sorted(report.parent.parent.glob("*.xctest/Contents/MacOS/*"))
+    bundles = sorted(path for path in report.parent.parent.glob("*.xctest/Contents/MacOS/*") if path.is_file())
     if not profile.exists() or not bundles:
         sys.exit(f"no coverage profile at {profile}; run `swift test --enable-code-coverage` first")
     return profile, bundles

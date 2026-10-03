@@ -109,6 +109,10 @@ UI exercitam. Abaixo do piso, falha. Depois de aumentar a cobertura, suba o
 piso com `--write-floor` e commite o arquivo. Ele grava meio ponto abaixo do
 medido, porque a cobertura oscila um pouco de uma execução para outra.
 
+Os pisos valem para o Xcode do CI (`XCODE_VERSION` nos workflows). Com outro
+Xcode na máquina a medição pode diferir em alguns décimos, então confira o
+número que o job imprime antes de gravar um piso novo.
+
 ### Thread Sanitizer
 
 ```sh
