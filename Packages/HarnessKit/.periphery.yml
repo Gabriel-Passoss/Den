@@ -6,3 +6,9 @@ retain_public: true
 disable_redundant_public_analysis: true
 retain_codable_properties: true
 relative_results: true
+# Periphery reads the index from .build/debug/index/store, where only
+# SwiftPM's native build system puts it (newer toolchains default to
+# swiftbuild).
+build_arguments:
+  - --build-system
+  - native
