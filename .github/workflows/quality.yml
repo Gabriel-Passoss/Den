@@ -1,0 +1,82 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Same signing setup as tests.yml: no team identity on CI, so everything is
+# signed ad hoc.
+env:
+  SIGNING: CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
+
+jobs:
+  static:
+    name: Format, lint, duplication, secrets
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks and the commit-message check read the history
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pre-commit
+            .build/quality-tools
+          key: quality-static-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.pre-commit-config.yaml', 'Scripts/quality/tool') }}
+      - name: Install pre-commit
+        run: pip install pre-commit==4.6.2
+      # The same hooks a commit runs, on every file.
+      - name: Run the commit hooks on the whole tree
+        run: pre-commit run --all-files --show-diff-on-failure --color=always
+      - name: Look for secrets in the whole history
+        run: pre-commit run gitleaks-history --hook-stage manual --all-files --color=always
+      - name: Check the pull request's commit messages
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          failed=0
+          for commit in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            git log -1 --format=%B "$commit" > "$RUNNER_TEMP/message"
+            pre-commit run conventional-pre-commit --hook-stage commit-msg \
+              --commit-msg-filename "$RUNNER_TEMP/message" --color=always || failed=1
+          done
+          exit "$failed"
+
+  compiled:
+    name: Warnings as errors, unused code
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - uses: actions/cache@v4
+        with:
+          path: .build/quality-tools
+          key: quality-compiled-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Scripts/quality/tool') }}
+      # build-for-testing compiles the test targets too, and the index it
+      # leaves in build/DerivedData is what the unused-code scan reads.
+      - name: Build everything with warnings as errors
+        run: |
+          # shellcheck disable=SC2086 # $SIGNING is a list of build settings
+          Scripts/quality/build-strict $SIGNING
+      - name: Look for unused code
+        run: Scripts/quality/unused-code --skip-build

@@ -1,0 +1,91 @@
+# Static quality gates. They run on each commit (`pre-commit install` once, see
+# docs/quality.md) and again in CI on every pull request
+# (.github/workflows/quality.yml), so CI never finds what a commit could have.
+minimum_pre_commit_version: "4.4.0"
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
+# Recorded protocol fixtures are byte-for-byte what the CLIs printed, the
+# baselines are written by the tools themselves, and the specs and plans under
+# docs/superpowers are working notes the hooks leave as they are.
+exclude: ^Packages/HarnessKit/Tests/[^/]+/Fixtures/|(^|/)\.[a-z]+-baseline\.json$|^docs/superpowers/
+
+repos:
+  # Repository hygiene.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-case-conflict # APFS is case-insensitive by default
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: check-symlinks
+      - id: check-json
+      - id: check-yaml
+      - id: check-xml
+        files: \.(xcscheme|xcworkspacedata|plist)$
+        types: [file]
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md] # two trailing spaces are a line break there
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Swift: format, then lint, then look for copied code.
+  - repo: local
+    hooks:
+      - id: swiftformat
+        name: SwiftFormat
+        entry: Scripts/quality/tool swiftformat --quiet
+        language: unsupported # runs the pinned binary from Scripts/quality/tool
+        types: [swift]
+        require_serial: true
+      - id: swiftlint
+        name: SwiftLint
+        entry: Scripts/quality/tool swiftlint lint --strict --quiet --force-exclude --baseline .swiftlint-baseline.json
+        language: unsupported
+        types: [swift]
+        require_serial: true
+      - id: jscpd
+        name: Duplicated code (jscpd)
+        entry: jscpd
+        language: node
+        additional_dependencies: [jscpd@5.4.0]
+        types: [swift]
+        pass_filenames: false # a copy can come from any file, so scan them all
+
+  # Shell scripts and CI workflows.
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+  - repo: https://github.com/Mateusz-Grzelinski/actionlint-py
+    rev: v1.7.12.25
+    hooks:
+      - id: actionlint
+        # actionlint checks `run:` scripts with shellcheck when it finds one;
+        # ship it so every machine gets the same answer.
+        additional_dependencies: [shellcheck-py==0.11.0.1]
+
+  # Secrets: the staged change on each commit; the whole history in CI.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+      - id: gitleaks
+        alias: gitleaks-history
+        name: Detect hardcoded secrets in the whole history
+        entry: gitleaks git --redact --verbose
+        pass_filenames: false
+        always_run: true
+        stages: [manual]
+
+  # Commit messages follow Conventional Commits, as the history already does.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
