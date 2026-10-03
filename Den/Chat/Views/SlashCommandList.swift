@@ -1,5 +1,4 @@
 import SwiftUI
-import HarnessCore
 
 struct SlashCommandList: View {
     let commands: [SlashCommand]

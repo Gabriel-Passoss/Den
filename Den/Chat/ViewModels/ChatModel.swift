@@ -113,8 +113,6 @@ final class ChatModel {
 
     private var pendingSeed: String?
 
-    private let isRestored: Bool
-
     private var hasLaunched = false
 
     var isLive: Bool { session != nil }
@@ -138,7 +136,6 @@ final class ChatModel {
         self.segments = [Segment(harness: harness, harnessSessionID: "", model: "")]
 
         self.harnessSessionID = ""
-        self.isRestored = false
         restorePreferences()
         loadKnobs()
         catalog = cache.rememberedCatalog(for: workingDirectory, harness: harness)
@@ -162,7 +159,6 @@ final class ChatModel {
         self.hasTitle = true
         self.harnessSessionID = session.segments.last?.harnessSessionID ?? ""
         self.harness = session.segments.last?.harness ?? registry.fallback
-        self.isRestored = true
         self.status = "fria"
         restorePreferences()
         loadKnobs()

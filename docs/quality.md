@@ -78,7 +78,7 @@ registrado e não bloqueia; **qualquer coisa nova bloqueia**:
 |---|---|
 | `.swiftlint-baseline.json` | violações do SwiftLint que já existiam (funções e arquivos longos, force unwraps, `master`/`slave` no PTY…) |
 | `.jscpd-baseline.json` | clones que já existiam (ex.: `ControlChannel` × `ACPChannel`, `ClaudeDiscovery` × `OpenCodeDiscovery`, vários testes) |
-| `.periphery-baseline.json`, `Packages/HarnessKit/.periphery-baseline.json` | não existem ainda — veja abaixo |
+| `.periphery-baseline.json` | o que o Periphery acha no app e não dá para apagar: `@State` usado só via `$`, exigência de protocolo que o app ainda não chama, propriedade lida só pelo `Equatable` sintetizado, e `RunInstance.configurationID` |
 
 Para limites de tamanho, o SwiftLint compara a mensagem inteira (“a função tem
 73 linhas”). Então mexer numa função que já estava acima do limite faz ela
@@ -92,11 +92,6 @@ Scripts/quality/unused-code --write-baseline   # Periphery (precisa do Xcode)
 ```
 
 e commite os arquivos gerados — o diff mostra exatamente o que entrou ou saiu.
-
-O Periphery ainda não tem baseline porque só roda no macOS. Se a primeira
-execução no CI encontrar código não usado que não dê para apagar agora, rode
-`Scripts/quality/unused-code --write-baseline` num Mac e commite os dois
-arquivos.
 
 ## Atualizar uma ferramenta
 

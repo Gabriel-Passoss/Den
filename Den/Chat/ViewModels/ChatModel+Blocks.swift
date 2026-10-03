@@ -1,5 +1,4 @@
 import Foundation
-import HarnessCore
 
 extension ChatModel {
     var blocks: [ChatBlock] {

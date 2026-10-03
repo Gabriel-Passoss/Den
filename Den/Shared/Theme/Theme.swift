@@ -20,7 +20,6 @@ enum Theme {
     static let bubble = Color(hex: 0x232836)
     static let hover = Color(hex: 0x222631)
     static let hoverRaised = Color(hex: 0x282D39)
-    static let selected = Color(hex: 0x2F3442)
     static let terminal = Color(hex: 0x0A0C0F)
     static let terminalBar = Color(hex: 0x1B1F27)
 
@@ -50,7 +49,6 @@ enum Theme {
     static let hunk = Color(hex: 0x93AEE8)
     static let hunkFill = Color(hex: 0x1B2233)
     static let waiting = Color(hex: 0xC3AEF0)
-    static let success = Color(hex: 0x2F8A4A)
 
     static let alertFill = Color(hex: 0x1F1B12)
     static let alertBorder = Color(hex: 0x4D3F1F)
