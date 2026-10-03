@@ -8,12 +8,14 @@ struct GitHubSetupBar: View {
     var dismiss: () -> Void
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         HStack(spacing: 10) {
             Image(systemName: "terminal")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.textTertiary)
             Text(message)
-                .font(.system(size: 12))
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -21,49 +23,53 @@ struct GitHubSetupBar: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(command, forType: .string)
             } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "doc.on.doc").font(.system(size: 9))
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.on.doc").font(.system(size: 10))
                     Text("Copiar")
-                    Text(command).font(.system(size: 11, design: .monospaced)).foregroundStyle(InlineCode.color)
+                    Text(command)
+                        .font(.system(size: 11.5, design: .monospaced))
+                        .foregroundStyle(Theme.accentSoft)
                 }
-                .font(.system(size: 11))
-                .padding(.horizontal, 8)
-                .frame(height: 22)
-                .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                .font(.system(size: 12))
+                .padding(.horizontal, 10)
+                .frame(height: 26)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DenButtonStyle(kind: .secondary, radius: 7))
             .fixedSize()
             if case .missing = state {
                 Button(action: choose) {
                     Text("Já tenho, escolher…")
-                        .font(.system(size: 11))
-                        .padding(.horizontal, 8)
-                        .frame(height: 22)
-                        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                        .font(.system(size: 12))
+                        .padding(.horizontal, 10)
+                        .frame(height: 26)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DenButtonStyle(kind: .secondary, radius: 7))
                 .fixedSize()
             }
-            Button("Tentar de novo", action: retry)
-                .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(InlineCode.color)
-                .fixedSize()
+            Button(action: retry) {
+                Text("Tentar de novo")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.accentSoft)
+                    .padding(.horizontal, 8)
+                    .frame(height: 26)
+            }
+            .buttonStyle(.denGhost(radius: 7))
+            .fixedSize()
             Button(action: dismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
+                    .foregroundStyle(Theme.textTertiary)
+                    .iconLabel(size: 24)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.denGhost(radius: 6))
             .accessibilityLabel("Dispensar")
         }
         .padding(.leading, 12)
         .padding(.trailing, 6)
-        .frame(height: 34)
-        .background(Color.gray.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.gray.opacity(0.3), lineWidth: 1))
+        .frame(height: 36)
+        .foregroundStyle(Theme.text)
+        .background(Theme.card, in: shape)
+        .overlay(shape.strokeBorder(Theme.borderCard, lineWidth: 1).allowsHitTesting(false))
     }
 
     private var message: String {

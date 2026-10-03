@@ -138,12 +138,33 @@ final class ConversationUITests: XCTestCase {
         composer.typeText("Diga apenas OK e nada mais.\n")
 
         require(element("pull-request-bar", in: app), in: app)
-        require(app.staticTexts["#80"], in: app)
+        require(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "#80")).firstMatch, in: app)
         require(text(containing: "#80 · Checks falhando", in: app), in: app)
         let checks = app.buttons["Checks"].firstMatch
         require(checks, in: app)
         checks.click()
-        require(app.staticTexts["lint"], in: app)
+        require(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "lint")).firstMatch,
+                in: app)
+    }
+
+    @MainActor
+    func testTheGitHubSetupBarAsksForALoginAndCanBeDismissed() throws {
+        try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
+        try claude.answerTitles(with: "Saudação curta")
+        let app = launch(projectSetup: repositoryWithOrigin,
+                         extraEnvironment: ["DEN_GH": FakeCLI.gh, "FAKE_GH_AUTH_STATUS": "1"])
+
+        let composer = openComposer(in: app)
+        let chip = element("worktree-chip", in: app)
+        require(chip, in: app)
+        chip.click()
+        composer.click()
+        composer.typeText("Diga apenas OK e nada mais.\n")
+
+        let message = text(containing: "O gh precisa de login em github.com", in: app)
+        require(message, in: app)
+        app.buttons["Dispensar"].firstMatch.click()
+        XCTAssertTrue(message.waitForNonExistence(timeout: patience))
     }
 
     // MARK: - Conversation
