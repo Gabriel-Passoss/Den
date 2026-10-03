@@ -15,6 +15,9 @@ struct PaneTip: Equatable {
 }
 
 struct PaneHoverCard: View {
+    static let maxWidth: CGFloat = 240
+    static let margin: CGFloat = 12
+
     let tip: PaneTip
 
     var body: some View {
@@ -22,6 +25,7 @@ struct PaneHoverCard: View {
             Text(tip.title)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             if let detail = tip.detail {
                 Text(detail)
                     .font(.system(size: 10.5))
@@ -51,17 +55,16 @@ struct PaneHoverCard: View {
                 .padding(.top, 1)
             }
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 8)
-        .frame(minWidth: 120, maxWidth: 240, alignment: .leading)
-        .fixedSize()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(minWidth: 120, alignment: .leading)
         .foregroundStyle(Theme.text)
         .background(Color(hex: 0x1E222B), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
             .strokeBorder(Theme.borderControl, lineWidth: 1))
         .shadow(color: .black.opacity(0.45), radius: 12, y: 4)
         .environment(\.colorScheme, .dark)
-        .padding(12)
+        .padding(Self.margin)
     }
 }
 
@@ -77,8 +80,7 @@ final class HoverTipPanel {
               let content = window.contentView else { return }
 
         let host = NSHostingView(rootView: PaneHoverCard(tip: tip))
-        host.layoutSubtreeIfNeeded()
-        let size = host.fittingSize
+        let size = Self.size(of: tip)
 
         let panel = self.panel ?? makePanel()
         panel.contentView = host
@@ -99,6 +101,11 @@ final class HoverTipPanel {
             panel.animator().alphaValue = 1
         }
         isVisible = true
+    }
+
+    static func size(of tip: PaneTip) -> NSSize {
+        NSHostingController(rootView: PaneHoverCard(tip: tip)).sizeThatFits(
+            in: NSSize(width: PaneHoverCard.maxWidth + 2 * PaneHoverCard.margin, height: 10_000))
     }
 
     func hide() {
