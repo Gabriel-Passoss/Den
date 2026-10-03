@@ -6,13 +6,17 @@ struct UITestEnvironment: AppEnvironment {
     static let cliKeyPrefix = "DEN_CLI_"
     static let projectSetupKey = "DEN_PROJECT_SETUP"
     static let defaultsSuite = "Den.UITests"
+    static let ghKey = "DEN_GH"
 
     let sessionsRoot: URL
     let attachmentsRoot: URL
     let runConfigurationsFile: URL
+    let worktreesRoot: URL
+    let worktreesFile: URL
     let defaults: UserDefaults
     let registry: HarnessRegistry
     let workingDirectory: URL
+    let ghOverride: String?
 
     init?(_ variables: [String: String]) {
         guard let rootPath = variables[Self.rootKey] else { return nil }
@@ -20,7 +24,10 @@ struct UITestEnvironment: AppEnvironment {
         sessionsRoot = root.appending(path: "sessions")
         attachmentsRoot = root.appending(path: "attachments")
         runConfigurationsFile = root.appending(path: "run-configurations.json")
+        worktreesRoot = root.appending(path: "worktrees")
+        worktreesFile = root.appending(path: "task-worktrees.json")
         workingDirectory = root.appending(path: "project")
+        ghOverride = variables[Self.ghKey]
 
         let pinned = Dictionary(uniqueKeysWithValues: HarnessRegistry.standard.ids.compactMap { id in
             variables[Self.cliKeyPrefix + id.rawValue].map { (id, $0) }

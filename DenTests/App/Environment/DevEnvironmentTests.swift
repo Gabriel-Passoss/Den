@@ -10,6 +10,8 @@ import Foundation
     #expect(environment.attachmentsRoot == support.appending(path: "attachments"))
     #expect(environment.runConfigurationsFile
             == support.appending(path: "run-configurations.json"))
+    #expect(environment.worktreesRoot.path == NSHomeDirectory() + "/.den-dev/worktrees")
+    #expect(environment.worktreesFile == support.appending(path: "task-worktrees.json"))
     #expect(environment.workingDirectory.path == NSHomeDirectory())
     #expect(environment.registry.ids == HarnessRegistry.standard.ids)
 }

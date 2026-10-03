@@ -25,6 +25,8 @@ private func scratchRoot() -> URL {
     #expect(environment.attachmentsRoot.path.hasPrefix(root.path))
     #expect(environment.workingDirectory.path.hasPrefix(root.path))
     #expect(environment.runConfigurationsFile.path.hasPrefix(root.path))
+    #expect(environment.worktreesRoot.path.hasPrefix(root.path))
+    #expect(environment.worktreesFile.path.hasPrefix(root.path))
     #expect(FileManager.default.fileExists(atPath: environment.workingDirectory.path))
     #expect(environment.defaults != .standard)
 }
@@ -106,4 +108,18 @@ private func scratchRoot() -> URL {
     #expect(claude.displayName == "Claude Code")
     #expect(claude.titleArguments(for: "x") != nil)
     #expect(environment.registry.harness(for: openCodeID) is PinnedHarness == false)
+}
+
+@Test func aPinnedGhIsHandedOverOnlyInUITests() throws {
+    let root = scratchRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let pinned = try #require(UITestEnvironment([
+        UITestEnvironment.rootKey: root.path,
+        UITestEnvironment.ghKey: "/fake/gh",
+    ]))
+    let plain = try #require(UITestEnvironment([UITestEnvironment.rootKey: root.path]))
+
+    #expect(pinned.ghOverride == "/fake/gh")
+    #expect(plain.ghOverride == nil)
 }
