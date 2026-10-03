@@ -15,12 +15,8 @@ struct ChatView: View {
 
     @AppStorage(InspectorPane.storageKey) private var pane: InspectorPane = .closed
     @AppStorage("Den.inspectorWidth") private var inspectorWidth: Double = 480
-    @State private var lastOpenPane: InspectorPane = .changes
     @Environment(RunManager.self) private var runs
     @Environment(RunConfigurationsModel.self) private var runConfigurations
-    @Environment(WorktreeModel.self) private var worktrees
-    @Environment(PullRequestMonitor.self) private var monitor
-    @Environment(\.chrome) private var chrome
     let gitChanges: GitChangesModel
 
     private static let minimumChatWidth: CGFloat = 420
@@ -40,7 +36,7 @@ struct ChatView: View {
             let docked = room >= Self.minimumInspectorWidth
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
-                    header
+                    ChatHeader(chat: chat, runActive: runActive)
                     transcript
                     ChatComposer(chat: chat, slash: slash, mentions: mentions,
                                  keys: keys) { nearBottom = true }
@@ -84,18 +80,7 @@ struct ChatView: View {
             }
         }
 
-        .task(id: chat.sessionID) {
-            await worktrees.reconcile(chat)
-            await chat.loadBranch()
-        }
-        .task(id: chat.sessionID) {
-            let id = chat.sessionID
-            monitor.appear(id)
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3600))
-            }
-            monitor.disappear(id)
-        }
+        .task(id: chat.sessionID) { await chat.loadBranch() }
         .task(id: chat.workingDirectory) { await mentions.loadIndex(under: chat.workingDirectory) }
         .onChange(of: chat.prompt) {
             mentions.selection = 0
@@ -111,11 +96,6 @@ struct ChatView: View {
         .onChange(of: chat.isBusy) {
             if !chat.isBusy {
                 keys.disarmEsc()
-                worktrees.clearWarning(chat.sessionID)
-                Task { @MainActor in
-                    await worktrees.reconcile(chat)
-                    monitor.turnEnded(chat.sessionID)
-                }
                 if pane == .changes {
                     let gitChanges = self.gitChanges
                     let directory = chat.workingDirectory
@@ -123,84 +103,16 @@ struct ChatView: View {
                 }
             }
         }
-        .onChange(of: pane) {
-            if pane != .closed { lastOpenPane = pane }
-        }
         .onDisappear { keys.remove() }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)) { _ in
             let chat = self.chat
-            let worktrees = self.worktrees
-            let monitor = self.monitor
             Task { @MainActor in
                 if chat.hasUnread { chat.hasUnread = false }
-                await worktrees.reconcile(chat)
-                monitor.appBecameActive()
             }
         }
-        .overlay { lightbox }
-    }
-
-    private var header: some View {
-        TopBar(leadingInset: chrome.leadingInset + (chrome.sidebarHidden ? 8 : 20)) {
-            SidebarToggle()
-            ViewThatFits(in: .horizontal) {
-                breadcrumb(folder: true, branch: true)
-                breadcrumb(folder: false, branch: true)
-                breadcrumb(folder: false, branch: false)
-            }
-            Spacer(minLength: 12)
-            HarnessSwitcher(chat: chat)
-            panelToggle
-        }
-        .onKeyboardShortcut("0", modifiers: [.option, .command]) { toggle(.changes) }
-        .onKeyboardShortcut("9", modifiers: [.option, .command]) { toggle(.run) }
-    }
-
-    private func breadcrumb(folder: Bool, branch: Bool) -> some View {
-        HStack(spacing: 8) {
-            if folder {
-                Text(chat.workingDirectory.lastPathComponent)
-                    .foregroundStyle(Theme.textTertiary)
-                    .lineLimit(1)
-                    .help(chat.workingDirectory.path)
-                Text("/")
-                    .foregroundStyle(Theme.textFaint)
-            }
-            Text(chat.title)
-                .fontWeight(.medium)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            if branch, let name = chat.branch {
-                BranchPill(branch: name)
-            }
-        }
-        .font(.system(size: 14))
-    }
-
-    private var panelToggle: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                pane = pane == .closed ? lastOpenPane : .closed
-            }
-        } label: {
-            Image(systemName: "sidebar.right")
-                .font(.system(size: 14))
-                .foregroundStyle(pane == .closed ? Theme.textSecondary : Theme.text)
-                .iconLabel(size: 32)
-                .overlay(alignment: .topTrailing) {
-                    if runActive {
-                        Circle()
-                            .fill(Theme.added)
-                            .frame(width: 7, height: 7)
-                            .offset(x: -5, y: 5)
-                    }
-                }
-        }
-        .buttonStyle(DenButtonStyle(kind: .secondary))
-        .help(pane == .closed ? "Mostrar alterações e execução (⌥⌘0 / ⌥⌘9)"
-                              : "Ocultar painel")
-        .accessibilityLabel(pane == .closed ? "Mostrar painel" : "Ocultar painel")
+        .overlay { Lightbox(zoomed: $zoomed) }
+        .followsTask(of: chat)
     }
 
     private var inspector: some View {
@@ -215,46 +127,10 @@ struct ChatView: View {
         runConfigurations.configurations(in: runRoot).contains { runs.isActive($0.id) }
     }
 
-    private func toggle(_ target: InspectorPane) {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            if pane == target {
-                pane = .closed
-            } else {
-                pane = target
-                lastOpenPane = target
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var lightbox: some View {
-        if let zoomed, let image = ImageCache.decodedImage(zoomed.data) {
-            ZStack {
-                Color.black.opacity(0.7)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(radius: 24)
-                    .padding(36)
-                    .transition(.scale(scale: 0.55).combined(with: .opacity))
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { closeLightbox() }
-            .help("Clique ou Esc para fechar")
-        }
-    }
-
     private func zoom(_ data: Data) {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             zoomed = ZoomedImage(data: data)
         }
-    }
-
-    private func closeLightbox() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { zoomed = nil }
     }
 
     // MARK: - Transcript
@@ -325,32 +201,14 @@ struct ChatView: View {
             .scrollDisabled(tableLock.isLocked)
             .environment(tableLock)
             .overlay(alignment: .bottom) {
-                Group {
-                if !nearBottom {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.2)) { jumpToEnd() }
-                    } label: {
-                        Image(systemName: "arrow.down")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                            .frame(width: 34, height: 34)
-                            .background(Theme.raised, in: Circle())
-                            .overlay(Circle().strokeBorder(Theme.borderControl, lineWidth: 1))
-                            .shadow(color: .black.opacity(0.35), radius: 10, y: 3)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.bottom, 14)
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                    .help("Ir para o final")
-                    .accessibilityLabel("Ir para o final")
+                JumpToEndButton(isVisible: !nearBottom) {
+                    withAnimation(.easeOut(duration: 0.2)) { jumpToEnd() }
                 }
-                }
-                .animation(.easeOut(duration: 0.15), value: nearBottom)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 0) {
                     TaskBars(chat: chat)
-                    transientCards
+                    TransientCards(chat: chat) { nearBottom = true }
                 }
             }
             .onScrollGeometryChange(for: ScrollEdgeState.self) { geometry in
@@ -388,63 +246,6 @@ struct ChatView: View {
         .id(chat.sessionID)
     }
 
-    private static func isUserBlock(_ block: ChatBlock) -> Bool {
-        if case .line(let line) = block {
-            return line.role == .user || line.role == .compaction
-        }
-        return false
-    }
-
-    static func harness(of block: ChatBlock) -> HarnessID? {
-        switch block {
-        case .line(let line): line.harness
-        case .collapsed(_, let lines): lines.lazy.compactMap(\.harness).first
-        }
-    }
-
-    static func turnStarts(in blocks: [ChatBlock]) -> Set<UUID> {
-        var starts = Set<UUID>()
-        var afterUser = true
-        var previous: HarnessID?
-        for block in blocks {
-            if isUserBlock(block) {
-                afterUser = true
-            } else {
-                let author = harness(of: block)
-                if afterUser || author != previous { starts.insert(block.id) }
-                afterUser = false
-                previous = author
-            }
-        }
-        return starts
-    }
-
-    @ViewBuilder
-    private var transientCards: some View {
-        if chat.pending != nil || chat.pendingQuestion != nil {
-            VStack(spacing: 8) {
-                if let pending = chat.pending {
-                    PermissionCard(request: pending,
-                                   harnessName: chat.harnessName) { option in
-                        Task { await chat.resolve(option) }
-                    }
-                }
-                if let question = chat.pendingQuestion {
-                    QuestionCard(
-                        prompt: question,
-                        answer: { selections in
-                            nearBottom = true
-                            Task { await chat.answerQuestion(selections) }
-                        },
-                        dismiss: { Task { await chat.dismissQuestion() } }
-                    )
-                    .id(question.id)
-                }
-            }
-            .aboveComposer(fade: 0.12)
-        }
-    }
-
     private var typingVisible: Bool {
         chat.streaming.isEmpty && chat.isBusy && chat.compactingSince == nil
             && chat.pending == nil && chat.pendingQuestion == nil
@@ -459,110 +260,5 @@ struct ChatView: View {
         withAnimation(.easeOut(duration: 0.15)) {
             scrollPosition.scrollTo(edge: .bottom)
         }
-    }
-
-}
-
-struct AssistantTurn<Content: View>: View {
-    let harness: HarnessID
-    let showsHeader: Bool
-    let moment: Date?
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Group {
-                if showsHeader {
-                    HarnessBadge(harness: harness, size: 28)
-                } else {
-                    Color.clear
-                }
-            }
-            .frame(width: 28, height: showsHeader ? 28 : 1)
-
-            VStack(alignment: .leading, spacing: 8) {
-                if showsHeader {
-                    HStack(spacing: 6) {
-                        Text(HarnessBadge.name(for: harness))
-                            .fontWeight(.medium)
-                        if let moment {
-                            Text("·")
-                            Text(moment, format: .dateTime.hour().minute())
-                                .monospacedDigit()
-                        }
-                    }
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textTertiary)
-                    .frame(height: 28, alignment: .center)
-                    .padding(.bottom, -6)
-                }
-                content()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-struct BranchPill: View {
-    let branch: String
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 10, weight: .semibold))
-            Text(branch)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .font(.system(size: 11.5, design: .monospaced))
-        .foregroundStyle(Theme.textSecondary)
-        .padding(.horizontal, 8)
-        .frame(height: 22)
-        .frame(maxWidth: 220)
-        .background(Theme.field, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .fixedSize()
-        .help(branch)
-    }
-}
-
-struct SessionWelcome: View {
-    let chat: ChatModel
-
-    var body: some View {
-        VStack(spacing: 18) {
-            HarnessBadge(harness: chat.harness, size: 40)
-            VStack(spacing: 5) {
-                Text("\(chat.harnessName) em \(chat.workingDirectory.lastPathComponent)")
-                    .font(.system(size: 17, weight: .semibold))
-                Text("Descreva o que quer mudar. O agente lê, edita e executa no projeto.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.textTertiary)
-                    .multilineTextAlignment(.center)
-            }
-            HStack(spacing: 8) {
-                hint(Text("@").font(.system(size: 12, weight: .semibold, design: .monospaced)),
-                     "cita arquivos")
-                hint(Text("/").font(.system(size: 12, weight: .semibold, design: .monospaced)),
-                     "abre comandos")
-                hint(Image(systemName: "paperclip").font(.system(size: 11, weight: .medium)),
-                     "anexa imagens e PDFs")
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 120)
-    }
-
-    private func hint(_ glyph: some View, _ text: String) -> some View {
-        HStack(spacing: 6) {
-            glyph
-                .foregroundStyle(Theme.accent)
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 28)
-        .background(Theme.raised, in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
     }
 }

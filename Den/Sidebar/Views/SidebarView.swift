@@ -22,12 +22,10 @@ struct SidebarView: View {
 
     @State private var tipTask: Task<Void, Never>?
 
-    @FocusState private var searchFocused: Bool
-
     var body: some View {
         VStack(spacing: 0) {
-            header
-            search
+            SidebarHeader(workspace: workspace, lightsInset: lightsInset, collapse: collapse)
+            SidebarSearch(workspace: workspace)
             list
         }
         .background(Theme.sidebar)
@@ -50,77 +48,6 @@ struct SidebarView: View {
         } message: {
             Text(deleteMessage)
         }
-    }
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            Spacer(minLength: 4)
-            MenuChip {
-                Button("Nova sessão") { Task { await workspace.newSession() } }
-                Menu("Nova sessão com") {
-                    ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
-                        Button {
-                            Task { await workspace.newSession(harness: harness) }
-                        } label: {
-                            Label {
-                                Text(HarnessBadge.name(for: harness))
-                            } icon: {
-                                HarnessBadge.menuIcon(for: harness)
-                            }
-                        }
-                    }
-                }
-                Button("Nova pasta") { workspace.addFolder() }
-            } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.textMuted)
-                    .iconLabel()
-            }
-            .help("Nova sessão ou nova pasta")
-            .accessibilityLabel("Nova")
-            SidebarButton(title: "Recolher barra lateral", action: collapse)
-        }
-        .padding(.leading, lightsInset + 6)
-        .padding(.trailing, 10)
-        .frame(height: Theme.headerHeight)
-        .windowDragArea()
-    }
-
-    private var search: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.textTertiary)
-            TextField("Buscar sessões…", text: $workspace.search)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .focused($searchFocused)
-                .onExitCommand {
-                    workspace.search = ""
-                    searchFocused = false
-                }
-            if !workspace.search.isEmpty {
-                Button {
-                    workspace.search = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .help("Limpar busca")
-                .accessibilityLabel("Limpar busca")
-            }
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 34)
-        .background(Theme.field, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .strokeBorder(searchFocused ? Theme.accent.opacity(0.55) : .clear, lineWidth: 1))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 10)
-        .onKeyboardShortcut("f", modifiers: [.command, .shift]) { searchFocused = true }
     }
 
     // MARK: - List
@@ -149,14 +76,14 @@ struct SidebarView: View {
                 sectionTitle("Sessões") { EmptyView() }
                     .padding(.top, workspace.folderGroups.isEmpty ? 0 : 14)
 
-                newSessionRow
+                NewSessionRow(workspace: workspace)
 
                 ForEach(workspace.looseSessions) { summary in
                     row(for: summary, in: nil)
                 }
 
                 if workspace.folderGroups.isEmpty, workspace.looseSessions.isEmpty {
-                    emptyList
+                    SidebarEmptyList(search: workspace.search)
                 }
             }
             .padding(.horizontal, 8)
@@ -243,50 +170,6 @@ struct SidebarView: View {
             .padding(.bottom, 4)
             .transition(.opacity)
         }
-    }
-
-    private var newSessionRow: some View {
-        Button {
-            Task { await workspace.newSession() }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 18)
-                Text("Nova sessão")
-                    .font(.system(size: 13, weight: .medium))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(Theme.accent)
-            .padding(.horizontal, 10)
-            .frame(height: 32)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.denGhost)
-        .contextMenu {
-            ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
-                Button("Nova sessão com \(HarnessBadge.name(for: harness))") {
-                    Task { await workspace.newSession(harness: harness) }
-                }
-            }
-        }
-        .help("Iniciar uma sessão nova")
-    }
-
-    private var emptyList: some View {
-        VStack(spacing: 6) {
-            Image(systemName: workspace.search.isEmpty ? "bubble.left.and.bubble.right"
-                                                      : "magnifyingglass")
-                .font(.system(size: 20))
-                .foregroundStyle(Theme.textFaint)
-            Text(workspace.search.isEmpty ? "Nenhuma conversa"
-                                          : "Nada encontrado para \"\(workspace.search)\"")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.textTertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
     }
 
     private func scheduleTip(_ next: PaneTip?) {
@@ -384,47 +267,6 @@ struct SidebarView: View {
         }
     }
 
-    private struct SessionDropDelegate: DropDelegate {
-        let target: UUID
-        let areaFolderID: String?
-        let workspace: WorkspaceModel
-        @Binding var dragging: UUID?
-
-        func dropEntered(info: DropInfo) {
-            guard let dragging, dragging != target else { return }
-            withAnimation(.easeInOut(duration: 0.18)) {
-                workspace.placeSession(dragging, near: target)
-            }
-        }
-
-        func dropUpdated(info: DropInfo) -> DropProposal? {
-            DropProposal(operation: .move)
-        }
-
-        func performDrop(info: DropInfo) -> Bool {
-            defer { dragging = nil }
-            if dragging != nil { return true }
-
-            let providers = info.itemProviders(for: [.plainText])
-            guard !providers.isEmpty else { return false }
-            let workspace = self.workspace
-            let areaFolderID = self.areaFolderID
-            for provider in providers {
-                _ = provider.loadObject(ofClass: NSString.self) { object, _ in
-                    guard let string = object as? String,
-                          string.hasPrefix("folder:") else { return }
-                    Task { @MainActor in
-                        withAnimation(.easeInOut(duration: 0.22)) {
-                            workspace.moveFolder(String(string.dropFirst(7)),
-                                                 before: areaFolderID)
-                        }
-                    }
-                }
-            }
-            return true
-        }
-    }
-
     private func dropBinding(_ folderID: String) -> Binding<Bool> {
         Binding(
             get: { dropTarget == folderID },
@@ -462,5 +304,46 @@ struct SidebarView: View {
                 if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
             }
         }
+    }
+}
+
+private struct SessionDropDelegate: DropDelegate {
+    let target: UUID
+    let areaFolderID: String?
+    let workspace: WorkspaceModel
+    @Binding var dragging: UUID?
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != target else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            workspace.placeSession(dragging, near: target)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer { dragging = nil }
+        if dragging != nil { return true }
+
+        let providers = info.itemProviders(for: [.plainText])
+        guard !providers.isEmpty else { return false }
+        let workspace = self.workspace
+        let areaFolderID = self.areaFolderID
+        for provider in providers {
+            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                guard let string = object as? String,
+                      string.hasPrefix("folder:") else { return }
+                Task { @MainActor in
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        workspace.moveFolder(String(string.dropFirst(7)),
+                                             before: areaFolderID)
+                    }
+                }
+            }
+        }
+        return true
     }
 }
