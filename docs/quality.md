@@ -19,6 +19,7 @@ mesmas versões das ferramentas.
 | Código não usado: declarações, parâmetros, imports, propriedades só atribuídas | Periphery 3.8.0 — `.periphery.yml` e `Packages/HarnessKit/.periphery.yml` | | ✓ |
 | Piso de cobertura de linhas, por alvo do HarnessKit e para o app fora das pastas `Views` | `Scripts/quality/coverage` — `.coverage-floor.json` | | ✓ |
 | Corridas de dados nos testes do pacote e do app | Thread Sanitizer — job `sanitizer` em `tests.yml` | | ✓ |
+| Testes de mutação no HarnessKit, nas linhas que o PR alterou | `Scripts/quality/mutation` — `.mutation-baseline.json` | | ✓ só em PR |
 | Segredos (chaves, tokens) | gitleaks 8.30.1 | ✓ no que está staged | ✓ no histórico inteiro |
 | Mensagem de commit no formato Conventional Commits (`feat(app): …`) | conventional-pre-commit | ✓ | ✓ nos commits do PR |
 | Scripts shell | shellcheck | ✓ | ✓ |
@@ -119,6 +120,26 @@ xcodebuild test -project Den.xcodeproj -scheme Den -destination 'platform=macOS'
 Uma corrida de dados derruba o comando, e o relatório mostra as duas pilhas
 que tocaram a mesma memória. Corrija a corrida; não existe baseline para isso.
 
+### Mutação
+
+```sh
+Scripts/quality/mutation --base origin/main   # só as linhas alteradas desde a main
+Scripts/quality/mutation --all                # o HarnessKit inteiro, uns 25 minutos
+```
+
+O script troca um operador por vez (`==`/`!=`, `<`/`>=`, `>`/`<=`, `&&`/`||`,
+`true`/`false`) numa cópia do pacote e roda os testes. Se eles continuam
+passando, o mutante sobreviveu: nenhum teste prende aquela linha. O PR falha
+quando um sobrevivente não está em `.mutation-baseline.json`.
+
+- **Sobrevivente novo**: escreva o teste que falharia com a troca.
+- **Mutante equivalente** (a troca não muda o comportamento): aceite com
+  `Scripts/quality/mutation --base origin/main --write-baseline` e commite o
+  baseline; o diff mostra o que foi aceito.
+
+O workflow Quality tem um disparo manual que roda o pacote inteiro e publica
+o resultado de cada mutante como artefato.
+
 ## Dívida registrada (baselines)
 
 Os gates foram ligados num código que já existia. O que já estava lá ficou
@@ -129,6 +150,7 @@ registrado e não bloqueia; **qualquer coisa nova bloqueia**:
 | `.swiftlint-baseline.json` | violações do SwiftLint que já existiam (funções e arquivos longos, force unwraps, `master`/`slave` no PTY…) e os comentários que já estavam no código |
 | `.jscpd-baseline.json` | clones que já existiam (ex.: `ControlChannel` × `ACPChannel`, `ClaudeDiscovery` × `OpenCodeDiscovery`, vários testes) |
 | `.periphery-baseline.json` | o que o Periphery acha no app e não dá para apagar: `@State` usado só via `$`, exigência de protocolo que o app ainda não chama, propriedade lida só pelo `Equatable` sintetizado, e `RunInstance.configurationID` |
+| `.mutation-baseline.json` | mutantes que já sobreviviam no HarnessKit, casados pelo texto da linha |
 
 Para limites de tamanho, o SwiftLint compara a mensagem inteira (“a função tem
 73 linhas”). Então mexer numa função que já estava acima do limite faz ela

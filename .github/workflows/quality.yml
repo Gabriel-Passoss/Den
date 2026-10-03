@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A manual run also mutates the whole package; see the mutation-full job.
+  workflow_dispatch:
 
 concurrency:
   group: quality-${{ github.ref }}
@@ -81,3 +83,38 @@ jobs:
           Scripts/quality/build-strict $SIGNING
       - name: Look for unused code
         run: Scripts/quality/unused-code --skip-build
+
+  mutation:
+    name: Mutation testing (changed lines)
+    if: github.event_name == 'pull_request'
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the script diffs against the pull request's base
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+      - name: Mutate the lines this pull request changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: Scripts/quality/mutation --base "$BASE"
+
+  mutation-full:
+    name: Mutation testing (whole package)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+      - name: Mutate the whole package
+        run: Scripts/quality/mutation --all --report build/mutation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-report
+          path: build/mutation.json
