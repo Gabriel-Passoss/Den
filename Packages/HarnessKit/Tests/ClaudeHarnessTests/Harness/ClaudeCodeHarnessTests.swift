@@ -1,5 +1,4 @@
 import Testing
-import HarnessCore
 @testable import ClaudeHarness
 
 @Test func aQuickPromptRunsTheInstructionOnHaiku() throws {
