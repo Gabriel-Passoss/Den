@@ -106,7 +106,7 @@ private func scratchRoot() -> URL {
     let claude = try #require(environment.registry.harness(for: claudeCodeID))
     #expect(try await claude.discover().executable == "/fake/claude")
     #expect(claude.displayName == "Claude Code")
-    #expect(claude.titleArguments(for: "x") != nil)
+    #expect(claude.quickPromptArguments(for: "x") != nil)
     #expect(environment.registry.harness(for: openCodeID) is PinnedHarness == false)
 }
 

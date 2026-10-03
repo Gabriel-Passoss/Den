@@ -9,7 +9,7 @@ private nonisolated func outcome(_ text: String, status: Int32 = 0) -> ProcessOu
 
 private func asking() -> FakeHarness {
     var harness = FakeHarness()
-    harness.oneShotArguments = ["-p", "--model", "haiku"]
+    harness.quickPrompt = ["-p", "--model", "haiku"]
     return harness
 }
 

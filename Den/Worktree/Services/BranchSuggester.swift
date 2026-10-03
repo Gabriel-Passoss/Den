@@ -22,11 +22,11 @@ nonisolated struct BranchSuggester: Sendable {
             + "descreve o trabalho pedido, porque o PR dessa branch também segue o Conventional Commits. "
             + "A descrição é sempre em inglês, mesmo que o pedido esteja em outro idioma, e tem de 2 a 5 "
             + "palavras em minúsculas, separadas por hífen. "
-            + "Sem aspas e sem explicação. Responda somente o nome.\n\nPedido: \(message.prefix(600))"
+            + "Sem aspas e sem explicação. Responda somente o nome.\n\nPedido: \(message.prefix(QuickPrompt.requestLimit))"
     }
 
     func suggest(for message: String, harness: any Harness) async -> BranchSuggestion? {
-        guard let arguments = harness.titleArguments(for: Self.instruction(for: message)),
+        guard let arguments = harness.quickPromptArguments(for: Self.instruction(for: message)),
               let installation = try? await harness.discover(),
               let outcome = await run(installation.executable, arguments, timeout),
               outcome.succeeded else { return nil }

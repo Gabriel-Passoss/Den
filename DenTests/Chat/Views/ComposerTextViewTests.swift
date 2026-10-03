@@ -1,5 +1,6 @@
 import Testing
 import AppKit
+import SwiftUI
 @testable import Den
 
 private let line = ComposerTextView.lineHeight
@@ -79,4 +80,59 @@ private func lines(_ height: CGFloat) -> Double {
     view.onPaste = { _ in true }
 
     #expect(view.capture(from: board) == false)
+}
+
+@MainActor
+private final class GhostLog {
+    var accepted = 0
+    var dismissed = 0
+}
+
+@MainActor
+private func composer(ghost: String, log: GhostLog) -> ComposerTextView.Coordinator {
+    ComposerTextView.Coordinator(ComposerTextView(
+        text: .constant(""), focusRequested: .constant(false), placeholder: "",
+        ghost: ghost, onSubmit: {}, onPaste: { _ in false },
+        onAcceptGhost: { log.accepted += 1 }, onDismissGhost: { log.dismissed += 1 }))
+}
+
+@MainActor
+@Test func theRightArrowInAnEmptyFieldAcceptsTheGhost() {
+    let log = GhostLog()
+    let handled = composer(ghost: "Sim", log: log)
+        .textView(PromptTextView(usingTextLayoutManager: false),
+                  doCommandBy: #selector(NSResponder.moveRight(_:)))
+    #expect(handled)
+    #expect(log.accepted == 1)
+}
+
+@MainActor
+@Test func theRightArrowMovesTheCursorOnceTheFieldHasText() {
+    let log = GhostLog()
+    let field = PromptTextView(usingTextLayoutManager: false)
+    field.string = "n"
+    let handled = composer(ghost: "Sim", log: log)
+        .textView(field, doCommandBy: #selector(NSResponder.moveRight(_:)))
+    #expect(!handled)
+    #expect(log.accepted == 0)
+}
+
+@MainActor
+@Test func theRightArrowWithoutAGhostMovesTheCursor() {
+    let log = GhostLog()
+    let handled = composer(ghost: "", log: log)
+        .textView(PromptTextView(usingTextLayoutManager: false),
+                  doCommandBy: #selector(NSResponder.moveRight(_:)))
+    #expect(!handled)
+    #expect(log.accepted == 0)
+}
+
+@MainActor
+@Test func escapeDismissesTheGhost() {
+    let log = GhostLog()
+    let handled = composer(ghost: "Sim", log: log)
+        .textView(PromptTextView(usingTextLayoutManager: false),
+                  doCommandBy: #selector(NSResponder.cancelOperation(_:)))
+    #expect(handled)
+    #expect(log.dismissed == 1)
 }

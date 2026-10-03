@@ -80,6 +80,10 @@ nonisolated final class FakeCLI {
         try title.write(to: directory.appending(path: "title"), atomically: true, encoding: .utf8)
     }
 
+    func answerSuggestions(with reply: String) throws {
+        try reply.write(to: directory.appending(path: "reply"), atomically: true, encoding: .utf8)
+    }
+
     /// The steps so far, for a fake made with `init(appRoot:harness:)`.
     var launchEnvironment: [String: String] {
         guard let scenarioKey else { return [:] }

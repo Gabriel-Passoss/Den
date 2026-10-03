@@ -41,7 +41,7 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
     let scratch = parent.appending(path: "Área de trabalho")
     let repo = try await makeRepository(at: scratch.appending(path: "api"), scratch: scratch)
     var harness = FakeHarness()
-    harness.oneShotArguments = oneShot
+    harness.quickPrompt = oneShot
     let worktrees = WorktreeModel(
         ledger: TaskLedger(store: TaskWorktreeStore(url: scratch.appending(path: "task-worktrees.json"))),
         root: scratch.appending(path: "worktrees"), defaults: scratchDefaults.defaults, maker: maker,

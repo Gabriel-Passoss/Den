@@ -23,18 +23,9 @@ struct ChatComposer: View {
                 pendingAttachmentRow
             }
 
-            ComposerTextView(text: $chat.prompt, focusRequested: $focusRequested,
-                             placeholder: Self.placeholder,
-                             onSubmit: submit,
-                             onPaste: { chat.capturePaste($0) })
-                .overlay(alignment: .topLeading) {
-                    if chat.prompt.isEmpty {
-                        Text(Self.placeholder)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.textTertiary)
-                            .allowsHitTesting(false)
-                    }
-                }
+            ComposerField(chat: chat, focusRequested: $focusRequested,
+                          placeholder: Self.placeholder, submit: submit,
+                          stickToBottom: stickToBottom)
                 .padding(.horizontal, 8)
                 .padding(.top, 6)
                 .padding(.bottom, 4)
