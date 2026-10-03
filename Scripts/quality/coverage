@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Fails when line coverage is below the floor recorded in .coverage-floor.json.
 
-  Scripts/quality/coverage package [--write-floor]
-  Scripts/quality/coverage app <result.xcresult> [--write-floor]
+  Scripts/quality/coverage package [--write-floor] [--report <file>]
+  Scripts/quality/coverage app <result.xcresult> [--write-floor] [--report <file>]
 
 `package` reads the profile that `swift test --enable-code-coverage` left in
 Packages/HarnessKit. `app` reads the result bundle of an `xcodebuild test
 -enableCodeCoverage YES` run and leaves out everything under a Views folder,
 which the UI tests exercise instead. --write-floor records what was measured,
 less half a point for the run-to-run wobble and rounded down, as the new floor.
+--report writes each measurement beside its floor as JSON, for the summary the
+Quality workflow posts on a pull request.
 """
 import argparse
 import json
@@ -104,6 +106,7 @@ def main(arguments=None):
     parser.add_argument("group", choices=["package", "app"])
     parser.add_argument("result", nargs="?", help="the .xcresult bundle, for `app`")
     parser.add_argument("--write-floor", action="store_true")
+    parser.add_argument("--report", metavar="FILE")
     options = parser.parse_args(arguments)
     if options.group == "app" and not options.result:
         parser.error("app needs the path of an .xcresult bundle")
@@ -117,6 +120,11 @@ def main(arguments=None):
     if options.write_floor:
         floors = raised(floors, measured, names)
         FLOOR_FILE.write_text(json.dumps(floors, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    if options.report:
+        entries = [{"name": name, "measured": measured.get(name), "floor": floors.get(name)} for name in names]
+        Path(options.report).parent.mkdir(parents=True, exist_ok=True)
+        Path(options.report).write_text(json.dumps(entries, indent=2) + "\n", encoding="utf-8")
 
     for name in names:
         shown = f"{measured[name]:5.1f}%" if name in measured else "    -"

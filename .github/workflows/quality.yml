@@ -43,9 +43,19 @@ jobs:
           key: quality-static-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.pre-commit-config.yaml', 'Scripts/quality/tool') }}
       - name: Install pre-commit
         run: pip install pre-commit==4.6.2
-      # The same hooks a commit runs, on every file.
+      # The same hooks a commit runs, on every file. The output is kept for the
+      # summary comment, which reads each hook's result from it.
       - name: Run the commit hooks on the whole tree
-        run: pre-commit run --all-files --show-diff-on-failure --color=always
+        run: |
+          set -o pipefail
+          mkdir -p build/gate
+          pre-commit run --all-files --show-diff-on-failure --color=always | tee build/gate/hooks.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-hooks
+          path: build/gate/hooks.txt
+          if-no-files-found: ignore
       - name: Look for secrets in the whole history
         run: pre-commit run gitleaks-history --hook-stage manual --all-files --color=always
       - name: Check the pull request's commit messages
@@ -99,7 +109,79 @@ jobs:
       - name: Mutate the lines this pull request changes
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: Scripts/quality/mutation --base "$BASE"
+        run: Scripts/quality/mutation --base "$BASE" --report build/gate/mutation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-mutation
+          path: build/gate/mutation.json
+          if-no-files-found: ignore
+
+  # One comment on the pull request with every gate's reading beside its
+  # baseline, rewritten on each run. Coverage and the sanitizer live in the Tests
+  # workflow, so this waits for that run of the same commit. A fork's token
+  # cannot write to the pull request, so the job runs only for branches of this
+  # repository.
+  summary:
+    name: Summary comment
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [static, compiled, mutation]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for the Tests run of this commit
+        id: tests
+        run: |
+          run=$(gh run list --workflow Tests --commit "$HEAD_SHA" --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [ -n "$run" ]; then
+            gh run watch "$run" --interval 15 > /dev/null || true
+          fi
+      - name: Collect this run's reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gate-*
+          path: build/reports
+      - name: Collect the Tests run's reports
+        if: steps.tests.outputs.run != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gate-*
+          path: build/reports
+          run-id: ${{ steps.tests.outputs.run }}
+          github-token: ${{ github.token }}
+      - name: Collect the job results
+        env:
+          TESTS_RUN: ${{ steps.tests.outputs.run }}
+        run: |
+          mkdir -p build/reports
+          gh run view "$GITHUB_RUN_ID" --json jobs > build/reports/quality-jobs.json
+          if [ -n "$TESTS_RUN" ]; then
+            gh run view "$TESTS_RUN" --json jobs > build/reports/tests-jobs.json
+          fi
+      - name: Write the comment
+        run: |
+          Scripts/quality/summary --reports build/reports --commit "$HEAD_SHA" > build/comment.md
+          cat build/comment.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish it on the pull request
+        run: |
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- quality-gates-summary -->")) | .id' | head -n 1)
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -F body=@build/comment.md > /dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@build/comment.md > /dev/null
+          fi
 
   mutation-full:
     name: Mutation testing (whole package)

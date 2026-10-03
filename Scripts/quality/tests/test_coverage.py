@@ -185,6 +185,25 @@ class Main(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("Den: no floor recorded; run again with --write-floor", complained)
 
+    def test_the_report_puts_what_was_measured_beside_each_floor_even_when_the_run_fails(self):
+        self.record(self.FLOORS)
+        report = self.floor.parent / "out" / "coverage-package.json"
+        status, _, _ = self.run_main(["package", "--report", str(report)],
+                                     package={**self.PACKAGE, "ClaudeHarness": 86.4})
+        self.assertEqual(status, 1)
+        self.assertEqual(json.loads(report.read_text(encoding="utf-8")), [
+            {"name": "HarnessCore", "measured": 96.7, "floor": 96},
+            {"name": "ClaudeHarness", "measured": 86.4, "floor": 87},
+            {"name": "OpenCodeHarness", "measured": 64.9, "floor": 64},
+            {"name": "HarnessProbeArguments", "measured": 91.2, "floor": 90},
+        ])
+
+    def test_the_report_says_null_for_what_was_not_measured_or_has_no_floor(self):
+        report = self.floor.parent / "coverage-app.json"
+        self.run_main(["app", "build/app.xcresult", "--report", str(report)], app={})
+        self.assertEqual(json.loads(report.read_text(encoding="utf-8")),
+                         [{"name": "Den", "measured": None, "floor": None}])
+
     def test_write_floor_records_the_measured_group_and_keeps_the_other(self):
         self.record({"Den": 80, "HarnessCore": 50})
         status, _, _ = self.run_main(["package", "--write-floor"], package=self.PACKAGE)

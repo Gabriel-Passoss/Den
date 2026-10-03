@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+"""Writes the pull request comment that sums up the quality gates.
+
+  Scripts/quality/summary --reports <folder> [--commit <sha>]
+
+The Quality workflow collects into <folder> what the jobs left behind: the
+coverage and mutation reports, the output of the commit hooks, and the job
+results of the Quality and Tests runs. Each gate becomes one table row with
+what was measured beside its baseline. A gate whose data is missing says so
+and is not judged. The comment goes to standard output.
+"""
+import argparse
+import json
+import re
+import sys
+from collections import Counter, namedtuple
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+MARKER = "<!-- quality-gates-summary -->"
+NO_DATA = "sem dados"
+NO_BASELINE = "sem baseline"
+PASSED, FAILED, UNJUDGED = "✓", "✗", "—"
+
+COVERAGE_GATES = (
+    ("HarnessCore", "Cobertura · HarnessCore"),
+    ("ClaudeHarness", "Cobertura · ClaudeHarness"),
+    ("OpenCodeHarness", "Cobertura · OpenCodeHarness"),
+    ("HarnessProbeArguments", "Cobertura · HarnessProbeArguments"),
+    ("Den", "Cobertura · app fora de Views"),
+)
+STATIC_JOB = "Format, lint, duplication, secrets"
+COMPILED_JOB = "Warnings as errors, unused code"
+SANITIZER_JOB = "Thread Sanitizer"
+HOOK_LINE = re.compile(r"^(.+?)\.{3,}(?:\(no files to check\))?(Passed|Failed|Skipped)$")
+COLOUR = re.compile(r"\x1b\[[0-9;]*m")
+HOOK_RESULTS = {"Passed": "success", "Failed": "failure", "Skipped": None}
+
+Row = namedtuple("Row", "gate measured baseline mark")
+
+
+def percent(value):
+    return f"{value:.1f}".replace(".", ",") + "%"
+
+
+def counted(number, singular, plural):
+    return f"{number} {singular if number == 1 else plural}"
+
+
+def coverage_rows(entries):
+    by_name = {entry["name"]: entry for entry in entries}
+    rows = []
+    for name, gate in COVERAGE_GATES:
+        entry = by_name.get(name, {})
+        measured, floor = entry.get("measured"), entry.get("floor")
+        if measured is None or floor is None:
+            mark = UNJUDGED
+        else:
+            mark = PASSED if measured >= floor else FAILED
+        rows.append(Row(gate, NO_DATA if measured is None else percent(measured),
+                        NO_DATA if floor is None else f"piso {floor}%", mark))
+    return rows
+
+
+def mutation_row(outcomes, baseline):
+    gate = "Mutação · linhas do PR"
+    if outcomes is None:
+        return Row(gate, NO_DATA, NO_DATA, UNJUDGED)
+    if not outcomes:
+        return Row(gate, "nenhum mutante nas linhas alteradas", UNJUDGED, PASSED)
+    counts = Counter(entry["outcome"] for entry in outcomes)
+    survivors = [entry for entry in outcomes if entry["outcome"] == "survived"]
+    known = sum(1 for entry in survivors if _mutant_key(entry) in baseline)
+    fresh = len(survivors) - known
+    measured = f"{counted(counts['killed'], 'morto', 'mortos')}, {counted(counts['survived'], 'vivo', 'vivos')}"
+    if counts["discarded"]:
+        measured += f", {counted(counts['discarded'], 'descartado', 'descartados')}"
+    accepted = f"{known} no baseline"
+    if fresh:
+        accepted += f", {counted(fresh, 'novo', 'novos')}"
+    return Row(gate, measured, accepted, FAILED if fresh else PASSED)
+
+
+def _mutant_key(entry):
+    return (entry["file"], entry["code"], entry["original"], entry["replacement"], entry["occurrence"])
+
+
+def hook_states(text):
+    states = {}
+    for line in COLOUR.sub("", text).splitlines():
+        match = HOOK_LINE.match(line)
+        if match:
+            states[match.group(1)] = HOOK_RESULTS[match.group(2)]
+    return states
+
+
+def check_row(gate, state, url, clean, baseline):
+    if state == "success":
+        return Row(gate, clean, baseline, PASSED)
+    if state == "failure":
+        return Row(gate, f"[falhou]({url})" if url else "falhou", baseline, FAILED)
+    return Row(gate, NO_DATA, baseline, UNJUDGED)
+
+
+def loaded(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def first(reports, pattern):
+    return next(iter(sorted(reports.rglob(pattern))), None)
+
+
+def size_of(path, measure):
+    content = loaded(path)
+    try:
+        return f"{len(measure(content))} no baseline"
+    except (KeyError, TypeError):
+        return NO_DATA
+
+
+def rows(reports, root):
+    entries = []
+    for path in sorted(reports.rglob("coverage-*.json")):
+        entries.extend(loaded(path) or [])
+
+    mutation_report = first(reports, "mutation.json")
+    outcomes = loaded(mutation_report) if mutation_report else None
+    accepted = {_mutant_key(entry) for entry in loaded(root / ".mutation-baseline.json") or []}
+
+    hooks_log = first(reports, "hooks.txt")
+    hooks = hook_states(hooks_log.read_text(encoding="utf-8", errors="replace")) if hooks_log else {}
+
+    jobs = {}
+    for path in sorted(reports.glob("*-jobs.json")):
+        for job in (loaded(path) or {}).get("jobs", []):
+            jobs[job["name"]] = job
+
+    def job_url(name):
+        return jobs.get(name, {}).get("url")
+
+    def step_state(name, step):
+        for candidate in jobs.get(name, {}).get("steps", []):
+            if candidate["name"] == step:
+                return candidate.get("conclusion")
+        return None
+
+    static, compiled = job_url(STATIC_JOB), job_url(COMPILED_JOB)
+    return coverage_rows(entries) + [
+        mutation_row(outcomes if isinstance(outcomes, list) else None, accepted),
+        check_row("Formatação", hooks.get("SwiftFormat"), static, "sem diferenças", NO_BASELINE),
+        check_row("Lint", hooks.get("SwiftLint"), static, "0 novas",
+                  size_of(root / ".swiftlint-baseline.json", lambda content: content)),
+        check_row("Código duplicado", hooks.get("Duplicated code (jscpd)"), static, "0 novos",
+                  size_of(root / ".jscpd-baseline.json", lambda content: content["fingerprints"])),
+        check_row("Warnings como erro", step_state(COMPILED_JOB, "Build everything with warnings as errors"),
+                  compiled, "0 warnings", NO_BASELINE),
+        check_row("Código morto", step_state(COMPILED_JOB, "Look for unused code"), compiled, "0 novos",
+                  size_of(root / ".periphery-baseline.json", lambda content: content["v1"]["usrs"])),
+        check_row("Thread Sanitizer", jobs.get(SANITIZER_JOB, {}).get("conclusion"), job_url(SANITIZER_JOB),
+                  "0 corridas", NO_BASELINE),
+    ]
+
+
+def render(table, commit):
+    lines = [MARKER, "## Quality gates", "", "| Gate | Medido | Linha de base | |", "|---|---|---|:-:|"]
+    lines += [f"| {row.gate} | {row.measured} | {row.baseline} | {row.mark} |" for row in table]
+    footer = "Atualizado a cada execução do CI"
+    lines += ["", f"{footer}, commit `{commit[:7]}`." if commit else f"{footer}."]
+    return "\n".join(lines) + "\n"
+
+
+def main(arguments=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--reports", required=True, metavar="FOLDER")
+    parser.add_argument("--commit", metavar="SHA")
+    options = parser.parse_args(arguments)
+    sys.stdout.write(render(rows(Path(options.reports), ROOT), options.commit))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

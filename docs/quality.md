@@ -144,6 +144,23 @@ quando um sobrevivente não está em `.mutation-baseline.json`.
 O workflow Quality tem um disparo manual que roda o pacote inteiro e publica
 o resultado de cada mutante como artefato.
 
+## Resumo no pull request
+
+O workflow Quality publica um comentário no PR com a leitura de cada gate ao
+lado da sua linha de base, e reescreve esse mesmo comentário a cada execução:
+
+- cobertura medida e piso, por alvo;
+- mutantes mortos e vivos nas linhas do PR, e quantos dos vivos já estão no
+  baseline;
+- para formatação, lint, duplicação, warnings, código morto e sanitizer, se o
+  gate passou e o tamanho do baseline.
+
+Quem monta a tabela é `Scripts/quality/summary`, a partir dos relatórios que
+os jobs publicam como artefatos `gate-*`. Uma linha diz "sem dados" quando o
+job não chegou a produzir o relatório, por exemplo porque os testes falharam
+antes de medir a cobertura. Em PR vindo de fork o comentário não é publicado,
+porque o token do workflow não pode escrever ali.
+
 ## Dívida registrada (baselines)
 
 Os gates foram ligados num código que já existia. O que já estava lá ficou
