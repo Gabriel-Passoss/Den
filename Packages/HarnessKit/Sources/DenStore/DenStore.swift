@@ -14,9 +14,11 @@ public struct OpenedStore: Sendable {
 
 public struct Repositories: Sendable {
     public let sessions: any SessionRepository
+    public let sidebar: any SidebarRepository
 
     init(database: Database, now: @escaping @Sendable () -> Date) {
         sessions = SQLiteSessionRepository(database: database, now: now)
+        sidebar = SQLiteSidebarRepository(database: database)
     }
 }
 
