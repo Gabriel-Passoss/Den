@@ -15,10 +15,14 @@ public struct OpenedStore: Sendable {
 public struct Repositories: Sendable {
     public let sessions: any SessionRepository
     public let sidebar: any SidebarRepository
+    public let preferences: any SessionPreferencesRepository
+    public let harnessCache: any HarnessCacheRepository
 
     init(database: Database, now: @escaping @Sendable () -> Date) {
         sessions = SQLiteSessionRepository(database: database, now: now)
         sidebar = SQLiteSidebarRepository(database: database)
+        preferences = SQLiteSessionPreferencesRepository(database: database)
+        harnessCache = SQLiteHarnessCacheRepository(database: database, now: now)
     }
 }
 
@@ -45,6 +49,7 @@ public enum DenStore {
                                  _ now: @escaping @Sendable () -> Date) throws -> Repositories {
         let database = try Database(location)
         try Migrator(Schema.migrations).migrate(database)
+        SQLiteHarnessCacheRepository(database: database, now: now).prune()
         return Repositories(database: database, now: now)
     }
 
