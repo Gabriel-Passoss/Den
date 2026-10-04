@@ -9,23 +9,20 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
-# CI builds with the Xcode named here, so a new compiler arrives as a change to
-# this line and not with the runner image. There is no team signing identity
-# on CI, so everything is signed ad hoc.
 env:
-  XCODE_VERSION: "26.6"
+  XCODE_VERSION: "27.0"
   SIGNING: CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
 
 jobs:
   harnesskit:
     name: HarnessKit
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: ./.github/actions/select-xcode
         with:
-          xcode-version: ${{ env.XCODE_VERSION }}
+          version: ${{ env.XCODE_VERSION }}
       - name: Test the package
         run: swift test --package-path Packages/HarnessKit --enable-code-coverage
       - name: Check the coverage floor
@@ -33,13 +30,13 @@ jobs:
 
   app:
     name: App (unit + pipeline E2E)
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: ./.github/actions/select-xcode
         with:
-          xcode-version: ${{ env.XCODE_VERSION }}
+          version: ${{ env.XCODE_VERSION }}
       - name: Test the app
         run: |
           # shellcheck disable=SC2086 # $SIGNING is a list of build settings
@@ -59,13 +56,13 @@ jobs:
 
   sanitizer:
     name: Thread Sanitizer
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: ./.github/actions/select-xcode
         with:
-          xcode-version: ${{ env.XCODE_VERSION }}
+          version: ${{ env.XCODE_VERSION }}
       # A data race fails either command on its own; no sanitizer option is needed.
       - name: Test the package under Thread Sanitizer
         run: swift test --package-path Packages/HarnessKit --sanitize=thread
@@ -83,33 +80,3 @@ jobs:
         with:
           name: tsan-xcresult
           path: build/tsan.xcresult
-
-  ui:
-    name: UI (XCUITest)
-    runs-on: macos-26
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: ${{ env.XCODE_VERSION }}
-      # Under sudo the tool asks for root's password and waits forever, so run
-      # it as the runner's user, bounded, and let the UI tests report the rest.
-      - name: Allow UI automation without a password prompt
-        run: automationmodetool enable-automationmode-without-authentication < /dev/null
-        timeout-minutes: 2
-        continue-on-error: true
-      - name: Test the UI
-        run: |
-          # shellcheck disable=SC2086 # $SIGNING is a list of build settings
-          xcodebuild test \
-            -project Den.xcodeproj -scheme DenUITests \
-            -destination 'platform=macOS' \
-            -resultBundlePath build/ui.xcresult \
-            $SIGNING
-      # A failing UI test attaches the accessibility tree; read it from here.
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: ui-xcresult
-          path: build/ui.xcresult

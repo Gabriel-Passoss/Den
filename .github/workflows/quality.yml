@@ -14,35 +14,26 @@ concurrency:
 permissions:
   contents: read
 
-# Same Xcode and signing setup as tests.yml: a pinned version, and no team
-# identity on CI, so everything is signed ad hoc.
 env:
-  XCODE_VERSION: "26.6"
+  XCODE_VERSION: "27.0"
   SIGNING: CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
 
 jobs:
   static:
     name: Format, lint, duplication, secrets
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # gitleaks and the commit-message check read the history
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: ./.github/actions/select-xcode
         with:
-          xcode-version: ${{ env.XCODE_VERSION }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
+          version: ${{ env.XCODE_VERSION }}
       - uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/pre-commit
-            .build/quality-tools
-          key: quality-static-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.pre-commit-config.yaml', 'Scripts/quality/tool') }}
-      - name: Install pre-commit
-        run: pip install pre-commit==4.6.2
+          path: .build/quality-tools
+          key: quality-static-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-${{ hashFiles('Scripts/quality/tool') }}
       # The same hooks a commit runs, on every file.
       - name: Run the commit hooks on the whole tree
         run: pre-commit run --all-files --show-diff-on-failure --color=always
@@ -64,17 +55,17 @@ jobs:
 
   compiled:
     name: Warnings as errors, unused code
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: ./.github/actions/select-xcode
         with:
-          xcode-version: ${{ env.XCODE_VERSION }}
+          version: ${{ env.XCODE_VERSION }}
       - uses: actions/cache@v4
         with:
           path: .build/quality-tools
-          key: quality-compiled-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Scripts/quality/tool') }}
+          key: quality-compiled-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-${{ hashFiles('Scripts/quality/tool') }}
       # build-for-testing compiles the test targets too, and the index it
       # leaves in build/DerivedData is what the unused-code scan reads.
       - name: Build everything with warnings as errors
@@ -87,15 +78,15 @@ jobs:
   mutation:
     name: Mutation testing (changed lines)
     if: github.event_name == 'pull_request'
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the script diffs against the pull request's base
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: ./.github/actions/select-xcode
         with:
-          xcode-version: ${{ env.XCODE_VERSION }}
+          version: ${{ env.XCODE_VERSION }}
       - name: Mutate the lines this pull request changes
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -104,13 +95,13 @@ jobs:
   mutation-full:
     name: Mutation testing (whole package)
     if: github.event_name == 'workflow_dispatch'
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: ./.github/actions/select-xcode
         with:
-          xcode-version: ${{ env.XCODE_VERSION }}
+          version: ${{ env.XCODE_VERSION }}
       - name: Mutate the whole package
         run: Scripts/quality/mutation --all --report build/mutation.json
       - uses: actions/upload-artifact@v4
