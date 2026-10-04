@@ -16,12 +16,12 @@ let package = Package(
         .target(name: "HarnessTestSupport"),
         .testTarget(
             name: "HarnessCoreTests",
-            dependencies: ["HarnessCore", "HarnessTestSupport"]
+            dependencies: ["HarnessCore", "HarnessTestSupport", "DenStore"]
         ),
         .target(name: "ClaudeHarness", dependencies: ["HarnessCore"]),
         .testTarget(
             name: "ClaudeHarnessTests",
-            dependencies: ["ClaudeHarness", "HarnessCore", "HarnessTestSupport"],
+            dependencies: ["ClaudeHarness", "HarnessCore", "HarnessTestSupport", "DenStore"],
 
             resources: [.copy("Fixtures")]
         ),

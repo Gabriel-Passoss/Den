@@ -13,7 +13,7 @@ mesmas versões das ferramentas.
 | Formatação Swift (o estilo da casa, sem reescrever o que já é deliberado) | SwiftFormat 0.63.1 — `.swiftformat` | ✓ corrige sozinho | ✓ |
 | Lint: falhas lógicas (`a == a`, force unwrap, `Task` que engole erro, observer descartado, `super` esquecido…), idiomas e limites de tamanho | SwiftLint 0.65.1 — `.swiftlint.yml` | ✓ | ✓ |
 | Sem comentários novos em Swift; só diretivas de ferramenta passam | SwiftLint, regra `no_comments` | ✓ | ✓ |
-| Fronteiras de módulo: HarnessKit sem framework de UI, harness concreto só em `Den/Harness`, `Den/Shared` sem `HarnessCore` | SwiftLint, regras customizadas em `.swiftlint.yml` | ✓ | ✓ |
+| Fronteiras de módulo: HarnessKit sem framework de UI, harness concreto só em `Den/Harness`, `Den/Shared` sem `HarnessCore`, SQLite só em `SQLiteKit`, `SQLiteKit` só em `DenStore` | SwiftLint, regras customizadas em `.swiftlint.yml` | ✓ | ✓ |
 | Código duplicado (clone novo de ≥ 50 tokens e ≥ 5 linhas) | jscpd 5.4.0 — `.jscpd.json` | ✓ | ✓ |
 | Warnings do compilador viram erro (concorrência, deprecações, valores não usados, código inalcançável) | `swiftc` / `xcodebuild` — `Scripts/quality/build-strict` | | ✓ |
 | Código não usado: declarações, parâmetros, imports, propriedades só atribuídas | Periphery 3.8.0 — `.periphery.yml` e `Packages/HarnessKit/.periphery.yml` | | ✓ |
@@ -61,10 +61,13 @@ do jeito que os hooks esperam.
   (`swiftlint:`, `swiftformat:`, `periphery:`, `jscpd:` e o
   `swift-tools-version:` do manifesto do pacote), sem texto depois.
 - **Import recusado** (`headless_harnesskit`,
-  `concrete_harness_outside_registry`, `shared_knows_no_harness`): a
+  `concrete_harness_outside_registry`, `shared_knows_no_harness`,
+  `sqlite_behind_sqlitekit`, `sqlitekit_behind_denstore`): a
   dependência cruza uma fronteira de módulo. O HarnessKit não conhece UI, o
   app só fala com um harness concreto por `Den/Harness`, e `Den/Shared` não
-  conhece harness nenhum.
+  conhece harness nenhum. O SQLite só é importado pelo `SQLiteKit`, e o
+  `SQLiteKit` só pelo `DenStore`: o resto do código fala com um protocolo de
+  repositório.
 - **jscpd achou um clone novo**: o relatório marca com `[NEW]` os dois trechos.
   Extraia o que é comum. Se a repetição for intencional, envolva o trecho com
   `// jscpd:ignore-start` e `// jscpd:ignore-end`.
