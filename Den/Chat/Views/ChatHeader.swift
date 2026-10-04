@@ -22,6 +22,7 @@ struct ChatHeader: View {
         }
         .onKeyboardShortcut("0", modifiers: [.option, .command]) { toggle(.changes) }
         .onKeyboardShortcut("9", modifiers: [.option, .command]) { toggle(.run) }
+        .onKeyboardShortcut("8", modifiers: [.option, .command]) { toggle(.memory) }
         .onChange(of: pane) {
             if pane != .closed { lastOpenPane = pane }
         }
@@ -68,7 +69,7 @@ struct ChatHeader: View {
                 }
         }
         .buttonStyle(DenButtonStyle(kind: .secondary))
-        .help(pane == .closed ? "Mostrar alterações e execução (⌥⌘0 / ⌥⌘9)"
+        .help(pane == .closed ? "Mostrar alterações, execução e memória (⌥⌘0 / ⌥⌘9 / ⌥⌘8)"
                               : "Ocultar painel")
         .accessibilityLabel(pane == .closed ? "Mostrar painel" : "Ocultar painel")
     }

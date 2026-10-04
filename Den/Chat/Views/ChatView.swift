@@ -118,7 +118,7 @@ struct ChatView: View {
     private var inspector: some View {
         InspectorView(pane: $pane, gitChanges: gitChanges,
                       directory: chat.workingDirectory, runRoot: runRoot,
-                      runActive: runActive)
+                      runActive: runActive, chat: chat)
     }
 
     private var runRoot: URL { runConfigurations.root(for: chat.workingDirectory) }
