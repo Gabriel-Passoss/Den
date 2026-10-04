@@ -132,9 +132,9 @@ class MissingInputs(unittest.TestCase):
 
 class Main(unittest.TestCase):
     PACKAGE = {"HarnessCore": 96.7, "ClaudeHarness": 87.9, "OpenCodeHarness": 64.9, "HarnessProbeArguments": 91.2,
-               "SQLiteKit": 95.4, "DenStore": 93.1}
+               "SQLiteKit": 95.4, "DenStore": 93.1, "DenMemory": 97.8}
     FLOORS = {"HarnessCore": 96, "ClaudeHarness": 87, "OpenCodeHarness": 64, "HarnessProbeArguments": 90, "Den": 80,
-              "SQLiteKit": 95, "DenStore": 93}
+              "SQLiteKit": 95, "DenStore": 93, "DenMemory": 97}
 
     def setUp(self):
         scratch = tempfile.TemporaryDirectory()
@@ -162,7 +162,7 @@ class Main(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(complained, "")
         self.assertIn("OpenCodeHarness          64.9%   floor 64%", printed)
-        self.assertEqual(len(printed.splitlines()), 6)
+        self.assertEqual(len(printed.splitlines()), 7)
 
     def test_a_target_below_its_floor_fails_the_run(self):
         self.record(self.FLOORS)
@@ -192,7 +192,7 @@ class Main(unittest.TestCase):
         status, _, _ = self.run_main(["package", "--write-floor"], package=self.PACKAGE)
         self.assertEqual(status, 0)
         self.assertEqual(json.loads(self.floor.read_text(encoding="utf-8")),
-                         {"ClaudeHarness": 87, "Den": 80, "DenStore": 92, "HarnessCore": 96,
+                         {"ClaudeHarness": 87, "Den": 80, "DenMemory": 97, "DenStore": 92, "HarnessCore": 96,
                           "HarnessProbeArguments": 90, "OpenCodeHarness": 64, "SQLiteKit": 94})
         self.assertTrue(self.floor.read_text(encoding="utf-8").endswith("}\n"))
 
