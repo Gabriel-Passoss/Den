@@ -65,9 +65,6 @@ public final class Database: @unchecked Sendable {
         return opened
     }
 
-    private static let busyAttempts = 100
-    private static let busyPause: UInt32 = 50000
-
     private static func configure(_ connection: Connection, _ location: Location) throws {
         try connection.executeScript("PRAGMA busy_timeout = 5000")
         if location != .memory {
@@ -76,15 +73,16 @@ public final class Database: @unchecked Sendable {
         try connection.executeScript("PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL")
     }
 
-    private static func waitingWhileBusy(_ body: () throws -> Void) throws {
-        for _ in 1..<busyAttempts {
+    static func waitingWhileBusy(patience: TimeInterval = 5, pause: TimeInterval = 0.05,
+                                 _ body: () throws -> Void) throws {
+        let deadline = Date().addingTimeInterval(patience)
+        while true {
             do {
                 try body()
                 return
-            } catch DatabaseError.sqlite(let code, _) where code == SQLITE_BUSY {
-                usleep(busyPause)
+            } catch DatabaseError.sqlite(let code, _) where code == SQLITE_BUSY && Date() < deadline {
+                Thread.sleep(forTimeInterval: pause)
             }
         }
-        try body()
     }
 }
