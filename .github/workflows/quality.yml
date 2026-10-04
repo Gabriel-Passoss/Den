@@ -33,7 +33,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .build/quality-tools
-          key: quality-static-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Scripts/quality/tool') }}
+          key: quality-static-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-${{ hashFiles('Scripts/quality/tool') }}
       # The same hooks a commit runs, on every file.
       - name: Run the commit hooks on the whole tree
         run: pre-commit run --all-files --show-diff-on-failure --color=always
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .build/quality-tools
-          key: quality-compiled-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Scripts/quality/tool') }}
+          key: quality-compiled-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-${{ hashFiles('Scripts/quality/tool') }}
       # build-for-testing compiles the test targets too, and the index it
       # leaves in build/DerivedData is what the unused-code scan reads.
       - name: Build everything with warnings as errors
