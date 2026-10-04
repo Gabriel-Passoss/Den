@@ -65,9 +65,26 @@ public final class Database: @unchecked Sendable {
         return opened
     }
 
+    private static let busyAttempts = 100
+    private static let busyPause: UInt32 = 50000
+
     private static func configure(_ connection: Connection, _ location: Location) throws {
-        if location != .memory { try connection.executeScript("PRAGMA journal_mode = WAL") }
-        try connection.executeScript(
-            "PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000")
+        try connection.executeScript("PRAGMA busy_timeout = 5000")
+        if location != .memory {
+            try waitingWhileBusy { try connection.executeScript("PRAGMA journal_mode = WAL") }
+        }
+        try connection.executeScript("PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL")
+    }
+
+    private static func waitingWhileBusy(_ body: () throws -> Void) throws {
+        for _ in 1..<busyAttempts {
+            do {
+                try body()
+                return
+            } catch DatabaseError.sqlite(let code, _) where code == SQLITE_BUSY {
+                usleep(busyPause)
+            }
+        }
+        try body()
     }
 }
