@@ -33,6 +33,9 @@ let package = Package(
             resources: [.copy("Fixtures")]
         ),
 
+        .target(name: "SQLiteKit"),
+        .testTarget(name: "SQLiteKitTests", dependencies: ["SQLiteKit"]),
+
         .target(name: "HarnessProbeArguments"),
         .testTarget(name: "HarnessProbeArgumentsTests", dependencies: ["HarnessProbeArguments"]),
 
