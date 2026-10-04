@@ -1,12 +1,13 @@
 import Testing
 import Foundation
 import HarnessCore
+import HarnessTestSupport
 @testable import ClaudeHarness
 
 private let install = HarnessInstallation(executable: "/opt/homebrew/bin/claude", version: "2.1.236")
 private let cwd = URL(fileURLWithPath: "/tmp/scratch")
-private let session = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
-private let previousSession = UUID(uuidString: "99999999-8888-7777-6666-555555555555")!
+private let session = fixedUUID("11111111-2222-3333-4444-555555555555")
+private let previousSession = fixedUUID("99999999-8888-7777-6666-555555555555")
 
 @Test func theLaunchCarriesTheFlagThatEnablesPermissionRouting() throws {
     let launch = ClaudeLaunch.make(installation: install, workingDirectory: cwd, session: .fresh(sessionID: session))

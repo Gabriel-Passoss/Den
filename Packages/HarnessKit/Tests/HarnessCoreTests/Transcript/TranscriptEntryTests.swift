@@ -1,8 +1,9 @@
 import Testing
 import Foundation
+import HarnessTestSupport
 @testable import HarnessCore
 
-private let fixedID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+private let fixedID = fixedUUID("11111111-1111-1111-1111-111111111111")
 private let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
 
 private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {

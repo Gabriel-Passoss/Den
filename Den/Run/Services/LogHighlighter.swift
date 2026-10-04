@@ -27,6 +27,10 @@ nonisolated enum LogHighlighter {
     }
 
     private static func pattern(_ source: String) -> NSRegularExpression {
-        try! NSRegularExpression(pattern: source, options: [.anchorsMatchLines])
+        do {
+            return try NSRegularExpression(pattern: source, options: [.anchorsMatchLines])
+        } catch {
+            preconditionFailure("\(source) is not a usable pattern: \(error)")
+        }
     }
 }

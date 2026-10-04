@@ -140,7 +140,7 @@ private let golden: [Golden] = [
 
 private let goldenHandoffs: [(String, Handoff, String)] = [
     ("briefing", .briefing("resumo"), #"{"briefing":{"_0":"resumo"}}"#),
-    ("replay", .replay(throughEntry: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!),
+    ("replay", .replay(throughEntry: fixedUUID("22222222-2222-2222-2222-222222222222")),
      #"{"replay":{"throughEntry":"22222222-2222-2222-2222-222222222222"}}"#),
 ]
 

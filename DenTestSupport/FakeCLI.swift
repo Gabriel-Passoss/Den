@@ -182,4 +182,9 @@ nonisolated enum RecordedSession {
 
 nonisolated private final class TestBundle {}
 
-nonisolated private let testResources = Bundle(for: TestBundle.self).resourceURL!
+nonisolated private let testResources: URL = {
+    guard let resources = Bundle(for: TestBundle.self).resourceURL else {
+        preconditionFailure("the test bundle has no resource folder")
+    }
+    return resources
+}()

@@ -5,7 +5,7 @@ struct DevEnvironment: AppEnvironment {
 
     private let support = URL.applicationSupportDirectory.appending(path: "Den Dev")
 
-    let defaults = UserDefaults(suiteName: DevEnvironment.defaultsSuite)!
+    let defaults = userDefaults(inSuite: DevEnvironment.defaultsSuite)
 
     var sessionsRoot: URL { support.appending(path: "sessions") }
     var attachmentsRoot: URL { support.appending(path: "attachments") }

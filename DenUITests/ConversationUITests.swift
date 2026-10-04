@@ -33,9 +33,8 @@ final class ConversationUITests: XCTestCase {
         app.launchEnvironment["DEN_UI_TEST_ROOT"] = root.path
         app.launchEnvironment["DEN_PROJECT_SETUP"] = projectSetup
         app.launchEnvironment.merge(extraEnvironment) { $1 }
-        for cli in [claude!, openCode!] {
-            app.launchEnvironment.merge(cli.launchEnvironment) { $1 }
-        }
+        app.launchEnvironment.merge(claude.launchEnvironment) { $1 }
+        app.launchEnvironment.merge(openCode.launchEnvironment) { $1 }
         app.launchEnvironment["DEN_CLI_claude-code"] = claude.executable
         app.launchEnvironment["DEN_CLI_opencode"] = openCode.executable
         app.launch()

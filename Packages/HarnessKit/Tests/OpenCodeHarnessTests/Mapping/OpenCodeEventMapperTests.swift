@@ -24,7 +24,11 @@ private func kindName(_ kind: TranscriptEntry.Kind) -> String {
 }
 
 private func update(_ text: String) -> JSONValue {
-    try! JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    do {
+        return try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    } catch {
+        preconditionFailure("the recorded fixture is not JSON: \(error)")
+    }
 }
 
 private func runFixture(_ name: String) throws -> MappedOutput {

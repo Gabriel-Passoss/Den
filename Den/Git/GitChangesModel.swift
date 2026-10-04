@@ -230,7 +230,8 @@ final class GitChangesModel {
                 singles.append(file)
             }
         }
-        let items = grouped.keys.sorted().map { RepoItem.group(dir: $0, files: grouped[$0]!) }
+        let items = grouped.sorted { $0.key < $1.key }
+            .map { RepoItem.group(dir: $0.key, files: $0.value) }
             + singles.map(RepoItem.single)
 
         return Repo(root: root, branch: survey.branch, files: files, items: items,
