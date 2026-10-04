@@ -13,7 +13,8 @@ public struct MemoryConsolidator: Sendable {
         for candidate in candidates {
             guard let scope = scope(of: candidate, in: project) else { continue }
             let existing = repository.pages(in: scope)
-            let slug = existing.first { $0.slug == candidate.page }?.slug ?? MemorySlug.make(candidate.title)
+            let slug = existing.first { $0.slug == candidate.page }?.slug
+                ?? freeSlug(for: candidate.title, among: existing)
             let previous = existing.first { $0.slug == slug }
             let sessions = previous?.sessions ?? []
             let page = MemoryPage(
@@ -26,6 +27,17 @@ public struct MemoryConsolidator: Sendable {
             saved.append(page)
         }
         return saved
+    }
+
+    private func freeSlug(for title: String, among existing: [MemoryPage]) -> String {
+        let base = MemorySlug.make(title)
+        let candidates = [base] + (2...existing.count + 2).map { "\(base)-\($0)" }
+        let free = candidates.first { slug in
+            slug != FileMemoryRepository.indexSlug && !existing.contains {
+                $0.slug == slug && $0.title.caseInsensitiveCompare(title) != .orderedSame
+            }
+        }
+        return free ?? base
     }
 
     private func scope(of candidate: MemoryCandidate, in project: ProjectIdentity?) -> MemoryScope? {

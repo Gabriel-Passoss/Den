@@ -72,6 +72,11 @@ private func fact(_ title: String, layer: MemoryLayer = .project, category: Stri
 
     #expect(desk.repository.pages(in: .user).map(\.body) == ["depois"])
     #expect(desk.repository.pages(in: .user).map(\.created) == [dawn])
+
+    let again = try desk.consolidator.apply([fact("SEM COAUTOR", layer: .user, body: "em maiúsculas")],
+                                            project: nil, session: UUID(), now: noon)
+    #expect(again.map(\.slug) == ["sem-coautor"])
+    #expect(desk.repository.pages(in: .user).map(\.body) == ["em maiúsculas"])
 }
 
 @Test func aProjectFactOutsideARepositoryIsDropped() throws {
@@ -104,4 +109,31 @@ private func fact(_ title: String, layer: MemoryLayer = .project, category: Stri
                                             project: den, session: UUID(), now: noon)
 
     #expect(saved.map(\.slug) == ["titulo-sao"])
+}
+
+@Test func twoDifferentFactsNeverShareAFile() throws {
+    let desk = try Desk()
+    defer { desk.scratch.remove() }
+    let long = String(repeating: "palavra ", count: 12)
+
+    let saved = try desk.consolidator.apply(
+        [fact("日本語のタイトル", body: "um"), fact("別のタイトル", body: "dois"), fact("もう一つ", body: "três"),
+         fact(long + "primeiro", body: "quatro"), fact(long + "segundo", body: "cinco")],
+        project: den, session: UUID(), now: noon)
+
+    #expect(saved.map(\.slug).prefix(3) == ["memoria", "memoria-2", "memoria-3"])
+    #expect(Set(saved.map(\.slug)).count == 5)
+    #expect(desk.repository.pages(in: .project(den)).map(\.body).sorted() == ["cinco", "dois", "quatro", "três", "um"])
+}
+
+@Test func aFactCalledIndexDoesNotTakeTheWikisFrontPage() throws {
+    let desk = try Desk()
+    defer { desk.scratch.remove() }
+
+    let saved = try desk.consolidator.apply([fact("Index", body: "sobre índices do banco")],
+                                            project: den, session: UUID(), now: noon)
+
+    #expect(saved.map(\.slug) == ["index-2"])
+    #expect(desk.repository.pages(in: .project(den)).map(\.body) == ["sobre índices do banco"])
+    #expect(try desk.scratch.read("projects/\(den.slug)/index.md").hasPrefix("# Memória do projeto den"))
 }

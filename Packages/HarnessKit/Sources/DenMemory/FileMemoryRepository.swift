@@ -1,8 +1,9 @@
 import Foundation
 
 public struct FileMemoryRepository: MemoryRepository {
-    static let indexName = "index.md"
+    static let indexSlug = "index"
     private static let suffix = ".md"
+    static let indexName = indexSlug + suffix
 
     private let root: URL
 
