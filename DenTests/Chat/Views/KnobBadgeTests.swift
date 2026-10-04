@@ -70,10 +70,10 @@ private func modeKnob(current: String?) -> HarnessKnob {
 }
 
 @MainActor
-@Test func modeOptionsCarryTheirIconAndModelOptionsDoNot() {
+@Test func modeOptionsCarryTheirIconAndModelOptionsDoNot() throws {
     let mode = KnobBadge.sections(for: modeKnob(current: nil)) { _ in }
-    let auto = try? #require(mode.flatMap(\.items).first { $0.id == "auto" })
-    if case .symbol(let name, _) = auto?.icon {
+    let auto = try #require(mode.flatMap(\.items).first { $0.id == "auto" })
+    if case .symbol(let name, _) = auto.icon {
         #expect(name == "forward.fill")
     } else {
         Issue.record("o modo automático deveria trazer o ícone de modeLooks")
@@ -85,12 +85,12 @@ private func modeKnob(current: String?) -> HarnessKnob {
 }
 
 @MainActor
-@Test func anOptionWithNoLookKeepsItsLabelAndNoIcon() {
+@Test func anOptionWithNoLookKeepsItsLabelAndNoIcon() throws {
     let knob = HarnessKnob(id: "mode", category: .mode, name: "Permissão", currentValue: nil,
                            options: [HarnessKnob.Option(value: "unknown", label: "Desconhecido")])
 
-    let item = try? #require(KnobBadge.sections(for: knob) { _ in }.flatMap(\.items).first)
+    let item = try #require(KnobBadge.sections(for: knob) { _ in }.flatMap(\.items).first)
 
-    #expect(item?.title == "Desconhecido")
-    #expect(item?.icon == nil)
+    #expect(item.title == "Desconhecido")
+    #expect(item.icon == nil)
 }
