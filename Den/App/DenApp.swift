@@ -29,17 +29,14 @@ struct DenApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if let failure = launch.failure {
-                StoreFailureView(message: failure)
-            } else {
-                ContentView(environment: environment, repositories: launch.repositories)
-                    .environment(appDelegate.runs)
-                    .environment(runConfigurations)
-                    .environment(worktrees)
-                    .environment(monitor)
-                    .defaultAppStorage(environment.defaults)
-                    .task { monitor.start() }
-            }
+            ContentView(environment: environment, repositories: launch.repositories,
+                        storeFailure: launch.failure)
+                .environment(appDelegate.runs)
+                .environment(runConfigurations)
+                .environment(worktrees)
+                .environment(monitor)
+                .defaultAppStorage(environment.defaults)
+                .task { monitor.start() }
         }
 
         .commands { HarnessCommands() }

@@ -12,11 +12,22 @@ struct ContentView: View {
     @AppStorage("Den.sidebarVisible") private var sidebarVisible = true
     @AppStorage("Den.sidebarWidth") private var sidebarWidth: Double = 280
 
-    init(environment: any AppEnvironment, repositories: Repositories) {
+    private let storeFailure: String?
+
+    init(environment: any AppEnvironment, repositories: Repositories, storeFailure: String? = nil) {
+        self.storeFailure = storeFailure
         _workspace = State(initialValue: WorkspaceModel.live(environment, repositories: repositories))
     }
 
     var body: some View {
+        if let storeFailure {
+            StoreFailureView(message: storeFailure)
+        } else {
+            window
+        }
+    }
+
+    private var window: some View {
         HStack(spacing: 0) {
             if sidebarVisible {
                 SidebarView(workspace: workspace, lightsInset: lightsInset,
