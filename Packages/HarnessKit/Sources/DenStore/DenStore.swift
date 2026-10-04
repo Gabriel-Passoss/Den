@@ -17,12 +17,20 @@ public struct Repositories: Sendable {
     public let sidebar: any SidebarRepository
     public let preferences: any SessionPreferencesRepository
     public let harnessCache: any HarnessCacheRepository
+    private let database: Database
 
     init(database: Database, now: @escaping @Sendable () -> Date) {
+        self.database = database
         sessions = SQLiteSessionRepository(database: database, now: now)
         sidebar = SQLiteSidebarRepository(database: database)
         preferences = SQLiteSessionPreferencesRepository(database: database)
         harnessCache = SQLiteHarnessCacheRepository(database: database, now: now)
+    }
+
+    public func documents<Document: Codable & Sendable>(
+        kind: String, as type: Document.Type
+    ) -> any SessionDocumentRepository<Document> {
+        SQLiteSessionDocumentRepository<Document>(database: database, kind: kind)
     }
 }
 

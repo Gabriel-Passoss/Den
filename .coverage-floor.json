@@ -1,7 +1,9 @@
 {
   "ClaudeHarness": 87,
   "Den": 79,
+  "DenStore": 97,
   "HarnessCore": 96,
   "HarnessProbeArguments": 90,
-  "OpenCodeHarness": 64
+  "OpenCodeHarness": 64,
+  "SQLiteKit": 96
 }
