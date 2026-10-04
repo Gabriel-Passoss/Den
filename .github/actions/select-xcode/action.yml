@@ -1,0 +1,27 @@
+name: Select Xcode
+description: Points the rest of the job at the installed Xcode of one version, and fails when the runner has none.
+
+inputs:
+  version:
+    description: The Xcode version to build with, as `xcodebuild -version` prints it.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        WANTED: ${{ inputs.version }}
+      run: |
+        found=""
+        for app in /Applications/Xcode*.app; do
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/version.plist" 2>/dev/null) || continue
+          if [ "$version" = "$WANTED" ]; then
+            echo "DEVELOPER_DIR=$app/Contents/Developer" >> "$GITHUB_ENV"
+            echo "Building with Xcode $version from $app"
+            exit 0
+          fi
+          found="$found $version"
+        done
+        echo "::error::Xcode $WANTED is not installed on this runner (installed:${found:- none})."
+        exit 1
