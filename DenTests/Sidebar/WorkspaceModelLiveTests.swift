@@ -28,7 +28,7 @@ import DenStore
     #expect(workspace.summaries.map(\.title) == ["Guardada"])
 
     workspace.addFolder()
-    let reopened = WorkspaceModel(store: repositories.sessions,
+    let reopened = WorkspaceModel(store: repositories.sessions, sidebar: repositories.sidebar,
                                   defaults: environment.defaults,
                                   cache: SessionCache(defaults: environment.defaults))
     #expect(reopened.folders.count == 1)

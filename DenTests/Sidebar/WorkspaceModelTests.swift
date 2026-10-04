@@ -5,7 +5,7 @@ import HarnessCore
 
 // MARK: - Folder persistence
 
-@Test func foldersSurviveANewModelOnTheSameDefaults() async throws {
+@Test func foldersSurviveANewModelOnTheSameStore() async throws {
     try await withWorkspace { harness in
         harness.model.addFolder()
         let created = try #require(harness.model.folders.first)
@@ -18,90 +18,28 @@ import HarnessCore
 }
 
 @Test func membershipAndOrderSurviveTheSameWay() async throws {
-    let session = UUID().uuidString
     try await withWorkspace { harness in
-        harness.model.membership = [session: "f1"]
-        harness.model.sessionOrder = [session]
+        let session = storedSession("guardada")
+        try await harness.store.saveMetadata(session)
+        harness.model.addFolder()
+        let folder = try #require(harness.model.folders.first)
+        harness.model.membership = [session.id.uuidString: folder.id]
+        harness.model.sessionOrder = [session.id.uuidString]
 
         let reopened = harness.reopened()
-        #expect(reopened.membership == [session: "f1"])
-        #expect(reopened.sessionOrder == [session])
+        #expect(reopened.membership == [session.id.uuidString: folder.id])
+        #expect(reopened.sessionOrder == [session.id.uuidString])
     }
 }
 
-// MARK: - Legacy migration
+@Test func aPlaceInTheSidebarThatPointsNowhereIsNotKept() async throws {
+    try await withWorkspace { harness in
+        harness.model.membership = [UUID().uuidString: "pasta-que-não-existe"]
+        harness.model.sessionOrder = [UUID().uuidString, "nem é um identificador"]
 
-@Test func legacyFoldersMigrateIntoTheNewShape() async throws {
-    try await withWorkspace(seed: { defaults in
-        defaults.set(["/code/api", "/code/web"], forKey: "Den.folders")
-        defaults.set(["/code/api": "API"], forKey: "Den.folderNames")
-    }) { harness in
-        // The named one keeps its name; the unnamed one falls back to the leaf.
-        #expect(harness.model.folders.map(\.name) == ["API", "web"])
-    }
-}
-
-@Test func theNewShapeWinsOverTheLegacyKeys() async throws {
-    let encoded = try JSONEncoder().encode([WorkspaceModel.Folder(id: "f1", name: "Kept")])
-    try await withWorkspace(seed: { defaults in
-        defaults.set(encoded, forKey: "Den.folders.v2")
-        defaults.set(["/code/api"], forKey: "Den.folders")
-        defaults.set(["/code/api": "Ignored"], forKey: "Den.folderNames")
-    }) { harness in
-        #expect(harness.model.folders.map(\.name) == ["Kept"])
-    }
-}
-
-@Test func theMigratedFoldersArePersistedImmediately() async throws {
-    try await withWorkspace(seed: { defaults in
-        defaults.set(["/code/api"], forKey: "Den.folders")
-    }) { harness in
-        let data = try #require(harness.defaults.data(forKey: "Den.folders.v2"))
-        let stored = try JSONDecoder().decode([WorkspaceModel.Folder].self, from: data)
-        #expect(stored.map(\.name) == ["api"])
-    }
-}
-
-@Test func legacyMembershipLandsOnTheFirstRefresh() async throws {
-    try await withWorkspace(seed: { defaults in
-        defaults.set(["/code/api"], forKey: "Den.folders")
-    }) { harness in
-        let session = storedSession("one", in: "/code/api")
-        try await harness.store.saveMetadata(session)
-
-        await harness.model.refresh()
-
-        let folder = try #require(harness.model.folders.first)
-        #expect(harness.model.membership[session.id.uuidString] == folder.id)
-    }
-}
-
-@Test func theLegacyMappingIsSpentAfterOneRefresh() async throws {
-    try await withWorkspace(seed: { defaults in
-        defaults.set(["/code/api"], forKey: "Den.folders")
-    }) { harness in
-        try await harness.store.saveMetadata(storedSession("first", in: "/code/api"))
-        await harness.model.refresh()
-
-        let late = storedSession("late", in: "/code/api")
-        try await harness.store.saveMetadata(late)
-        await harness.model.refresh()
-
-        #expect(harness.model.membership[late.id.uuidString] == nil)
-    }
-}
-
-@Test func aSessionOutsideEveryLegacyFolderStaysLoose() async throws {
-    try await withWorkspace(seed: { defaults in
-        defaults.set(["/code/api"], forKey: "Den.folders")
-    }) { harness in
-        let session = storedSession("elsewhere", in: "/code/web")
-        try await harness.store.saveMetadata(session)
-
-        await harness.model.refresh()
-
-        #expect(harness.model.membership[session.id.uuidString] == nil)
-        #expect(harness.model.looseSessions.map(\.title) == ["elsewhere"])
+        let reopened = harness.reopened()
+        #expect(reopened.membership.isEmpty)
+        #expect(reopened.sessionOrder.isEmpty)
     }
 }
 
