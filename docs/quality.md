@@ -49,6 +49,20 @@ exata no `PATH` (por exemplo via Homebrew), ela é usada direto.
 O Xcode 16+ lê o `.editorconfig`, então o editor já indenta e termina linhas
 do jeito que os hooks esperam.
 
+## Onde o "porquê" fica
+
+Código não leva comentário aqui (regra `no_comments`), então o que um
+comentário carregaria e não cabe num nome fica em `docs/`:
+
+- `docs/fake-cli.md` — o protocolo entre o `FakeCLI` e o script de shell que
+  ele dirige: gatilhos, passos, `__ID__` e os dois construtores.
+- `docs/harnesskit.md` — as decisões do pacote: por que nenhuma leitura
+  bloqueia thread, por que o fim do stream carrega o motivo, e como um formato
+  desconhecido sobrevive no transcript.
+- `docs/testes.md` — a infraestrutura de teste: o pool de suites de defaults,
+  por que esperar faz parte da asserção, e os comportamentos do XCUITest que os
+  testes de UI contornam.
+
 ## No dia a dia
 
 - **SwiftFormat mexeu no arquivo**: o commit para, o arquivo fica corrigido;
@@ -147,11 +161,16 @@ o resultado de cada mutante como artefato.
 ## Dívida registrada (baselines)
 
 Os gates foram ligados num código que já existia. O que já estava lá ficou
-registrado e não bloqueia; **qualquer coisa nova bloqueia**:
+registrado e não bloqueia; **qualquer coisa nova bloqueia**.
+
+O baseline do SwiftLint começou com 276 entradas e hoje tem 23: saíram os
+comentários (214), os force unwraps e force tries, o `master`/`slave` do PTY,
+as closures em posição trailing e a tupla de cinco membros. O que ficou está
+descrito abaixo.
 
 | Arquivo | O que guarda |
 |---|---|
-| `.swiftlint-baseline.json` | violações do SwiftLint que já existiam (funções e arquivos longos, force unwraps, `master`/`slave` no PTY…) e os comentários que já estavam no código |
+| `.swiftlint-baseline.json` | o que sobrou da dívida do SwiftLint: funções, tipos e arquivos acima do limite de tamanho e de complexidade (quase tudo no `ChatModel` e no `GitChangesPanel`), as linhas longas que são JSON gravado dos CLIs e um aninhamento que um teste exige |
 | `.jscpd-baseline.json` | clones que já existiam (ex.: `ControlChannel` × `ACPChannel`, `ClaudeDiscovery` × `OpenCodeDiscovery`, vários testes) |
 | `.periphery-baseline.json` | o que o Periphery acha no app e não dá para apagar: `@State` usado só via `$`, exigência de protocolo que o app ainda não chama, propriedade lida só pelo `Equatable` sintetizado, e `RunInstance.configurationID` |
 | `.mutation-baseline.json` | mutantes que já sobreviviam no HarnessKit, casados pelo texto da linha |
