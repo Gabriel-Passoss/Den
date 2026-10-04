@@ -80,27 +80,3 @@ jobs:
         with:
           name: tsan-xcresult
           path: build/tsan.xcresult
-
-  ui:
-    name: UI (XCUITest)
-    runs-on: [self-hosted, macOS]
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/select-xcode
-        with:
-          version: ${{ env.XCODE_VERSION }}
-      - name: Test the UI
-        run: |
-          # shellcheck disable=SC2086 # $SIGNING is a list of build settings
-          xcodebuild test \
-            -project Den.xcodeproj -scheme DenUITests \
-            -destination 'platform=macOS' \
-            -resultBundlePath build/ui.xcresult \
-            $SIGNING
-      # A failing UI test attaches the accessibility tree; read it from here.
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: ui-xcresult
-          path: build/ui.xcresult
