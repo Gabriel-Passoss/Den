@@ -52,8 +52,6 @@ nonisolated enum SyntaxHighlighter {
         }
     }
 
-    // MARK: - Colors
-
     static let keywordColor = Color(hex: 0xB4A8FF)
     static let stringColor = Color(hex: 0xB5CE8A)
     static let numberColor = Color(hex: 0xF2B482)
@@ -150,8 +148,6 @@ nonisolated enum SyntaxHighlighter {
         flush()
         return result
     }
-
-    // MARK: - Lexical details
 
     private static func isCommentStart(_ chars: [Character], at i: Int,
                                        language: Language) -> Bool {

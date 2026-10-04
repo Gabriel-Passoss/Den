@@ -7,8 +7,6 @@ private func notices(_ chat: ChatModel) -> [String] {
     chat.lines.filter { "\($0.role)" == "notice" }.map(\.text)
 }
 
-// MARK: - Starting
-
 @Test func startDiscoversTheHarnessAndOpensASession() async throws {
     try await withLiveChat { live in
         await live.chat.start()
@@ -66,8 +64,6 @@ private func notices(_ chat: ChatModel) -> [String] {
         #expect(live.chat.knobs == offered)
     }
 }
-
-// MARK: - Sending
 
 @Test func sendStartsTheSessionAndForwardsTheText() async throws {
     try await withLiveChat { live in
@@ -166,8 +162,6 @@ private func notices(_ chat: ChatModel) -> [String] {
     }
 }
 
-// MARK: - Permissions
-
 private let request = PermissionRequest(
     id: "req-1", toolName: "Bash", input: .object([:]),
     options: [.init(id: "allow", kind: .allowOnce, label: "Permitir"),
@@ -238,8 +232,6 @@ private let request = PermissionRequest(
                 == [.deny(message: "o usuário dispensou a pergunta", interrupt: false)])
     }
 }
-
-// MARK: - Knobs
 
 private let modeKnob = HarnessKnob(
     id: "mode", category: .mode, name: "Modo", currentValue: "manual",
@@ -361,8 +353,6 @@ private let effortKnob = HarnessKnob(
     })
 }
 
-// MARK: - Switching harness
-
 @Test func switchingHarnessOpensAFreshSegmentOnTheNewOne() async throws {
     let other = FakeHarness(id: "other", displayName: "Other")
     try await withLiveChat(alongside: [other]) { live in
@@ -402,8 +392,6 @@ private let effortKnob = HarnessKnob(
     }
 }
 
-// MARK: - Stopping
-
 @Test func stopClosesTheSessionAndGoesCold() async throws {
     try await withLiveChat { live in
         await live.chat.send(text: "hello")
@@ -416,8 +404,6 @@ private let effortKnob = HarnessKnob(
         #expect(await live.session.stops == 1)
     }
 }
-
-// MARK: - Updates arriving on the stream
 
 @Test func theInitialisationEventFillsInTheModelAndCatalog() async throws {
     try await withLiveChat { live in

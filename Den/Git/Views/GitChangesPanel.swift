@@ -102,8 +102,6 @@ struct GitChangesPanel: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
 
-    // MARK: - Content
-
     @ViewBuilder
     private var content: some View {
         if !model.loadedOnce {

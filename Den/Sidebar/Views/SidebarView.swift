@@ -50,8 +50,6 @@ struct SidebarView: View {
         }
     }
 
-    // MARK: - List
-
     private var list: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 1) {

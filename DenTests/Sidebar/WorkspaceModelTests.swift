@@ -3,8 +3,6 @@ import Foundation
 import HarnessCore
 @testable import Den
 
-// MARK: - Folder persistence
-
 @Test func foldersSurviveANewModelOnTheSameDefaults() async throws {
     try await withWorkspace { harness in
         harness.model.addFolder()
@@ -30,8 +28,6 @@ import HarnessCore
         #expect(reopened.sessionOrder == [session])
     }
 }
-
-// MARK: - Legacy migration
 
 @Test func legacyFoldersMigrateIntoTheNewShape() async throws {
     try await withWorkspace(seed: { defaults in
@@ -107,8 +103,6 @@ import HarnessCore
     })
 }
 
-// MARK: - Ordering
-
 @Test func sessionsWithoutAStoredOrderFallBackToRecency() async throws {
     try await withWorkspace { harness in
         harness.model.summaries = [summary("older", updated: 100),
@@ -138,8 +132,6 @@ import HarnessCore
     }
 }
 
-// MARK: - Grouping
-
 @Test func sessionsLandInTheirFolder() async throws {
     try await withWorkspace { harness in
         harness.model.folders = [.init(id: "f1", name: "API"),
@@ -167,8 +159,6 @@ import HarnessCore
         #expect(harness.model.looseSessions.map(\.title) == ["orphan"])
     }
 }
-
-// MARK: - Search
 
 @Test func searchMatchesTitleOrWorkingDirectory() async throws {
     try await withWorkspace { harness in
@@ -200,8 +190,6 @@ import HarnessCore
         #expect(harness.model.folderGroups.isEmpty)
     }
 }
-
-// MARK: - Folder operations
 
 @Test func renameFolderTrimsAndIgnoresBlankNames() async throws {
     try await withWorkspace { harness in
@@ -268,8 +256,6 @@ import HarnessCore
     }
 }
 
-// MARK: - Placing sessions
-
 @Test func placeSessionAdoptsTheTargetFolder() async throws {
     try await withWorkspace { harness in
         let moving = summary("moving")
@@ -305,8 +291,6 @@ import HarnessCore
         #expect(harness.model.membership[session.uuidString] == nil)
     }
 }
-
-// MARK: - Sessions backed by the store
 
 @Test func selectRestoresAChatWithoutBringingItToLife() async throws {
     try await withWorkspace { harness in
@@ -386,8 +370,6 @@ import HarnessCore
         #expect(harness.model.selectedID == nil)
     }
 }
-
-// MARK: - Default harness
 
 @Test func theDefaultHarnessRoundTripsThroughTheInjectedDefaults() async throws {
     try await withWorkspace { harness in

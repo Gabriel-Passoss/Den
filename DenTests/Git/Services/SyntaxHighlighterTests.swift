@@ -22,8 +22,6 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
     shades(SyntaxHighlighter.highlight(line, language: language))
 }
 
-// MARK: - Language detection
-
 @Test func languageFromHintCoversTheCommonAliases() {
     #expect(SyntaxHighlighter.language(forHint: "swift") == .swift)
     #expect(SyntaxHighlighter.language(forHint: "TypeScript") == .cFamily)
@@ -48,8 +46,6 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
     #expect(SyntaxHighlighter.language(forFile: "Makefile") == .plain)
     #expect(SyntaxHighlighter.language(forFile: "script.lua") == .generic)
 }
-
-// MARK: - Strings
 
 @Test func highlightPreservesTheLineText() {
     let source = #"let x = "hi" // comment"#
@@ -79,8 +75,6 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
     #expect(tokens("s = 'a'", .swift) == ["plain:s = 'a'"])
 }
 
-// MARK: - JSON
-
 @Test func jsonSeparatesKeysFromValues() {
     #expect(tokens(#"{"name": "value"}"#, .json)
             == ["plain:{", #"type:"name""#, "plain:: ", #"string:"value""#, "plain:}"])
@@ -90,8 +84,6 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
     #expect(tokens(#"{"True": True}"#, .json)
             == ["plain:{", #"type:"True""#, "plain:: True}"])
 }
-
-// MARK: - Numbers
 
 @Test func anIdentifierSwallowsItsTrailingDigits() {
     #expect(tokens("x1 = 42", .cFamily) == ["plain:x1 = ", "number:42"])
@@ -131,8 +123,6 @@ func digitsOutsideAsciiNeverStallTheScanner() {
             == ["plain:value = ", "number:3.", "plain:toString()"])
 }
 
-// MARK: - Identifiers, attributes and keywords
-
 @Test func capitalisedWordsReadAsTypes() {
     #expect(tokens("let x: Int = 0", .swift)
             == ["keyword:let", "plain: x: ", "type:Int", "plain: = ", "number:0"])
@@ -155,8 +145,6 @@ func digitsOutsideAsciiNeverStallTheScanner() {
     #expect(tokens("func main", .swift) == ["keyword:func", "plain: main"])
 }
 
-// MARK: - Comments
-
 @Test func aCommentSwallowsTheRestOfTheLine() {
     #expect(tokens(#"let x = 1 // note "quoted""#, .swift)
             == ["keyword:let", "plain: x = ", "number:1", "plain: ",
@@ -178,8 +166,6 @@ func digitsOutsideAsciiNeverStallTheScanner() {
 @Test func jsonHasNoComments() {
     #expect(tokens("a // note", .json) == ["plain:a // note"])
 }
-
-// MARK: - Rendering diff lines
 
 private func line(_ kind: GitDiffLine.Kind, _ text: String) -> GitDiffLine {
     GitDiffLine(id: 1, kind: kind, number: 1, text: text)

@@ -6,8 +6,6 @@ import HarnessCore
 private let bigPaste = (1...8).map { "line \($0) " + String(repeating: "x", count: 40) }
     .joined(separator: "\n")
 
-// MARK: - Capturing
-
 @Test func aLongPasteBecomesAChipAndStaysOutOfThePrompt() {
     let chat = inertChat()
     chat.prompt = "explain"
@@ -34,8 +32,6 @@ private let bigPaste = (1...8).map { "line \($0) " + String(repeating: "x", coun
     #expect(chat.pendingPastes.isEmpty)
 }
 
-// MARK: - Expanding back into the field
-
 @Test func expandingIntoAnEmptyPromptPutsTheWholeTextThere() throws {
     let chat = inertChat()
     chat.capturePaste(bigPaste)
@@ -57,8 +53,6 @@ private let bigPaste = (1...8).map { "line \($0) " + String(repeating: "x", coun
 
     #expect(chat.prompt == "explain\n" + bigPaste)
 }
-
-// MARK: - Sending
 
 @Test func pastesFollowTheTypedTextInTheTurn() async throws {
     try await withLiveChat { live in

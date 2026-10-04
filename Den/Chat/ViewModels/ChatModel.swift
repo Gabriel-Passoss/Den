@@ -128,8 +128,6 @@ final class ChatModel {
 
     var isLive: Bool { session != nil }
 
-    // MARK: - Creation
-
     init(store: FileTranscriptStore, workingDirectory: URL,
          harness: HarnessID? = nil, cache: SessionCache = .standard,
          registry: HarnessRegistry = .standard,
@@ -219,8 +217,6 @@ final class ChatModel {
         guard let branch else { return folder }
         return "\(folder) · branch \(branch)"
     }
-
-    // MARK: - Lifecycle
 
     func start() async {
         guard session == nil else { return }
@@ -561,8 +557,6 @@ final class ChatModel {
         await persistMetadata()
     }
 
-    // MARK: - Rendering
-
     private func apply(_ update: SessionUpdate) {
         switch update {
         case .event(let event):
@@ -766,8 +760,6 @@ final class ChatModel {
     }
 
     private var writingHarness: HarnessID?
-
-    // MARK: - System notices arriving as user messages
 
     private var awaitingCompactionSummary = false
 

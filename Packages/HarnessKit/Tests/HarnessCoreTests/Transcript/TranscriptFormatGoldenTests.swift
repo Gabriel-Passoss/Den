@@ -136,8 +136,6 @@ private let golden: [Golden] = [
             == (try json(wire)))
 }
 
-// MARK: - Handoff: the provenance this plan exists to record
-
 private let goldenHandoffs: [(String, Handoff, String)] = [
     ("briefing", .briefing("resumo"), #"{"briefing":{"_0":"resumo"}}"#),
     ("replay", .replay(throughEntry: fixedUUID("22222222-2222-2222-2222-222222222222")),
@@ -177,8 +175,6 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
     #expect(try json(String(decoding: try encoder.encode(expected), as: UTF8.self))
             == (try json(wire)))
 }
-
-// MARK: - The two open enums must not drift from themselves
 
 @Test func anUnknownHandoffStrategyDegradesAndReencodesIdempotently() throws {
     let wire = #"{"summarizeWithModel":{"model":"m-9","tokens":800}}"#

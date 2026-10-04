@@ -84,8 +84,6 @@ private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {
     #expect(UsageTotals.zero + a == a)
 }
 
-// MARK: - Case 10: a discriminator this version does not know
-
 private func decodeEntry(_ json: String) throws -> TranscriptEntry {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601

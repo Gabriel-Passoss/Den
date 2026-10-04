@@ -40,8 +40,6 @@ private func sent(_ cli: FakeCLI, _ method: String) -> [String] {
     cli.received.filter { $0.contains(FakeCLI.request(method)) }
 }
 
-// MARK: - Session
-
 @Test func anOpenCodeConversationHandshakesOverACP() async throws {
     try await withEndToEnd { e2e in
         try handshake(e2e.openCode)
@@ -141,8 +139,6 @@ private func sent(_ cli: FakeCLI, _ method: String) -> [String] {
         #expect(restored.isLive)
     }
 }
-
-// MARK: - Handing over between harnesses
 
 @Test func switchingToOpenCodeHandsTheConversationOver() async throws {
     try await withEndToEnd { e2e in

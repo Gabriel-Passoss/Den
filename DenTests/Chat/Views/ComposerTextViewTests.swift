@@ -9,8 +9,6 @@ private func lines(_ height: CGFloat) -> Double {
     Double(height / line)
 }
 
-// MARK: - Height
-
 @Test func anEmptyPromptIsOneLineTall() {
     #expect(lines(ComposerTextView.height(of: "", width: 400)) == 1)
 }
@@ -39,8 +37,6 @@ private func lines(_ height: CGFloat) -> Double {
     #expect(lines(ComposerTextView.height(of: text, width: 400))
             == Double(ComposerTextView.maxLines))
 }
-
-// MARK: - Paste
 
 @MainActor
 @Test func pastingHandsTheTextToTheChatFirst() {

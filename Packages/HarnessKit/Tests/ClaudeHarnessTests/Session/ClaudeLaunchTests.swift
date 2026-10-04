@@ -38,8 +38,6 @@ private let previousSession = fixedUUID("99999999-8888-7777-6666-555555555555")
     #expect(launch.environment["CLAUDE_CODE_ENTRYPOINT"] == "den")
 }
 
-// MARK: - SessionStart
-
 @Test func freshEmitsANewSessionIDAndNothingElseSessionRelated() throws {
     let args = ClaudeLaunch.make(installation: install, workingDirectory: cwd, session: .fresh(sessionID: session)).arguments
     let i = try #require(args.firstIndex(of: "--session-id"))
