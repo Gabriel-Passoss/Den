@@ -133,10 +133,6 @@ public actor ProcessTransport {
         case alreadyStarted
     }
 
-    /// The CLI ended without being asked to: a failing exit status, or a
-    /// signal it did not get from `terminate()`. It is how the stream ends
-    /// then, so the reason reaches whoever reads it instead of looking like a
-    /// clean end of output.
     public struct ExitFailure: Error, Equatable, CustomStringConvertible {
         public let status: Int32
         public let standardError: String

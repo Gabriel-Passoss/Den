@@ -26,8 +26,6 @@ public struct HarnessCapabilities: Equatable, Sendable {
         self.canForkSession = canForkSession
     }
 
-    /// Whether a knob of this category reaches the running CLI without a
-    /// relaunch.
     public func canChangeInSession(_ category: HarnessKnob.Category) -> Bool {
         switch category {
         case .model: canSetModelInSession

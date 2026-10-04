@@ -34,8 +34,8 @@ import HarnessCore
         defaults.set(["/code/api", "/code/web"], forKey: "Den.folders")
         defaults.set(["/code/api": "API"], forKey: "Den.folderNames")
     }, { harness in
-        // The named one keeps its name; the unnamed one falls back to the leaf.
-        #expect(harness.model.folders.map(\.name) == ["API", "web"])
+        #expect(harness.model.folders.map(\.name) == ["API", "web"],
+                "the named folder keeps its name, the unnamed one falls back to its leaf")
     })
 }
 
@@ -127,8 +127,8 @@ import HarnessCore
         let fresh = summary("fresh", updated: 1)
         harness.model.summaries = [ranked, fresh]
         harness.model.sessionOrder = [ranked.id.uuidString]
-        // Unranked wins regardless of how stale it is, so a new session surfaces.
-        #expect(harness.model.looseSessions.map(\.title) == ["fresh", "ranked"])
+        #expect(harness.model.looseSessions.map(\.title) == ["fresh", "ranked"],
+                "an unranked session outranks any ranked one, however stale, so a new session surfaces")
     }
 }
 

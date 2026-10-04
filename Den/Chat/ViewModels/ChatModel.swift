@@ -480,8 +480,6 @@ final class ChatModel {
             settings.compactMapValues { $0.isEmpty ? nil : $0 }, for: sessionID)
     }
 
-    /// A setting the running CLI cannot take waits for the turn in flight to
-    /// end, then relaunches it.
     private var relaunchAfterTurn = false
 
     private func relaunchIfIdle() async {

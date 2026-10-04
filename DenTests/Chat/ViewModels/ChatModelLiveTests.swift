@@ -347,9 +347,8 @@ private let effortKnob = HarnessKnob(
 
         await live.chat.choose(knob: "mode", value: "auto")
 
-        // The relaunch is the only way the choice reaches a process that
-        // cannot take it in flight.
-        #expect(live.log.lastSettings["mode"] == "auto")
+        #expect(live.log.lastSettings["mode"] == "auto",
+                "a relaunch is the only way the choice reaches a CLI that cannot take it in flight")
     })
 }
 
@@ -451,7 +450,6 @@ private let effortKnob = HarnessKnob(
 }
 
 @Test func aQuestionShapedInputDoesNotHijackAnOrdinaryTool() async throws {
-    // Only the tool name decides which card shows, never the input shape.
     let disguised = PermissionRequest(
         id: "req-2", toolName: "Bash",
         input: .object(["questions": .array([.object([
@@ -467,7 +465,8 @@ private let effortKnob = HarnessKnob(
 
         await settle { live.chat.pending != nil }
         #expect(live.chat.pending?.id == "req-2")
-        #expect(live.chat.pendingQuestion == nil)
+        #expect(live.chat.pendingQuestion == nil,
+                "the tool name alone decides which card opens, never the shape of its input")
     }
 }
 

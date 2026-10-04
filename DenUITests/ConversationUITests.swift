@@ -1,11 +1,5 @@
 import XCTest
 
-/// Drives the real app through its accessibility tree. Each test gets its own
-/// data root and fake CLIs, so no real session, preference or CLI is touched.
-///
-/// This runner is sandboxed: it can read anywhere but write only inside its
-/// container, which the app cannot reach. So the app owns the data root, under
-/// /tmp, and the fake CLIs' steps travel in the launch environment.
 final class ConversationUITests: XCTestCase {
     private var root: URL!
     private var claude: FakeCLI!
@@ -41,8 +35,6 @@ final class ConversationUITests: XCTestCase {
         return app
     }
 
-    /// Fails with the accessibility tree attached, which is what to read when a
-    /// query stops matching.
     @MainActor
     private func require(_ element: XCUIElement, in app: XCUIApplication,
                          file: StaticString = #filePath, line: UInt = #line) {
@@ -51,7 +43,13 @@ final class ConversationUITests: XCTestCase {
         tree.name = "accessibility tree"
         tree.lifetime = .keepAlways
         add(tree)
-        XCTFail("never appeared: \(element)", file: file, line: line)
+        XCTFail("never appeared: \(element) — read the attached accessibility tree",
+                file: file, line: line)
+    }
+
+    @MainActor
+    private func clickThroughFailingHitTest(_ element: XCUIElement) {
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
     }
 
     @MainActor
@@ -76,7 +74,6 @@ final class ConversationUITests: XCTestCase {
         return composer
     }
 
-    /// Opens a conversation from the empty window and sends its first turn.
     @MainActor
     private func startConversation(_ text: String, in app: XCUIApplication) {
         openComposer(in: app).typeText(text + "\n")
@@ -196,9 +193,7 @@ final class ConversationUITests: XCTestCase {
         startConversation("Crie prova.txt com o texto ok.", in: app)
         let allow = app.buttons["Permitir"]
         require(allow, in: app)
-        // The card's buttons answer the accessibility hit test as not hittable,
-        // though a real click lands on them, so click where the button is.
-        allow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        clickThroughFailingHitTest(allow)
 
         require(text(containing: "criado com o conte", in: app), in: app)
         XCTAssertFalse(allow.exists)
@@ -347,7 +342,6 @@ final class ConversationUITests: XCTestCase {
         let app = launch()
 
         sessionMenu(in: app).buttons["Apagar sessão…"].click()
-        // The Touch Bar mirrors the alert's buttons, so look inside the sheet.
         let confirm = app.sheets.buttons["Apagar"]
         require(confirm, in: app)
         confirm.click()

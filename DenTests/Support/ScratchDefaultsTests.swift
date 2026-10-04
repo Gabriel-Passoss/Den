@@ -9,9 +9,8 @@ import Foundation
         names.insert(scratch.suite)
         scratch.remove()
     }
-    // Other tests may borrow from the pool meanwhile, but twenty suites in a
-    // row must not mean twenty files.
-    #expect(names.count < 20)
+    #expect(names.count < 20,
+            "twenty suites in a row must reuse pooled names rather than leave twenty plists behind")
 }
 
 @Test func aFreedSuiteComesBackEmpty() throws {

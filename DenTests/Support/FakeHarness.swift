@@ -6,8 +6,6 @@ struct HarnessFailure: Error, Equatable {
     let reason: String
 }
 
-/// Shared scratch space between the harness (a value type the protocol requires
-/// to be Sendable) and the test that inspects it.
 nonisolated final class HarnessLog: @unchecked Sendable {
     var madeSessions = 0
     var lastSettings: [String: String] = [:]

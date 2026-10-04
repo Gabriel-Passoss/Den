@@ -3,23 +3,20 @@ import Foundation
 import HarnessCore
 @testable import Den
 
-// The git panel against a real repository driven by /usr/bin/git, instead of
-// fake `.git` folders and canned porcelain.
+private let configWithoutTheUsersOwn = [
+    "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+    "-c", "user.name=Den Tests", "-c", "user.email=tests@den.invalid",
+]
 
 private func git(_ arguments: [String], in directory: URL) async throws {
-    // The user's own config must not leak in: no signing, no hooks.
-    _ = try await SystemCommandRunner().run("/usr/bin/git", [
-        "-C", directory.path, "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
-        "-c", "user.name=Den Tests", "-c", "user.email=tests@den.invalid",
-    ] + arguments)
+    _ = try await SystemCommandRunner().run(
+        "/usr/bin/git", ["-C", directory.path] + configWithoutTheUsersOwn + arguments)
 }
 
 private func write(_ text: String, to name: String, in directory: URL) throws {
     try text.write(to: directory.appending(path: name), atomically: true, encoding: .utf8)
 }
 
-/// A repository on `main` with one commit, then edited the way a harness
-/// would leave it: one file changed, one deleted, one created.
 private func withEditedRepository(_ body: (URL) async throws -> Void) async throws {
     let repository = FileManager.default.temporaryDirectory
         .appending(path: "DenTests-" + UUID().uuidString)

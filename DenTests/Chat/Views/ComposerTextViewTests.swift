@@ -87,7 +87,7 @@ private final class GhostLog {
 @MainActor
 private func composer(ghost: String, log: GhostLog) -> ComposerTextView.Coordinator {
     ComposerTextView.Coordinator(ComposerTextView(
-        text: .constant(""), focusRequested: .constant(false), placeholder: "",
+        text: .constant(""), focusRequested: .constant(false), accessibilityPlaceholder: "",
         ghost: ghost, onSubmit: {}, onPaste: { _ in false },
         onAcceptGhost: { log.accepted += 1 }, onDismissGhost: { log.dismissed += 1 }))
 }

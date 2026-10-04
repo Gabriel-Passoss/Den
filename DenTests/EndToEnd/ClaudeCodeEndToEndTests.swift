@@ -3,9 +3,6 @@ import Foundation
 import HarnessCore
 @testable import Den
 
-// These run the real ClaudeCodeHarness, ControlChannel and ProcessTransport
-// against a FakeCLI that replays sessions recorded from the actual CLI.
-
 private let recordedSessionID = "051f6a7e-34f2-4dc7-bafc-27a72a020893"
 
 private func notices(_ chat: ChatModel) -> [String] {
