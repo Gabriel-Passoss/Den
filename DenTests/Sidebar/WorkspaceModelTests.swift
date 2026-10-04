@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import HarnessCore
+import DenStore
 @testable import Den
 
 // MARK: - Folder persistence
@@ -344,4 +345,56 @@ import HarnessCore
     }) { harness in
         #expect(harness.model.defaultHarness == HarnessRegistry.standard.fallback)
     }
+}
+
+nonisolated final class SidebarSpy: SidebarRepository, @unchecked Sendable {
+    var layout = SidebarLayout()
+    var saves = 0
+    var failsToLoad = false
+
+    func load() throws -> SidebarLayout {
+        if failsToLoad { throw CocoaError(.fileReadUnknown) }
+        return layout
+    }
+
+    func save(_ layout: SidebarLayout) throws {
+        saves += 1
+        self.layout = layout
+    }
+}
+
+@MainActor
+private func workspace(over spy: SidebarSpy, defaults: UserDefaults) -> WorkspaceModel {
+    WorkspaceModel(store: scratchSessions(), sidebar: spy, defaults: defaults, cache: scratchCache)
+}
+
+@Test func openingAWorkspaceReadsTheLayoutAndWritesNothing() {
+    let scratch = ScratchDefaults()
+    defer { scratch.remove() }
+    let spy = SidebarSpy()
+    spy.layout = SidebarLayout(folders: [SidebarFolder(id: "f1", name: "Backend")])
+
+    let model = workspace(over: spy, defaults: scratch.defaults)
+
+    #expect(model.folders.map(\.name) == ["Backend"])
+    #expect(spy.saves == 0)
+    model.addFolder()
+    #expect(spy.saves == 1)
+    #expect(spy.layout.folders.count == 2)
+}
+
+@Test func aLayoutThatCouldNotBeReadIsNeverOverwritten() {
+    let scratch = ScratchDefaults()
+    defer { scratch.remove() }
+    let spy = SidebarSpy()
+    spy.layout = SidebarLayout(folders: [SidebarFolder(id: "f1", name: "Backend")])
+    spy.failsToLoad = true
+
+    let model = workspace(over: spy, defaults: scratch.defaults)
+    model.addFolder()
+    model.sessionOrder = [UUID().uuidString]
+
+    #expect(model.folders.count == 1)
+    #expect(spy.saves == 0)
+    #expect(spy.layout.folders.map(\.name) == ["Backend"])
 }

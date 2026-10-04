@@ -40,6 +40,7 @@ final class WorkspaceModel {
 
     private let store: any SessionRepository
     private let sidebar: any SidebarRepository
+    @ObservationIgnored private var persistsLayout = false
     private let defaults: UserDefaults
     private let cache: SessionCache
     private let registry: HarnessRegistry
@@ -72,14 +73,20 @@ final class WorkspaceModel {
         self.registry = registry
         self.attachmentsRoot = attachmentsRoot
 
-        let layout = (try? sidebar.load()) ?? SidebarLayout()
-        self.folders = layout.folders.map { Folder(id: $0.id, name: $0.name) }
-        self.membership = Dictionary(layout.membership.map { ($0.key.uuidString, $0.value) },
-                                     uniquingKeysWith: { first, _ in first })
-        self.sessionOrder = layout.order.map(\.uuidString)
+        do {
+            let layout = try sidebar.load()
+            self.folders = layout.folders.map { Folder(id: $0.id, name: $0.name) }
+            self.membership = Dictionary(layout.membership.map { ($0.key.uuidString, $0.value) },
+                                         uniquingKeysWith: { first, _ in first })
+            self.sessionOrder = layout.order.map(\.uuidString)
+            persistsLayout = true
+        } catch {
+            print("não consegui ler a barra lateral, e por isso não vou regravá-la: \(error)")
+        }
     }
 
     private func persistLayout() {
+        guard persistsLayout else { return }
         let placed = membership.compactMap { session, folder in
             UUID(uuidString: session).map { ($0, folder) }
         }
