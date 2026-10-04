@@ -28,8 +28,6 @@ public struct OpenCodeEventMapper: Sendable {
         compactionProse = []
     }
 
-    // MARK: - Session notifications
-
     public mutating func map(update: JSONValue) -> MappedOutput {
         guard let kind = update["sessionUpdate"]?.stringValue else {
             return MappedOutput(entries: [unrecognized("update", update)])
@@ -162,8 +160,6 @@ public struct OpenCodeEventMapper: Sendable {
         )])
     }
 
-    // MARK: - Tools
-
     struct HeldTool {
         var title: String
         var kind: String
@@ -261,8 +257,6 @@ public struct OpenCodeEventMapper: Sendable {
         return update["rawOutput"] ?? .null
     }
 
-    // MARK: - Turn end
-
     public mutating func turnResult(_ result: JSONValue) -> MappedOutput {
         var output = flush()
 
@@ -297,8 +291,6 @@ public struct OpenCodeEventMapper: Sendable {
         blockIndex = 0
         return output
     }
-
-    // MARK: - Degradation
 
     func unrecognized(_ discriminator: String, _ payload: JSONValue) -> TranscriptEntry {
         TranscriptEntry(

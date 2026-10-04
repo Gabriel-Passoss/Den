@@ -1,8 +1,9 @@
 import Testing
 import Foundation
+import HarnessTestSupport
 @testable import HarnessCore
 
-private let fixedID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+private let fixedID = fixedUUID("11111111-1111-1111-1111-111111111111")
 private let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
 
 private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {
@@ -82,8 +83,6 @@ private func roundTrip(_ entry: TranscriptEntry) throws -> TranscriptEntry {
     #expect(sum.costUSD == 2.0)
     #expect(UsageTotals.zero + a == a)
 }
-
-// MARK: - Case 10: a discriminator this version does not know
 
 private func decodeEntry(_ json: String) throws -> TranscriptEntry {
     let decoder = JSONDecoder()

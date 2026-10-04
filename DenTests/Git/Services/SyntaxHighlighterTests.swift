@@ -22,8 +22,6 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
     shades(SyntaxHighlighter.highlight(line, language: language))
 }
 
-// MARK: - Language detection
-
 @Test func languageFromHintCoversTheCommonAliases() {
     #expect(SyntaxHighlighter.language(forHint: "swift") == .swift)
     #expect(SyntaxHighlighter.language(forHint: "TypeScript") == .cFamily)
@@ -48,8 +46,6 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
     #expect(SyntaxHighlighter.language(forFile: "Makefile") == .plain)
     #expect(SyntaxHighlighter.language(forFile: "script.lua") == .generic)
 }
-
-// MARK: - Strings
 
 @Test func highlightPreservesTheLineText() {
     let source = #"let x = "hi" // comment"#
@@ -79,8 +75,6 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
     #expect(tokens("s = 'a'", .swift) == ["plain:s = 'a'"])
 }
 
-// MARK: - JSON
-
 @Test func jsonSeparatesKeysFromValues() {
     #expect(tokens(#"{"name": "value"}"#, .json)
             == ["plain:{", #"type:"name""#, "plain:: ", #"string:"value""#, "plain:}"])
@@ -90,8 +84,6 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
     #expect(tokens(#"{"True": True}"#, .json)
             == ["plain:{", #"type:"True""#, "plain:: True}"])
 }
-
-// MARK: - Numbers
 
 @Test func anIdentifierSwallowsItsTrailingDigits() {
     #expect(tokens("x1 = 42", .cFamily) == ["plain:x1 = ", "number:42"])
@@ -106,19 +98,27 @@ private func tokens(_ line: String, _ language: SyntaxHighlighter.Language) -> [
 
 @Test(.timeLimit(.minutes(1)))
 func digitsOutsideAsciiNeverStallTheScanner() {
-    // Every character here answers true to isNumber but matches nothing in the
-    // scan's advance set. Entering the number branch used to leave the index
-    // parked and spin the loop forever, freezing the app on such a diff.
-    #expect(tokens("x = \u{0663}", .swift) == ["plain:x = \u{0663}"]) // arabic-indic
-    #expect(tokens("x = \u{0968}", .swift) == ["plain:x = \u{0968}"]) // devanagari
-    #expect(tokens("x = \u{00B2}", .swift) == ["plain:x = \u{00B2}"]) // superscript
-    #expect(tokens("x = \u{2462}", .swift) == ["plain:x = \u{2462}"]) // circled
-    #expect(tokens("x = \u{FF13}", .swift) == ["plain:x = \u{FF13}"]) // fullwidth
+    let digitsOutsideAscii = [
+        (named: "arabic-indic", character: "\u{0663}"),
+        (named: "devanagari", character: "\u{0968}"),
+        (named: "superscript", character: "\u{00B2}"),
+        (named: "circled", character: "\u{2462}"),
+        (named: "fullwidth", character: "\u{FF13}"),
+    ]
+
+    for digit in digitsOutsideAscii {
+        #expect(tokens("x = " + digit.character, .swift) == ["plain:x = " + digit.character],
+                """
+                \(digit.named) answers true to isNumber but matches nothing the scan \
+                advances over, and the number branch used to leave the index parked \
+                and spin forever, freezing the app on such a diff
+                """)
+    }
 }
 
 @Test func aRomanNumeralTakesTheIdentifierPath() {
-    // isLetter is true for these, so they read as a capitalised word.
-    #expect(tokens("x = \u{2162}", .swift) == ["plain:x = ", "type:\u{2162}"])
+    #expect(tokens("x = \u{2162}", .swift) == ["plain:x = ", "type:\u{2162}"],
+            "isLetter is true for a roman numeral, so it reads as a capitalised word")
 }
 
 @Test func asciiDigitsAreStillNumbers() {
@@ -126,12 +126,10 @@ func digitsOutsideAsciiNeverStallTheScanner() {
 }
 
 @Test func aNumberGreedilyEatsATrailingDot() {
-    // Known quirk: the scan accepts "." so member access on a literal splits oddly.
     #expect(tokens("value = 3.toString()", .cFamily)
-            == ["plain:value = ", "number:3.", "plain:toString()"])
+            == ["plain:value = ", "number:3.", "plain:toString()"],
+            "a known quirk: the scan accepts a dot, so member access on a literal splits oddly")
 }
-
-// MARK: - Identifiers, attributes and keywords
 
 @Test func capitalisedWordsReadAsTypes() {
     #expect(tokens("let x: Int = 0", .swift)
@@ -155,8 +153,6 @@ func digitsOutsideAsciiNeverStallTheScanner() {
     #expect(tokens("func main", .swift) == ["keyword:func", "plain: main"])
 }
 
-// MARK: - Comments
-
 @Test func aCommentSwallowsTheRestOfTheLine() {
     #expect(tokens(#"let x = 1 // note "quoted""#, .swift)
             == ["keyword:let", "plain: x = ", "number:1", "plain: ",
@@ -179,8 +175,6 @@ func digitsOutsideAsciiNeverStallTheScanner() {
     #expect(tokens("a // note", .json) == ["plain:a // note"])
 }
 
-// MARK: - Rendering diff lines
-
 private func line(_ kind: GitDiffLine.Kind, _ text: String) -> GitDiffLine {
     GitDiffLine(id: 1, kind: kind, number: 1, text: text)
 }
@@ -192,11 +186,13 @@ private func line(_ kind: GitDiffLine.Kind, _ text: String) -> GitDiffLine {
 }
 
 @Test func renderNeverHighlightsPlainText() throws {
-    // The text has to be something highlight() would colour without a keyword
-    // table, or the assertion cannot tell the bypass from an inert input.
     let rendered = try #require(
         SyntaxHighlighter.render([line(.added, "let n = 42")], language: .plain).first)
-    #expect(shades(rendered.text) == ["plain:let n = 42"])
+    #expect(shades(rendered.text) == ["plain:let n = 42"],
+            """
+            the text is something highlight() would colour given a keyword table, so \
+            an inert input cannot be mistaken for the bypass under test
+            """)
 }
 
 @Test func renderHighlightsEveryOtherKind() throws {

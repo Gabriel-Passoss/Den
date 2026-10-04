@@ -16,6 +16,13 @@ extension AppEnvironment {
     var ghOverride: String? { nil }
 }
 
+func userDefaults(inSuite name: String) -> UserDefaults {
+    guard let suite = UserDefaults(suiteName: name) else {
+        preconditionFailure("\(name) is not a usable defaults suite")
+    }
+    return suite
+}
+
 protocol RootedEnvironment: AppEnvironment {
     var root: URL { get }
 }

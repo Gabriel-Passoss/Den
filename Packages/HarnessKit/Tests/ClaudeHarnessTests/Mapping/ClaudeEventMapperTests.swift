@@ -13,8 +13,6 @@ private func json(_ text: String) throws -> JSONValue {
     try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
 }
 
-// MARK: - Deltas
-
 @Test func aTextDeltaBecomesAnEphemeralEventAndNothingDurable() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"stream_event","event":{"type":"content_block_delta","index":0,
@@ -82,8 +80,6 @@ private func json(_ text: String) throws -> JSONValue {
     }
 }
 
-// MARK: - Degradation
-
 @Test func anUnknownLineTypeIsPreservedNotDropped() throws {
     let line = try json(#"{"type":"future_thing","payload":{"a":1}}"#)
     let out = makeMapper().map(line)
@@ -122,8 +118,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(try makeMapper().map(json(#"{"type":"control_request","request_id":"1"}"#)) == .empty)
     #expect(try makeMapper().map(json(#"{"type":"control_response","response":{}}"#)) == .empty)
 }
-
-// MARK: - Durable: assistant
 
 @Test func anAssistantTextBlockBecomesOneDurableEntryAndNoEvent() throws {
     let out = makeMapper().map(try json(#"""
@@ -228,8 +222,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(entry.kind == .unrecognized(discriminator: "claude:assistant", payload: line))
 }
 
-// MARK: - Durable: user
-
 @Test func aToolResultBlockBecomesAToolResultEntry() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"user","timestamp":"2026-09-17T02:20:59.447Z","message":{"role":"user","content":[
@@ -297,8 +289,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(discriminator == "claude:content/tool_result")
 }
 
-// MARK: - Durable: result
-
 @Test func aResultLineBecomesATurnResultWithItsUsage() throws {
     let out = makeMapper().map(try json(#"""
     {"type":"result","subtype":"success","is_error":false,"stop_reason":"end_turn",
@@ -341,8 +331,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(turn.isError == true)
     #expect(turn.stopReason == nil)
 }
-
-// MARK: - Linhas de sistema
 
 @Test func systemInitAnnouncesTheModelAndAlsoLandsInTheTranscript() throws {
     let out = makeMapper().map(try json(#"""
@@ -431,8 +419,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(out.entries[0].raw["rate_limit_info"]?["rateLimitType"]?.stringValue == "five_hour")
 }
 
-// MARK: - Permission entries
-
 @Test func aPermissionRequestBecomesAnEntryWithItsSuggestions() throws {
     let raw = try json(#"""
     {"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool",
@@ -462,8 +448,6 @@ private func json(_ text: String) throws -> JSONValue {
     #expect(entry.kind == .permissionDecision(requestID: "req-1", .allow(updatedInput: nil)))
     #expect(entry.timestamp == fixedNow)
 }
-
-// MARK: - Contexto ocupado
 
 @Test func messageStartAlreadyReportsTheContextItRead() throws {
     let out = makeMapper().map(try json(#"""

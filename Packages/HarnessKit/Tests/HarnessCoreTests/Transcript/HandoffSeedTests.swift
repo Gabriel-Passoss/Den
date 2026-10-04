@@ -97,8 +97,6 @@ private let conversation: [TranscriptEntry] = [
     #expect(seed.text.count < 400)
 }
 
-// MARK: - The handoff crossing the disk
-
 private let harnessA = HarnessID(rawValue: "harness-a")
 private let harnessB = HarnessID(rawValue: "harness-b")
 
@@ -156,8 +154,6 @@ private let harnessB = HarnessID(rawValue: "harness-b")
     }
 }
 
-// MARK: - The seed glued to the first request
-
 @Test func theSeedTravelsAttachedToTheRequest() throws {
     let seed = HandoffSeed.make([entry(.userMessage(text: "hi", attachments: []))])
 
@@ -177,8 +173,6 @@ private let harnessB = HarnessID(rawValue: "harness-b")
 
     #expect(message.hasSuffix(HandoffSeed.emptyRequest))
 }
-
-// MARK: - Option grouping
 
 @Test func aFlatListIsOneUntitledGroup() {
     let knob = HarnessKnob(id: "model", category: .model, name: "Modelo", options: [

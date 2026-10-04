@@ -131,11 +131,8 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
         public init(from decoder: Decoder) throws {
             let peek = try decoder.container(keyedBy: DiscriminatorKey.self)
             guard peek.allKeys.count == 1, let key = peek.allKeys.first else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: DiscriminatorKey(stringValue: "kind")!,
-                    in: peek,
-                    debugDescription: "TranscriptEntry.Kind espera exatamente uma chave discriminadora, achou \(peek.allKeys.count)"
-                )
+                throw DecodingError.oneDiscriminatorExpected(
+                by: "TranscriptEntry.Kind", reportingAs: "kind", in: peek)
             }
             guard Kind.knownDiscriminators.contains(key.stringValue) else {
                 let payload = try peek.decode(JSONValue.self, forKey: key)
@@ -178,7 +175,7 @@ public struct TranscriptEntry: Sendable, Equatable, Codable, Identifiable {
             case .unrecognized(let discriminator, let payload):
 
                 var container = encoder.container(keyedBy: DiscriminatorKey.self)
-                try container.encode(payload, forKey: DiscriminatorKey(stringValue: discriminator)!)
+                try container.encode(payload, forKey: DiscriminatorKey(discriminator))
             }
         }
     }

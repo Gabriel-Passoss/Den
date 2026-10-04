@@ -69,8 +69,6 @@ final class GitChangesModel {
         repos.reduce(0) { $0 + $1.files.count }
     }
 
-    // MARK: - Review
-
     private var reviewed: Set<String> = []
 
     private func reviewKey(_ file: FileChange, in repo: Repo) -> String {
@@ -230,14 +228,13 @@ final class GitChangesModel {
                 singles.append(file)
             }
         }
-        let items = grouped.keys.sorted().map { RepoItem.group(dir: $0, files: grouped[$0]!) }
+        let items = grouped.sorted { $0.key < $1.key }
+            .map { RepoItem.group(dir: $0.key, files: $0.value) }
             + singles.map(RepoItem.single)
 
         return Repo(root: root, branch: survey.branch, files: files, items: items,
                     truncatedFiles: entries.count > maxFilesPerRepo)
     }
-
-    // MARK: - Off the main thread
 
     nonisolated private static let skippedFolders: Set<String> = [
         "node_modules", ".build", "DerivedData", ".next", "dist", "build",

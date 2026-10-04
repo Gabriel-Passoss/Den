@@ -8,8 +8,19 @@ nonisolated enum LogLevel: Equatable, Sendable {
 }
 
 nonisolated enum LogHighlighter {
+    private static let errorAlternatives = [
+        #"\b(ERROR|FATAL|FAIL|FAILED|PANIC)\b"#,
+        #"\bERR!"#,
+        #"\bnpm error\b"#,
+        #"\b[A-Z]\w*(Error|Exception)\b"#,
+        #"\bError:"#,
+        #"\b(error|fatal|panic)(:|\[)"#,
+        #"\berror TS\d+"#,
+        #"^Traceback \(most recent call last\)"#,
+    ]
+
     private static let rules: [(LogLevel, NSRegularExpression)] = [
-        (.error, pattern(#"\b(ERROR|FATAL|FAIL|FAILED|PANIC)\b|\bERR!|\bnpm error\b|\b[A-Z]\w*(Error|Exception)\b|\bError:|\b(error|fatal|panic)(:|\[)|\berror TS\d+|^Traceback \(most recent call last\)"#)),
+        (.error, pattern(errorAlternatives.joined(separator: "|"))),
         (.warning, pattern(#"\b(WARN|WARNING|Warning|warning|warn)\b|\b[A-Z]\w*Warning\b"#)),
         (.debug, pattern(#"\b(DEBUG|TRACE)\b"#)),
         (.info, infoKeyword),
@@ -27,6 +38,10 @@ nonisolated enum LogHighlighter {
     }
 
     private static func pattern(_ source: String) -> NSRegularExpression {
-        try! NSRegularExpression(pattern: source, options: [.anchorsMatchLines])
+        do {
+            return try NSRegularExpression(pattern: source, options: [.anchorsMatchLines])
+        } catch {
+            preconditionFailure("\(source) is not a usable pattern: \(error)")
+        }
     }
 }

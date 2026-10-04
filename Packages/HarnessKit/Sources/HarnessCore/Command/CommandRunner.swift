@@ -27,10 +27,6 @@ public struct SystemCommandRunner: CommandRunner {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        // Nothing here blocks a thread: output arrives through readability
-        // handlers and the exit through the termination handler. Blocking reads
-        // plus `waitUntilExit` could starve the queue that reports the exit and
-        // hang with the process long gone.
         let run = RunCollector()
         process.terminationHandler = { run.exited(with: $0.terminationStatus) }
         try process.run()
@@ -45,17 +41,15 @@ public struct SystemCommandRunner: CommandRunner {
     }
 }
 
-/// Gathers what a run produces and hands it over once the process has exited
-/// and both of its pipes have closed.
 private final class RunCollector: @unchecked Sendable {
-    enum Stream: Sendable { case output, errorOutput }
+    enum Stream: Sendable, CaseIterable { case output, errorOutput }
 
     private let lock = NSLock()
     private var output = Data()
     private var errorOutput = Data()
     private var status: Int32 = 0
-    /// The exit, and the end of each of the two pipes.
-    private var outstanding = 3
+    private static let endOfProcess = 1
+    private var outstanding = Stream.allCases.count + endOfProcess
     private var waiting: CheckedContinuation<(Int32, Data, Data), Never>?
 
     func exited(with status: Int32) {

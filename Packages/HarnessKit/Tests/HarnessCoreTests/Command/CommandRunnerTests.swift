@@ -13,8 +13,6 @@ import HarnessTestSupport
 }
 
 @Test func manyShortRunsAtOnceAllComeBack() async throws {
-    // Each run finishes on three events (exit, and the end of both pipes) in
-    // whatever order they come; every run must come back exactly once.
     let runner = SystemCommandRunner()
     let outputs = try await withTimeout(seconds: 30) {
         try await withThrowingTaskGroup(of: String.self) { group in
@@ -24,7 +22,8 @@ import HarnessTestSupport
             return try await group.reduce(into: [String]()) { $0.append($1) }
         }
     }
-    #expect(outputs.count == 100)
+    #expect(outputs.count == 100,
+            "each run completes on its exit and both pipe ends, in any order, and returns exactly once")
     #expect(Set(outputs) == ["ok\n"])
 }
 

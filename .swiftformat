@@ -6,7 +6,7 @@
 # continuation lines), so the formatter keeps it instead of rewriting it.
 
 --swift-version 6.2
---language-mode 5
+--language-mode 6
 --min-version 0.63.1
 
 --exclude .build,**/.build,DerivedData,build

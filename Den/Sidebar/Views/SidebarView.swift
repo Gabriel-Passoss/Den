@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import HarnessCore
 
-private final class DragTracker: NSItemProvider {
+private nonisolated final class DragTracker: NSItemProvider {
     var onEnd: (() -> Void)?
     deinit { onEnd?() }
 }
@@ -49,8 +49,6 @@ struct SidebarView: View {
             Text(deleteMessage)
         }
     }
-
-    // MARK: - List
 
     private var list: some View {
         ScrollView {
