@@ -2,7 +2,7 @@ import Foundation
 import HarnessCore
 
 extension ChatModel {
-    func captureMemory(atLeast threshold: Int) {
+    func captureMemory(atLeast threshold: Int, announcing: Bool = false) {
         guard let memory else { return }
         let session = sessionID
         let spoken = entries
@@ -10,7 +10,7 @@ extension ChatModel {
         let harness = harness
         Task {
             await memory.capture(session: session, entries: spoken, directory: directory,
-                                 harness: harness, atLeast: threshold)
+                                 harness: harness, atLeast: threshold, announcing: announcing)
         }
     }
 }

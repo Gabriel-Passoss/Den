@@ -184,27 +184,77 @@ let twoMemories = """
     }
 }
 
-@Test func aHarnessWithoutOneShotPromptsBorrowsAnotherOnes() async throws {
+@Test func aConversationIsOnlyEverSentToItsOwnHarness() async throws {
     var talker = FakeHarness(id: "talker")
     talker.quickPrompt = ["--ask"]
     try await withMemory(harnesses: [FakeHarness(id: "silent"), talker]) { bench in
         bench.asked.answer(twoMemories)
 
-        await bench.capture(chatter("emprestado"))
+        await bench.capture(chatter("não emprestado"))
+
+        #expect(bench.asked.instructions.isEmpty)
+        #expect(bench.memory.status == .failed("este harness não faz a chamada avulsa que a memória usa"))
+        #expect(bench.wiki.pages(in: .user).isEmpty)
+    }
+}
+
+@Test func theSessionsOwnHarnessIsTheOneAsked() async throws {
+    var talker = FakeHarness(id: "talker")
+    talker.quickPrompt = ["--ask"]
+    try await withMemory(harnesses: [talker, FakeHarness(id: "silent")]) { bench in
+        bench.asked.answer(twoMemories)
+
+        await bench.capture(chatter("próprio"))
 
         #expect(bench.memory.status == .saved(2))
         #expect(bench.asked.executables == ["/fake/bin/harness"])
     }
 }
 
-@Test func withNoHarnessAbleToAskTheCaptureSaysSo() async throws {
-    try await withMemory(harnesses: [FakeHarness(id: "silent")]) { bench in
+@MainActor
+private final class Switch {
+    var memory: MemoryModel?
+
+    func off() { memory?.isEnabled = false }
+}
+
+@Test func switchingMemoryOffWhileItCapturesSavesNothing() async throws {
+    try await withMemory { bench in
+        let reply = twoMemories
+        let memorySwitch = Switch()
+        let memory = MemoryModel(repository: bench.wiki, marks: bench.repositories.memoryMarks,
+                                 defaults: bench.scratch.defaults,
+                                 registry: HarnessRegistry(harnesses: [bench.harness]),
+                                 run: { _, _, _ in
+                                     await memorySwitch.off()
+                                     return ProcessOutcome(status: 0, stdout: Data(reply.utf8), stderr: Data())
+                                 })
+        memorySwitch.memory = memory
+
+        await bench.capture(chatter("no meio"), with: memory)
+
+        #expect(!memory.isEnabled)
+        #expect(bench.wiki.pages(in: .user).isEmpty)
+        #expect(bench.wiki.pages(in: .project(bench.project)).isEmpty)
+        #expect(memory.status == .idle)
+    }
+}
+
+@Test func askingForACaptureWithNothingNewSaysSo() async throws {
+    try await withMemory { bench in
         bench.asked.answer(twoMemories)
+        let session = UUID()
 
-        await bench.capture(chatter("ninguém"))
-
+        await bench.memory.capture(session: session, entries: [assistant("só o assistente").entry],
+                                   directory: bench.repository, harness: bench.harness.id,
+                                   atLeast: MemoryModel.leaveThreshold, announcing: true)
+        #expect(bench.memory.status == .nothingNew)
         #expect(bench.asked.instructions.isEmpty)
-        #expect(bench.memory.status == .failed("nenhum harness instalado faz a chamada avulsa que a memória usa"))
+
+        await bench.memory.capture(session: session, entries: chatter("agora há", turns: 1),
+                                   directory: bench.repository, harness: bench.harness.id,
+                                   atLeast: MemoryModel.leaveThreshold, announcing: true)
+        #expect(bench.memory.status == .saved(2))
     }
 }
 

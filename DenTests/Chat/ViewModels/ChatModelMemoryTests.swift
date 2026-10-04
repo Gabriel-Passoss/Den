@@ -12,6 +12,10 @@ private func remembering(_ bench: MemoryBench) throws {
                         in: .user)
 }
 
+private func quiet() async {
+    try? await Task.sleep(for: .milliseconds(300))
+}
+
 @MainActor
 private func typedLines(of chat: ChatModel) -> [String] {
     chat.entries.compactMap { entry in
@@ -106,6 +110,7 @@ private func typedLines(of chat: ChatModel) -> [String] {
             live.chat.memory = bench.memory
 
             for turn in 1...3 {
+                await quiet()
                 #expect(bench.asked.instructions.isEmpty)
                 await live.chat.send(text: "mensagem \(turn)")
                 await live.session.emit(assistant("resposta \(turn)"))
@@ -132,6 +137,7 @@ private func typedLines(of chat: ChatModel) -> [String] {
                 await live.session.emit(endOfTurn(isError: true))
                 await settle { !live.chat.isBusy }
             }
+            await quiet()
 
             #expect(bench.asked.instructions.isEmpty)
         }
@@ -154,9 +160,11 @@ private func typedLines(of chat: ChatModel) -> [String] {
         await first.send(text: "neste projeto os commits são convencionais")
         await bench.harness.session.emit(assistant("Anotado."))
         await settle { first.entries.count == 2 }
+        await quiet()
         #expect(bench.asked.instructions.isEmpty)
 
         await workspace.select(first.sessionID)
+        await quiet()
         #expect(bench.asked.instructions.isEmpty)
 
         await workspace.newSession()

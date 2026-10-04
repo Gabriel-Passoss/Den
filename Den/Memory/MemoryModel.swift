@@ -106,12 +106,15 @@ final class MemoryModel {
     }
 
     func capture(session: UUID, entries: [TranscriptEntry], directory: URL, harness: HarnessID,
-                 atLeast threshold: Int) async {
-        guard isEnabled, !capturing.contains(session), let last = entries.last else { return }
+                 atLeast threshold: Int, announcing: Bool = false) async {
+        guard isEnabled, !capturing.contains(session) else { return }
         let fresh = pending(entries, for: session)
-        guard MemoryExtraction.userTurns(in: fresh) >= threshold,
+        guard let last = entries.last, MemoryExtraction.userTurns(in: fresh) >= threshold,
               let instruction = MemoryExtraction.instruction(entries: fresh, shelves: shelves(for: directory))
-        else { return }
+        else {
+            if announcing { status = .nothingNew }
+            return
+        }
         capturing.insert(session)
         defer { capturing.remove(session) }
         status = .capturing
@@ -122,11 +125,12 @@ final class MemoryModel {
     private func consolidate(_ instruction: String, session: UUID, directory: URL,
                              harness: HarnessID, upTo last: UUID) async -> Status {
         let answer: String
-        switch await ask(instruction, preferring: harness) {
-        case .unavailable: return .failed("nenhum harness instalado faz a chamada avulsa que a memória usa")
+        switch await ask(instruction, through: harness) {
+        case .unavailable: return .failed("este harness não faz a chamada avulsa que a memória usa")
         case .failed: return .failed("a chamada ao harness falhou")
         case .answered(let output): answer = output
         }
+        guard isEnabled else { return .idle }
         guard let candidates = MemoryExtraction.candidates(from: answer) else {
             return .failed("a resposta do harness não veio no formato esperado")
         }
@@ -148,21 +152,13 @@ final class MemoryModel {
         case answered(String)
     }
 
-    private func ask(_ instruction: String, preferring harness: HarnessID) async -> Answer {
-        let candidates = [harness] + registry.ids.filter { $0 != harness }
-        var result = Answer.unavailable
-        for id in candidates {
-            guard let adapter = registry.harness(for: id),
-                  let arguments = adapter.quickPromptArguments(for: instruction),
-                  let installation = try? await adapter.discover() else { continue }
-            guard let outcome = await run(installation.executable, arguments, Self.timeout),
-                  outcome.succeeded else {
-                result = .failed
-                continue
-            }
-            return .answered(outcome.output)
-        }
-        return result
+    private func ask(_ instruction: String, through harness: HarnessID) async -> Answer {
+        guard let adapter = registry.harness(for: harness),
+              let arguments = adapter.quickPromptArguments(for: instruction),
+              let installation = try? await adapter.discover() else { return .unavailable }
+        guard let outcome = await run(installation.executable, arguments, Self.timeout),
+              outcome.succeeded else { return .failed }
+        return .answered(outcome.output)
     }
 
     private func shelves(for directory: URL) -> [MemoryRecall.Shelf] {

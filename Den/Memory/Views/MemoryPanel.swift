@@ -58,7 +58,7 @@ struct MemoryPanel: View {
                 .accessibilityAddTraits(layer == candidate ? [.isSelected] : [])
             }
             Spacer()
-            Button { chat.captureMemory(atLeast: MemoryModel.leaveThreshold) } label: {
+            Button { chat.captureMemory(atLeast: MemoryModel.leaveThreshold, announcing: true) } label: {
                 Image(systemName: "sparkles")
                     .font(.system(size: 12))
                     .iconLabel(size: 26)
@@ -81,7 +81,7 @@ struct MemoryPanel: View {
                 .controlSize(.mini)
                 .labelsHidden()
                 .help(memory.isEnabled ? "Desligar a memória" : "Ligar a memória")
-                .accessibilityLabel("Memória ligada")
+                .accessibilityLabel("Memória")
         }
         .padding(.horizontal, 12)
         .frame(height: 40)
