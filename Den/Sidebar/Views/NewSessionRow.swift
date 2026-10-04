@@ -22,13 +22,13 @@ struct NewSessionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.denGhost)
-        .contextMenu {
-            ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
-                Button("Nova sessão com \(HarnessBadge.name(for: harness))") {
-                    Task { await workspace.newSession(harness: harness) }
-                }
+        .denContextMenu([DenMenuSection(items: workspace.availableHarnesses.map { harness in
+            DenMenuItem(id: harness.rawValue,
+                        title: "Nova sessão com \(HarnessBadge.name(for: harness))",
+                        icon: .image(HarnessBadge.menuIcon(for: harness))) {
+                Task { await workspace.newSession(harness: harness) }
             }
-        }
+        })])
         .help("Iniciar uma sessão nova")
     }
 }

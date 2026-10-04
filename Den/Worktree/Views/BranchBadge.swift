@@ -5,19 +5,24 @@ struct BranchBadge: View {
     let worktree: TaskWorktree
     var compact = false
 
-    var body: some View {
-        MenuChip {
-            ForEach(worktree.repos) { repo in
-                Button("Mostrar \(repo.name) no Finder") {
+    private var sections: [DenMenuSection] {
+        [
+            DenMenuSection(id: "repos", items: worktree.repos.map { repo in
+                DenMenuItem(id: repo.id, title: "Mostrar \(repo.name) no Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([repo.worktree])
                 }
-            }
-            Divider()
-            Button("Copiar nome da branch") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(worktree.branch, forType: .string)
-            }
-        } label: {
+            }),
+            DenMenuSection(id: "branch", items: [
+                DenMenuItem(id: "copy", title: "Copiar nome da branch") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(worktree.branch, forType: .string)
+                },
+            ]),
+        ]
+    }
+
+    var body: some View {
+        DenMenuChip(sections: sections) {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.branch").font(.system(size: 12))
                 if !compact {

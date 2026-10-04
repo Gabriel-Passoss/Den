@@ -16,37 +16,34 @@ struct KnobBadge: View {
         "build": ("hammer", Theme.added),
     ]
 
-    private func selection(for knob: HarnessKnob) -> Binding<String?> {
-        Binding(
-            get: { chat.knob(knob.id)?.currentValue },
-            set: { value in Task { await chat.choose(knob: knob.id, value: value) } }
-        )
-    }
-
-    @ViewBuilder
-    private func knobOption(_ option: HarnessKnob.Option, in knob: HarnessKnob) -> some View {
-        if knob.category == .mode, let icon = Self.modeLooks[option.value] {
-            Label(option.label, systemImage: icon.symbol).tag(Optional(option.value))
-        } else {
-            Text(option.label).tag(Optional(option.value))
+    static func sections(for knob: HarnessKnob,
+                         choose: @escaping (String) -> Void) -> [DenMenuSection] {
+        knob.groupedOptions.enumerated().map { index, bucket in
+            DenMenuSection(
+                id: bucket.group ?? "bucket-\(index)",
+                header: bucket.group,
+                items: bucket.options.map { option in
+                    let look = knob.category == .mode ? modeLooks[option.value] : nil
+                    let current = option.value == knob.currentValue
+                    return DenMenuItem(
+                        id: option.value,
+                        title: option.label,
+                        icon: look.map { DenMenuIcon.symbol($0.symbol, $0.color) },
+                        isSelected: current
+                    ) {
+                        guard !current else { return }
+                        choose(option.value)
+                    }
+                }
+            )
         }
     }
 
     var body: some View {
-        MenuChip(bordered: knob.category == .mode) {
-            Picker(knob.name, selection: selection(for: knob)) {
-                ForEach(Array(knob.groupedOptions.enumerated()), id: \.offset) { _, bucket in
-                    Section {
-                        ForEach(bucket.options, id: \.value) { option in
-                            knobOption(option, in: knob)
-                        }
-                    } header: {
-                        if let group = bucket.group { Text(group) }
-                    }
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
+        let sections = Self.sections(for: knob) { value in
+            Task { await chat.choose(knob: knob.id, value: value) }
+        }
+        return DenMenuChip(sections: sections, bordered: knob.category == .mode) {
             label
         }
         .help("\(knob.name): \(knob.label(for: knob.currentValue) ?? "—")")

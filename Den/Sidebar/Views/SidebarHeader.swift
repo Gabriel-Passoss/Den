@@ -6,26 +6,30 @@ struct SidebarHeader: View {
     var lightsInset: CGFloat
     var collapse: () -> Void
 
+    private var newSections: [DenMenuSection] {
+        let harnesses = workspace.availableHarnesses.map { harness in
+            DenMenuItem(id: harness.rawValue,
+                        title: HarnessBadge.name(for: harness),
+                        icon: .image(HarnessBadge.menuIcon(for: harness))) {
+                Task { await workspace.newSession(harness: harness) }
+            }
+        }
+        return [DenMenuSection(items: [
+            DenMenuItem(id: "new-session", title: "Nova sessão") {
+                Task { await workspace.newSession() }
+            },
+            DenMenuItem(id: "new-session-with", title: "Nova sessão com",
+                        children: [DenMenuSection(items: harnesses)]),
+            DenMenuItem(id: "new-folder", title: "Nova pasta") {
+                workspace.addFolder()
+            },
+        ])]
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 4)
-            MenuChip {
-                Button("Nova sessão") { Task { await workspace.newSession() } }
-                Menu("Nova sessão com") {
-                    ForEach(workspace.availableHarnesses, id: \.rawValue) { harness in
-                        Button {
-                            Task { await workspace.newSession(harness: harness) }
-                        } label: {
-                            Label {
-                                Text(HarnessBadge.name(for: harness))
-                            } icon: {
-                                HarnessBadge.menuIcon(for: harness)
-                            }
-                        }
-                    }
-                }
-                Button("Nova pasta") { workspace.addFolder() }
-            } label: {
+            DenMenuChip(sections: newSections) {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.textMuted)

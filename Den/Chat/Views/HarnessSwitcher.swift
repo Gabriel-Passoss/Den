@@ -4,23 +4,21 @@ import HarnessCore
 struct HarnessSwitcher: View {
     let chat: ChatModel
 
-    var body: some View {
-        MenuChip(bordered: true, radius: 10) {
-            Section("Harness desta sessão") {
-                ForEach(chat.availableHarnesses, id: \.rawValue) { candidate in
-                    Button {
-                        Task { await chat.switchHarness(to: candidate) }
-                    } label: {
-                        Label {
-                            Text(HarnessBadge.name(for: candidate))
-                        } icon: {
-                            HarnessBadge.menuIcon(for: candidate)
-                        }
-                    }
-                    .disabled(candidate == chat.harness)
-                }
+    private var sections: [DenMenuSection] {
+        [DenMenuSection(header: "Harness desta sessão",
+                        items: chat.availableHarnesses.map { candidate in
+            DenMenuItem(id: candidate.rawValue,
+                        title: HarnessBadge.name(for: candidate),
+                        icon: .image(HarnessBadge.menuIcon(for: candidate)),
+                        isSelected: candidate == chat.harness,
+                        isEnabled: candidate != chat.harness) {
+                Task { await chat.switchHarness(to: candidate) }
             }
-        } label: {
+        })]
+    }
+
+    var body: some View {
+        DenMenuChip(sections: sections, bordered: true, radius: 10) {
             HStack(spacing: 8) {
                 HarnessBadge(harness: chat.harness, size: 20)
                 Text(chat.harnessName)

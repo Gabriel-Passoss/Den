@@ -63,11 +63,14 @@ struct FolderHeader: View {
         .simultaneousGesture(TapGesture(count: 2).onEnded {
             Task { @MainActor in isEditing = true }
         })
-        .contextMenu {
-            Button("Renomear") { isEditing = true }
-            Button("Nova sessão aqui", action: newSession)
-            Divider()
-            Button("Remover pasta", action: remove)
-        }
+        .denContextMenu([
+            DenMenuSection(id: "edit", items: [
+                DenMenuItem(id: "rename", title: "Renomear") { isEditing = true },
+                DenMenuItem(id: "new-session", title: "Nova sessão aqui", action: newSession),
+            ]),
+            DenMenuSection(id: "danger", items: [
+                DenMenuItem(id: "remove", title: "Remover pasta", action: remove),
+            ]),
+        ])
     }
 }
