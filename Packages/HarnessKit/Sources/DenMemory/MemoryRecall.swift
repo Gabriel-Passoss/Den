@@ -52,7 +52,7 @@ public enum MemoryRecall {
         for shelf in shelves {
             var heading = "\n## \(shelf.scope.heading)\n"
             for page in shelf.pages {
-                let text = heading + "### \(page.title) (\(page.category.label))\n\(page.body)\n"
+                let text = inert(heading + "### \(page.title) (\(page.category.label))\n\(page.body)\n")
                 if block.take(text) {
                     heading = ""
                 } else {
@@ -65,7 +65,18 @@ public enum MemoryRecall {
 
     private static func line(for page: MemoryPage, in scope: MemoryScope,
                              _ locate: (MemoryPage, MemoryScope) -> URL) -> String {
-        "- \(page.title) — \(locate(page, scope).path)\n"
+        inert("- \(page.title) — \(locate(page, scope).path)\n")
+    }
+
+    static func mentionsBlock(_ text: String) -> Bool {
+        text.range(of: blockTag, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    private static let blockTag = "<(/?)den-memory"
+
+    private static func inert(_ text: String) -> String {
+        text.replacingOccurrences(of: blockTag, with: "‹$1den-memory",
+                                  options: [.regularExpression, .caseInsensitive])
     }
 
     public static func message(preamble: String, request: String) -> String {

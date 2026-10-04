@@ -68,7 +68,8 @@ public enum MemoryExtraction {
         let title = text(item["title"])
         let body = text(item["body"])
         guard !title.isEmpty, title.count <= titleLimit, !body.isEmpty, body.count <= bodyLimit,
-              !holdsSecret(title + "\n" + body) else { return nil }
+              !holdsSecret(title + "\n" + body), !MemoryRecall.mentionsBlock(title + "\n" + body)
+        else { return nil }
         let category = text(item["category"])
         let page = text(item["page"])
         return MemoryCandidate(layer: layer, category: category.isEmpty ? MemoryCategory.note.rawValue : category,
