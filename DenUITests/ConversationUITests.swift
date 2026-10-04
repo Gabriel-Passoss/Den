@@ -246,10 +246,8 @@ final class ConversationUITests: XCTestCase {
         require(app.staticTexts["OK"], in: app)
     }
 
-    // MARK: - Menus
-
     @MainActor
-    func testTheSidebarMenuOpensInAppAndDrillsIntoTheHarnesses() throws {
+    func testTheSidebarMenuOpensInAppAndDrillsIntoTheHarnesses() {
         let app = launch()
 
         app.buttons["Nova"].click()
@@ -325,18 +323,23 @@ final class ConversationUITests: XCTestCase {
     // MARK: - Sidebar
 
     @MainActor
+    private func sessionMenu(in app: XCUIApplication) -> XCUIElement {
+        startConversation("Diga apenas OK e nada mais.", in: app)
+        let row = sidebarRow("Saudação curta", in: app)
+        require(row, in: app)
+        row.rightClick()
+        let menu = app.popovers.firstMatch
+        require(menu, in: app)
+        return menu
+    }
+
+    @MainActor
     func testRenamingASessionFromTheSidebar() throws {
         try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
         try claude.answerTitles(with: "Saudação curta")
         let app = launch()
-        startConversation("Diga apenas OK e nada mais.", in: app)
-        let row = sidebarRow("Saudação curta", in: app)
-        require(row, in: app)
 
-        row.rightClick()
-        let menu = app.popovers.firstMatch
-        require(menu, in: app)
-        menu.buttons["Renomear"].click()
+        sessionMenu(in: app).buttons["Renomear"].click()
         app.typeKey("a", modifierFlags: .command)
         app.typeText("Renomeada\n")
 
@@ -349,20 +352,14 @@ final class ConversationUITests: XCTestCase {
         try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
         try claude.answerTitles(with: "Saudação curta")
         let app = launch()
-        startConversation("Diga apenas OK e nada mais.", in: app)
-        let row = sidebarRow("Saudação curta", in: app)
-        require(row, in: app)
 
-        row.rightClick()
-        let menu = app.popovers.firstMatch
-        require(menu, in: app)
-        menu.buttons["Apagar sessão…"].click()
+        sessionMenu(in: app).buttons["Apagar sessão…"].click()
         // The Touch Bar mirrors the alert's buttons, so look inside the sheet.
         let confirm = app.sheets.buttons["Apagar"]
         require(confirm, in: app)
         confirm.click()
 
         require(app.staticTexts["Nenhuma conversa aberta"], in: app)
-        XCTAssertFalse(row.exists)
+        XCTAssertFalse(sidebarRow("Saudação curta", in: app).exists)
     }
 }

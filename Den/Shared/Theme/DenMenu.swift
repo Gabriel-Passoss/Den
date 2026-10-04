@@ -127,24 +127,10 @@ struct DenMenuList: View {
     }
 
     private func back(to parent: DenMenuItem) -> some View {
-        Button {
+        BackButton(title: parent.title) {
             withAnimation(.easeOut(duration: 0.12)) { _ = path.popLast() }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 9, weight: .semibold))
-                Text(parent.title)
-                    .font(.system(size: 10, weight: .semibold))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(Theme.textTertiary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .help("Voltar")
-        .accessibilityLabel("Voltar")
     }
 
     private func choose(_ item: DenMenuItem) {

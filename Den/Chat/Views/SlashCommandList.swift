@@ -19,21 +19,8 @@ struct SlashCommandList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             if let group {
-                Button(action: back) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 9, weight: .semibold))
-                        Text(group.title)
-                            .font(.system(size: 10, weight: .semibold))
-                        Spacer(minLength: 0)
-                    }
-                    .foregroundStyle(Theme.textTertiary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Voltar (Esc)")
+                BackButton(title: group.title, back: back)
+                    .help("Voltar (Esc)")
             }
 
             ScrollViewReader { proxy in
