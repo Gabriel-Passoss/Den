@@ -2,6 +2,7 @@ import Foundation
 
 protocol AppEnvironment {
     var databaseFile: URL { get }
+    var memoryRoot: URL { get }
     var attachmentsRoot: URL { get }
     var runConfigurationsFile: URL { get }
     var worktreesRoot: URL { get }
@@ -21,6 +22,7 @@ protocol RootedEnvironment: AppEnvironment {
 
 extension RootedEnvironment {
     var databaseFile: URL { root.appending(path: "den.sqlite") }
+    var memoryRoot: URL { root.appending(path: "memory") }
     var attachmentsRoot: URL { root.appending(path: "attachments") }
     var runConfigurationsFile: URL { root.appending(path: "run-configurations.json") }
     var worktreesRoot: URL { root.appending(path: "worktrees") }

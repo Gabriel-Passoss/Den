@@ -26,6 +26,7 @@ private func scratchRoot() -> URL {
     #expect(environment.workingDirectory.path.hasPrefix(root.path))
     #expect(environment.runConfigurationsFile.path.hasPrefix(root.path))
     #expect(environment.worktreesRoot.path.hasPrefix(root.path))
+    #expect(environment.memoryRoot.path.hasPrefix(root.path))
     #expect(FileManager.default.fileExists(atPath: environment.workingDirectory.path))
     #expect(environment.defaults != .standard)
 }

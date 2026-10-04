@@ -11,6 +11,7 @@ import Foundation
     #expect(environment.runConfigurationsFile
             == support.appending(path: "run-configurations.json"))
     #expect(environment.worktreesRoot.path == NSHomeDirectory() + "/.den-dev/worktrees")
+    #expect(environment.memoryRoot.path == NSHomeDirectory() + "/.den-dev/memory")
     #expect(environment.workingDirectory.path == NSHomeDirectory())
     #expect(environment.registry.ids == HarnessRegistry.standard.ids)
 }
