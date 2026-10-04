@@ -173,8 +173,6 @@ final class ConversationUITests: XCTestCase {
         XCTAssertTrue(message.waitForNonExistence(timeout: patience))
     }
 
-    // MARK: - Conversation
-
     @MainActor
     func testAFirstConversationGetsItsReplyAndATitle() throws {
         try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
@@ -190,7 +188,7 @@ final class ConversationUITests: XCTestCase {
 
     @MainActor
     func testAllowingFromThePermissionCardFinishesTheTurn() throws {
-        let recorded = try RecordedSession.claudePermission()
+        let recorded = try RecordedSession.claudeWritePermission()
         try claude.on(FakeCLI.userTurn, reply: recorded.untilAsking)
         try claude.on(FakeCLI.permissionAnswer, reply: recorded.afterAnswer)
         let app = launch()
@@ -265,8 +263,6 @@ final class ConversationUITests: XCTestCase {
         require(menu.buttons["Nova pasta"], in: app)
     }
 
-    // MARK: - Mentions
-
     private let bigProject = """
         mkdir -p admin-web/src orders-api/src
         : > orders-api/pom.xml
@@ -318,8 +314,6 @@ final class ConversationUITests: XCTestCase {
         require(text(containing: "orders-api/orders-domain/src/main/java", in: app), in: app)
         XCTAssertFalse(text(containing: "worktrees/feature-1/orders-api", in: app).exists)
     }
-
-    // MARK: - Sidebar
 
     @MainActor
     private func sessionMenu(in app: XCUIApplication) -> XCUIElement {

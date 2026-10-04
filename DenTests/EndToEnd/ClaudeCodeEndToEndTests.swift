@@ -23,8 +23,6 @@ private func argument(after flag: String, in launch: FakeCLI.Launch?) -> String?
     return arguments[index + 1]
 }
 
-// MARK: - A turn
-
 @Test func theRegistryPinsTheHarnessesTheAppShips() {
     #expect(HarnessRegistry.standard.ids == [claudeCodeID, openCodeID])
 }
@@ -94,10 +92,8 @@ private func argument(after flag: String, in launch: FakeCLI.Launch?) -> String?
     }
 }
 
-// MARK: - Permissions
-
 @Test func anAllowedPermissionRoundTripsThroughStdin() async throws {
-    let recorded = try RecordedSession.claudePermission()
+    let recorded = try RecordedSession.claudeWritePermission()
     try await withEndToEnd { e2e in
         try e2e.claude.on(FakeCLI.userTurn, reply: recorded.untilAsking)
         try e2e.claude.on(FakeCLI.permissionAnswer, reply: recorded.afterAnswer)
@@ -121,7 +117,7 @@ private func argument(after flag: String, in launch: FakeCLI.Launch?) -> String?
 }
 
 @Test func aDeniedPermissionReachesTheCLI() async throws {
-    let recorded = try RecordedSession.claudePermission()
+    let recorded = try RecordedSession.claudeWritePermission()
     try await withEndToEnd { e2e in
         try e2e.claude.on(FakeCLI.userTurn, reply: recorded.untilAsking)
         try e2e.claude.on(FakeCLI.permissionAnswer, reply: [try #require(recorded.afterAnswer.last)])
@@ -136,8 +132,6 @@ private func argument(after flag: String, in launch: FakeCLI.Launch?) -> String?
         #expect(answer.contains(#""behavior":"deny""#))
     }
 }
-
-// MARK: - Knobs
 
 @Test func thePermissionModeChangesInPlaceWithoutARelaunch() async throws {
     try await withEndToEnd { e2e in
@@ -197,8 +191,6 @@ private func argument(after flag: String, in launch: FakeCLI.Launch?) -> String?
     }
 }
 
-// MARK: - Failure
-
 @Test func aCLIThatDiesMidTurnSaysWhyAndGoesCold() async throws {
     try await withEndToEnd { e2e in
         try e2e.claude.on(FakeCLI.userTurn, exit: 1, stderr: "Error: invalid API key")
@@ -213,8 +205,6 @@ private func argument(after flag: String, in launch: FakeCLI.Launch?) -> String?
         #expect(notices(chat) == ["a sessão caiu: o CLI saiu com código 1: Error: invalid API key"])
     }
 }
-
-// MARK: - Across launches of the app
 
 @Test func aConversationSurvivesARelaunchAndResumesTheCLISession() async throws {
     try await withEndToEnd { e2e in
