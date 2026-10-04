@@ -186,20 +186,17 @@ Depois rode `Scripts/quality/check` e commite o que a nova versão pedir.
 
 Coisas que também dá para verificar estaticamente e que ainda não estão ligadas:
 
-1. **Swift 6 language mode no app** (`SWIFT_VERSION = 6`). O pacote já usa; no
-   app, o modo 5 ainda deixa passar como warning corridas de dados que o modo 6
-   transforma em erro — os 7 warnings corrigidos agora eram desse tipo.
-2. **Acessibilidade**: as regras opt-in `accessibility_label_for_image` e
+1. **Acessibilidade**: as regras opt-in `accessibility_label_for_image` e
    `accessibility_trait_for_button` do SwiftLint acham hoje 49 imagens sem
    rótulo (ou sem `.accessibilityHidden(true)`, se forem decorativas) e 6 botões
    feitos com `onTapGesture`.
-3. **Strings e localização**: `SWIFT_EMIT_LOC_STRINGS` está ligado no app; um
+2. **Strings e localização**: `SWIFT_EMIT_LOC_STRINGS` está ligado no app; um
    String Catalog com a verificação de chaves faltando/obsoletas do Xcode pegaria
    textos sem tradução.
-4. **Revisão de dependências e licenças** quando o projeto passar a ter pacotes
+3. **Revisão de dependências e licenças** quando o projeto passar a ter pacotes
    de terceiros (hoje não tem): `swift package show-dependencies` +
    verificação de licenças, e Dependabot para as GitHub Actions.
-5. **GitHub**: ligar *secret scanning* com *push protection* e exigir os jobs
+4. **GitHub**: ligar *secret scanning* com *push protection* e exigir os jobs
    `Quality` como status checks obrigatórios na proteção da `main`.
-6. **Spell check** de identificadores e comentários com
+5. **Spell check** de identificadores e comentários com
    [typos](https://github.com/crate-ci/typos), que tem hook de pre-commit.

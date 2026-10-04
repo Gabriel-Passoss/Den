@@ -8,7 +8,7 @@ nonisolated struct SessionCache {
         self.defaults = defaults
     }
 
-    static let standard = SessionCache(defaults: .standard)
+    static var standard: SessionCache { SessionCache(defaults: .standard) }
 
     private func catalogKey(_ directory: URL, _ harness: HarnessID) -> String {
         "Den.catalog." + harness.rawValue + "." + directory.standardizedFileURL.path
