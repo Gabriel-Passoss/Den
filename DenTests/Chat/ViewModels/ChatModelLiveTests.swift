@@ -46,14 +46,14 @@ private func notices(_ chat: ChatModel) -> [String] {
 @Test func aFailedDiscoveryLeavesANoticeAndStaysCold() async throws {
     try await withLiveChat(configure: { harness in
         harness.discoveryFailure = HarnessFailure(reason: "binary missing")
-    }) { live in
+    }, { live in
         await live.chat.start()
 
         #expect(live.chat.isLive == false)
         #expect(live.chat.status.hasPrefix("falhou:"))
         #expect(notices(live.chat).first?.hasPrefix("não consegui subir o harness:") == true)
         #expect(live.log.madeSessions == 0)
-    }
+    })
 }
 
 @Test func knobsComeFromTheLiveSessionOnceItIsUp() async throws {
@@ -249,7 +249,7 @@ private let modeKnob = HarnessKnob(
     try await withLiveChat(configure: { harness in
         harness.declaredCapabilities = HarnessCapabilities(canSetPermissionMode: true)
         harness.declaredKnobs = [modeKnob]
-    }) { live in
+    }, { live in
         await live.session.offer(knobs: [modeKnob])
         await live.chat.start()
 
@@ -257,14 +257,14 @@ private let modeKnob = HarnessKnob(
 
         #expect(await live.session.appliedKnobs.map(\.id) == ["mode"])
         #expect(live.log.madeSessions == 1)
-    }
+    })
 }
 
 @Test func aKnobRelaunchesTheSessionWhenItCannotBeSetInPlace() async throws {
     try await withLiveChat(configure: { harness in
         harness.declaredCapabilities = HarnessCapabilities(canSetPermissionMode: false)
         harness.declaredKnobs = [modeKnob]
-    }) { live in
+    }, { live in
         await live.chat.start()
 
         await live.chat.choose(knob: "mode", value: "auto")
@@ -272,7 +272,7 @@ private let modeKnob = HarnessKnob(
         #expect(await live.session.appliedKnobs.isEmpty)
         #expect(live.log.madeSessions == 2)
         #expect(await live.session.stops == 1)
-    }
+    })
 }
 
 private let effortKnob = HarnessKnob(
@@ -283,7 +283,7 @@ private let effortKnob = HarnessKnob(
     try await withLiveChat(configure: { harness in
         harness.declaredCapabilities = HarnessCapabilities(canSetPermissionMode: true)
         harness.declaredKnobs = [effortKnob]
-    }) { live in
+    }, { live in
         await live.session.offer(knobs: [effortKnob])
         await live.chat.start()
 
@@ -292,14 +292,14 @@ private let effortKnob = HarnessKnob(
         #expect(await live.session.appliedKnobs.isEmpty)
         #expect(live.log.madeSessions == 2)
         #expect(live.log.lastSettings["effort"] == "high")
-    }
+    })
 }
 
 @Test func effortIsAppliedInPlaceWhenTheHarnessCanChangeIt() async throws {
     try await withLiveChat(configure: { harness in
         harness.declaredCapabilities = HarnessCapabilities(canSetEffortInSession: true)
         harness.declaredKnobs = [effortKnob]
-    }) { live in
+    }, { live in
         await live.session.offer(knobs: [effortKnob])
         await live.chat.start()
 
@@ -307,14 +307,14 @@ private let effortKnob = HarnessKnob(
 
         #expect(await live.session.appliedKnobs.map(\.id) == ["effort"])
         #expect(live.log.madeSessions == 1)
-    }
+    })
 }
 
 @Test func aKnobChosenMidTurnRelaunchesOnceTheTurnEnds() async throws {
     try await withLiveChat(configure: { harness in
         harness.declaredCapabilities = HarnessCapabilities(canSetPermissionMode: false)
         harness.declaredKnobs = [modeKnob]
-    }) { live in
+    }, { live in
         await live.session.offer(knobs: [modeKnob])
         await live.chat.send(text: "working")
 
@@ -328,28 +328,28 @@ private let effortKnob = HarnessKnob(
 
         await settle { live.log.madeSessions == 2 }
         #expect(live.log.lastSettings["mode"] == "auto")
-    }
+    })
 }
 
 @Test func choosingTheValueAKnobAlreadyHasIsANoOp() async throws {
     try await withLiveChat(configure: { harness in
         harness.declaredCapabilities = HarnessCapabilities(canSetPermissionMode: true)
         harness.declaredKnobs = [modeKnob]
-    }) { live in
+    }, { live in
         await live.chat.start()
 
         await live.chat.choose(knob: "mode", value: "auto")
         await live.chat.choose(knob: "mode", value: "auto")
 
         #expect(await live.session.appliedKnobs.count == 1)
-    }
+    })
 }
 
 @Test func aChosenKnobReachesTheRelaunchedProcess() async throws {
     try await withLiveChat(configure: { harness in
         harness.declaredCapabilities = HarnessCapabilities(canSetPermissionMode: false)
         harness.declaredKnobs = [modeKnob]
-    }) { live in
+    }, { live in
         await live.chat.start()
         #expect(live.log.lastSettings["mode"] == nil)
 
@@ -358,7 +358,7 @@ private let effortKnob = HarnessKnob(
         // The relaunch is the only way the choice reaches a process that
         // cannot take it in flight.
         #expect(live.log.lastSettings["mode"] == "auto")
-    }
+    })
 }
 
 // MARK: - Switching harness

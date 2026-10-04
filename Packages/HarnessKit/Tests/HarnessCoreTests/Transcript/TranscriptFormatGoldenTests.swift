@@ -202,14 +202,24 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
     }
 }
 
+private struct OpenEnumSubject {
+    let file: String
+    let opening: String
+    let closing: String
+    let name: String
+    let known: Set<String>
+}
+
 @Test func theOpenEnumsDoNotDivergeFromTheirKnownDiscriminators() throws {
     let sources = packageRoot().appending(path: "Sources/HarnessCore")
 
-    let subjects: [(String, String, String, Set<String>, String)] = [
-        ("TranscriptEntry.swift", "public enum Kind:", "private enum Known:",
-         TranscriptEntry.Kind.knownDiscriminators, "TranscriptEntry.Kind"),
-        ("Session.swift", "public enum Handoff:", "private enum Known:",
-         Handoff.knownDiscriminators, "Handoff"),
+    let subjects = [
+        OpenEnumSubject(file: "TranscriptEntry.swift", opening: "public enum Kind:",
+                        closing: "private enum Known:", name: "TranscriptEntry.Kind",
+                        known: TranscriptEntry.Kind.knownDiscriminators),
+        OpenEnumSubject(file: "Session.swift", opening: "public enum Handoff:",
+                        closing: "private enum Known:", name: "Handoff",
+                        known: Handoff.knownDiscriminators),
     ]
 
     let located = try #require(
@@ -218,21 +228,21 @@ private let goldenHandoffs: [(String, Handoff, String)] = [
             .filter { $0.pathExtension == "swift" }
     )
 
-    for (file, opening, closing, known, name) in subjects {
-        let url = try #require(located.first { $0.lastPathComponent == file },
-                               "could not find \(file) under Sources/HarnessCore")
+    for subject in subjects {
+        let url = try #require(located.first { $0.lastPathComponent == subject.file },
+                               "could not find \(subject.file) under Sources/HarnessCore")
         let text = try String(contentsOf: url, encoding: .utf8)
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        let start = try #require(lines.firstIndex { $0.contains(opening) },
-                                 "could not find \(opening) in \(file) — the source changed shape")
-        let end = try #require(lines[start...].firstIndex { $0.contains(closing) },
-                               "could not find \(closing) in \(file) — the source changed shape")
+        let start = try #require(lines.firstIndex { $0.contains(subject.opening) },
+                                 "could not find \(subject.opening) in \(subject.file) — the source changed shape")
+        let end = try #require(lines[start...].firstIndex { $0.contains(subject.closing) },
+                               "could not find \(subject.closing) in \(subject.file) — the source changed shape")
         let declared = lines[start..<end]
             .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("case ") }
             .count
 
-        #expect(declared == known.count + 1,
-                "\(name) declares \(declared) cases and knows \(known.count) discriminators — a new case never reached Known.CodingKeys")
+        #expect(declared == subject.known.count + 1,
+                "\(subject.name) declares \(declared) cases and knows \(subject.known.count) discriminators — a new case never reached Known.CodingKeys")
     }
 }
 

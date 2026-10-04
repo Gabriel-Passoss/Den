@@ -37,10 +37,10 @@ import HarnessCore
     try await withWorkspace(seed: { defaults in
         defaults.set(["/code/api", "/code/web"], forKey: "Den.folders")
         defaults.set(["/code/api": "API"], forKey: "Den.folderNames")
-    }) { harness in
+    }, { harness in
         // The named one keeps its name; the unnamed one falls back to the leaf.
         #expect(harness.model.folders.map(\.name) == ["API", "web"])
-    }
+    })
 }
 
 @Test func theNewShapeWinsOverTheLegacyKeys() async throws {
@@ -49,25 +49,25 @@ import HarnessCore
         defaults.set(encoded, forKey: "Den.folders.v2")
         defaults.set(["/code/api"], forKey: "Den.folders")
         defaults.set(["/code/api": "Ignored"], forKey: "Den.folderNames")
-    }) { harness in
+    }, { harness in
         #expect(harness.model.folders.map(\.name) == ["Kept"])
-    }
+    })
 }
 
 @Test func theMigratedFoldersArePersistedImmediately() async throws {
     try await withWorkspace(seed: { defaults in
         defaults.set(["/code/api"], forKey: "Den.folders")
-    }) { harness in
+    }, { harness in
         let data = try #require(harness.defaults.data(forKey: "Den.folders.v2"))
         let stored = try JSONDecoder().decode([WorkspaceModel.Folder].self, from: data)
         #expect(stored.map(\.name) == ["api"])
-    }
+    })
 }
 
 @Test func legacyMembershipLandsOnTheFirstRefresh() async throws {
     try await withWorkspace(seed: { defaults in
         defaults.set(["/code/api"], forKey: "Den.folders")
-    }) { harness in
+    }, { harness in
         let session = storedSession("one", in: "/code/api")
         try await harness.store.saveMetadata(session)
 
@@ -75,13 +75,13 @@ import HarnessCore
 
         let folder = try #require(harness.model.folders.first)
         #expect(harness.model.membership[session.id.uuidString] == folder.id)
-    }
+    })
 }
 
 @Test func theLegacyMappingIsSpentAfterOneRefresh() async throws {
     try await withWorkspace(seed: { defaults in
         defaults.set(["/code/api"], forKey: "Den.folders")
-    }) { harness in
+    }, { harness in
         try await harness.store.saveMetadata(storedSession("first", in: "/code/api"))
         await harness.model.refresh()
 
@@ -90,13 +90,13 @@ import HarnessCore
         await harness.model.refresh()
 
         #expect(harness.model.membership[late.id.uuidString] == nil)
-    }
+    })
 }
 
 @Test func aSessionOutsideEveryLegacyFolderStaysLoose() async throws {
     try await withWorkspace(seed: { defaults in
         defaults.set(["/code/api"], forKey: "Den.folders")
-    }) { harness in
+    }, { harness in
         let session = storedSession("elsewhere", in: "/code/web")
         try await harness.store.saveMetadata(session)
 
@@ -104,7 +104,7 @@ import HarnessCore
 
         #expect(harness.model.membership[session.id.uuidString] == nil)
         #expect(harness.model.looseSessions.map(\.title) == ["elsewhere"])
-    }
+    })
 }
 
 // MARK: - Ordering
@@ -406,7 +406,7 @@ import HarnessCore
 @Test func anUnknownStoredHarnessFallsBack() async throws {
     try await withWorkspace(seed: { defaults in
         defaults.set("ghost-harness", forKey: "Den.defaultHarness")
-    }) { harness in
+    }, { harness in
         #expect(harness.model.defaultHarness == HarnessRegistry.standard.fallback)
-    }
+    })
 }
