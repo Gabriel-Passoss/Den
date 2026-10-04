@@ -138,5 +138,11 @@ custom_rules:
     regex: '^\s*(@\w+\s+)*import\s+((typealias|struct|class|enum|protocol|let|var|func)\s+)?SQLite3\b'
     message: "Only SQLiteKit may import SQLite3; everything else goes through DenStore."
     severity: error
+  sqlitekit_behind_denstore:
+    name: "SQLiteKit stays behind DenStore"
+    excluded: ".*/Packages/HarnessKit/(Sources|Tests)/(SQLiteKit|SQLiteKitTests|DenStore|DenStoreTests)/.*"
+    regex: '^\s*(@\w+\s+)*import\s+((typealias|struct|class|enum|protocol|let|var|func)\s+)?SQLiteKit\b'
+    message: "Only DenStore may import SQLiteKit; everything else goes through a repository protocol."
+    severity: error
 
 reporter: xcode
