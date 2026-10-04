@@ -363,3 +363,26 @@ final class ConversationUITests: XCTestCase {
         XCTAssertFalse(sidebarRow("Saudação curta", in: app).exists)
     }
 }
+
+extension ConversationUITests {
+    @MainActor
+    func testTheMemoryTabShowsThePagesOfTheWiki() throws {
+        try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
+        let app = launch(projectSetup: """
+            mkdir -p ../memory/user
+            printf -- '---\\ntitle: Sem coautor\\ncategory: rule\\n---\\n\\nNunca adicionar coautor.\\n' \
+              > ../memory/user/sem-coautor.md
+            """)
+
+        startConversation("Diga apenas OK e nada mais.", in: app)
+        require(app.staticTexts["OK"], in: app)
+        app.typeKey("8", modifierFlags: [.option, .command])
+
+        require(app.buttons["Memória"], in: app)
+        require(app.staticTexts["Fora de um repositório"], in: app)
+        app.buttons["Usuário"].click()
+        require(app.buttons["Sem coautor"], in: app)
+        app.buttons["Sem coautor"].click()
+        require(text(containing: "Nunca adicionar coautor.", in: app), in: app)
+    }
+}

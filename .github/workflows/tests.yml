@@ -37,12 +37,17 @@ jobs:
       - uses: ./.github/actions/select-xcode
         with:
           version: ${{ env.XCODE_VERSION }}
+      # The build goes in the workspace, which the checkout wipes. The runner's
+      # shared DerivedData keeps products from other commits, and a module left
+      # there (HarnessCore.swiftmodule, from before the package had targets
+      # that depend on it) was found ahead of the one this build had just made.
       - name: Test the app
         run: |
           # shellcheck disable=SC2086 # $SIGNING is a list of build settings
           xcodebuild test \
             -project Den.xcodeproj -scheme Den \
             -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
             -enableCodeCoverage YES \
             -resultBundlePath build/app.xcresult \
             $SIGNING
@@ -72,6 +77,7 @@ jobs:
           xcodebuild test \
             -project Den.xcodeproj -scheme Den \
             -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
             -enableThreadSanitizer YES \
             -resultBundlePath build/tsan.xcresult \
             $SIGNING

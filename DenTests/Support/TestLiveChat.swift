@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import HarnessCore
+import DenStore
 @testable import Den
 
 @MainActor
@@ -8,7 +9,7 @@ struct LiveChatHarness {
     let chat: ChatModel
     let harness: FakeHarness
     let attachments: URL
-    let store: FileTranscriptStore
+    let store: any SessionRepository
 
     var session: FakeSession { harness.session }
     var log: HarnessLog { harness.log }
@@ -24,22 +25,16 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
     var harness = FakeHarness()
     configure(&harness)
 
-    let scratch = ScratchDefaults()
-    let defaults = scratch.defaults
-    let root = FileManager.default.temporaryDirectory
-        .appending(path: "DenTests-" + UUID().uuidString)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    defer {
-        scratch.remove()
-        try? FileManager.default.removeItem(at: root)
-    }
+    let root = try makeTree([])
+    defer { try? FileManager.default.removeItem(at: root) }
 
     let attachments = root.appending(path: "attachments")
-    let store = FileTranscriptStore(root: root)
+    let repositories = scratchRepositories()
+    let store = repositories.sessions
     let chat = ChatModel(store: store,
                          workingDirectory: root,
                          harness: harness.id,
-                         cache: SessionCache(defaults: defaults),
+                         cache: SessionCache(repositories),
                          registry: HarnessRegistry(harnesses: [harness] + others),
                          attachmentsRoot: attachments)
     chat.runner = runner

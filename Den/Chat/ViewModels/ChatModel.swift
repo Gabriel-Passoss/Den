@@ -105,10 +105,11 @@ final class ChatModel {
 
     func knob(_ id: String) -> HarnessKnob? { knobs.first { $0.id == id } }
 
-    private let store: FileTranscriptStore
+    private let store: any SessionRepository
     private let cache: SessionCache
     let registry: HarnessRegistry
     private let attachmentsRoot: URL
+    var memory: MemoryModel?
     var runner: any CommandRunner = SystemCommandRunner()
     var installation: HarnessInstallation?
     private var session: (any HarnessSession)?
@@ -118,7 +119,7 @@ final class ChatModel {
 
     private var harnessSessionID: String
 
-    private var entries: [TranscriptEntry] = []
+    private(set) var entries: [TranscriptEntry] = []
 
     private var segmentStart = 0
 
@@ -130,8 +131,8 @@ final class ChatModel {
 
     // MARK: - Creation
 
-    init(store: FileTranscriptStore, workingDirectory: URL,
-         harness: HarnessID? = nil, cache: SessionCache = .standard,
+    init(store: any SessionRepository, workingDirectory: URL,
+         harness: HarnessID? = nil, cache: SessionCache,
          registry: HarnessRegistry = .standard,
          attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
@@ -152,8 +153,8 @@ final class ChatModel {
         catalog = cache.rememberedCatalog(for: workingDirectory, harness: harness)
     }
 
-    init(store: FileTranscriptStore, restoring session: Session,
-         cache: SessionCache = .standard,
+    init(store: any SessionRepository, restoring session: Session,
+         cache: SessionCache,
          registry: HarnessRegistry = .standard,
          attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
@@ -244,6 +245,7 @@ final class ChatModel {
                 ? .resume(harnessSessionID: harnessSessionID)
                 : .fresh
             hasLaunched = true
+            memory?.sessionStarted(sessionID, fresh: start == .fresh)
 
             let live = adapter.makeSession(
                 installation: installation,
@@ -344,7 +346,8 @@ final class ChatModel {
             await nameFromFirstTurn(text.isEmpty ? "Anexo" : text)
         }
 
-        let outgoing = pendingSeed.map { HandoffSeed.message(seed: $0, request: text) } ?? text
+        let seeded = pendingSeed.map { HandoffSeed.message(seed: $0, request: text) } ?? text
+        let outgoing = memory?.opening(seeded, typed: text, session: sessionID, directory: workingDirectory) ?? seeded
         pendingSeed = nil
 
         isBusy = true

@@ -133,7 +133,7 @@ private func restoredChat(measured: ContextUsage?, entries: [TranscriptEntry] = 
                           harnessSessionID: "", model: "", entries: entries,
                           context: measured)
     let session = Session(title: "restored", workingDirectory: root, segments: [segment])
-    return ChatModel(store: FileTranscriptStore(root: root),
+    return ChatModel(store: scratchSessions(),
                      restoring: session, cache: scratchCache)
 }
 

@@ -1,12 +1,20 @@
 import Foundation
 import HarnessCore
+import DenStore
 @testable import Den
 
 @MainActor
 struct WorkspaceHarness {
     let model: WorkspaceModel
     let defaults: UserDefaults
-    let store: FileTranscriptStore
+    let repositories: Repositories
+
+    var store: any SessionRepository { repositories.sessions }
+
+    func reopened() -> WorkspaceModel {
+        WorkspaceModel(store: repositories.sessions, sidebar: repositories.sidebar, defaults: defaults,
+                       cache: SessionCache(repositories))
+    }
 }
 
 /// Builds a WorkspaceModel on a throwaway defaults suite and a throwaway store
@@ -26,11 +34,11 @@ func withWorkspace(seed: (UserDefaults) -> Void = { _ in },
     }
 
     seed(defaults)
-    let store = FileTranscriptStore(root: root)
-    let model = WorkspaceModel(store: store, defaults: defaults,
-                               cache: SessionCache(defaults: defaults),
+    let repositories = scratchRepositories()
+    let model = WorkspaceModel(store: repositories.sessions, sidebar: repositories.sidebar, defaults: defaults,
+                               cache: SessionCache(repositories),
                                attachmentsRoot: root.appending(path: "attachments"))
-    try await body(WorkspaceHarness(model: model, defaults: defaults, store: store))
+    try await body(WorkspaceHarness(model: model, defaults: defaults, repositories: repositories))
 }
 
 func summary(_ title: String, in directory: String = "/code/project",

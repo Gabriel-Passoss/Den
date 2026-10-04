@@ -6,6 +6,7 @@ struct InspectorView: View {
     let directory: URL
     let runRoot: URL
     let runActive: Bool
+    let chat: ChatModel
 
     @State private var shown: InspectorPane = .changes
 
@@ -29,6 +30,9 @@ struct InspectorView: View {
                             .accessibilityLabel("Em execução")
                     }
                 }
+                if chat.memory != nil {
+                    tab(.memory, title: "Memória", icon: "brain") { EmptyView() }
+                }
                 Spacer(minLength: 4)
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { pane = .closed }
@@ -39,14 +43,17 @@ struct InspectorView: View {
                         .iconLabel()
                 }
                 .buttonStyle(.denGhost)
-                .help(shown == .run ? "Recolher painel (⌥⌘9)" : "Recolher painel (⌥⌘0)")
+                .help("Recolher painel (\(shown.shortcut))")
                 .accessibilityLabel("Fechar painel")
             }
 
             Group {
-                if shown == .run {
+                switch shown {
+                case .run:
                     RunPanel(root: runRoot)
-                } else {
+                case .memory:
+                    if let memory = chat.memory { MemoryPanel(memory: memory, chat: chat) }
+                case .changes, .closed:
                     GitChangesPanel(model: gitChanges, directory: directory)
                 }
             }

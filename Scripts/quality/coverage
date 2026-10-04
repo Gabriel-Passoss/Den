@@ -20,7 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 FLOOR_FILE = ROOT / ".coverage-floor.json"
 PACKAGE = ROOT / "Packages" / "HarnessKit"
-PACKAGE_TARGETS = ("HarnessCore", "ClaudeHarness", "OpenCodeHarness", "HarnessProbeArguments")
+PACKAGE_TARGETS = ("HarnessCore", "ClaudeHarness", "OpenCodeHarness", "HarnessProbeArguments",
+                   "SQLiteKit", "DenStore", "DenMemory")
 APP_TARGET = "Den.app"
 APP_KEY = "Den"
 WOBBLE = 0.5

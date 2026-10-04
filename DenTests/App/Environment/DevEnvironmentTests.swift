@@ -6,12 +6,12 @@ import Foundation
     let environment = DevEnvironment()
     let support = URL.applicationSupportDirectory.appending(path: "Den Dev")
 
-    #expect(environment.sessionsRoot == support.appending(path: "sessions"))
+    #expect(environment.databaseFile == support.appending(path: "den.sqlite"))
     #expect(environment.attachmentsRoot == support.appending(path: "attachments"))
     #expect(environment.runConfigurationsFile
             == support.appending(path: "run-configurations.json"))
     #expect(environment.worktreesRoot.path == NSHomeDirectory() + "/.den-dev/worktrees")
-    #expect(environment.worktreesFile == support.appending(path: "task-worktrees.json"))
+    #expect(environment.memoryRoot.path == NSHomeDirectory() + "/.den-dev/memory")
     #expect(environment.workingDirectory.path == NSHomeDirectory())
     #expect(environment.registry.ids == HarnessRegistry.standard.ids)
 }

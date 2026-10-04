@@ -151,7 +151,7 @@ private func suggested(_ live: LiveChatHarness, _ runner: FakeCommandRunner) asy
                         kind: .turnResult(TurnResult(usage: .zero, stopReason: "end_turn",
                                                      isError: false)), raw: .null),
     ])
-    let chat = ChatModel(store: FileTranscriptStore(root: root),
+    let chat = ChatModel(store: scratchSessions(),
                          restoring: Session(title: "restored", workingDirectory: root,
                                             segments: [segment]),
                          cache: scratchCache,

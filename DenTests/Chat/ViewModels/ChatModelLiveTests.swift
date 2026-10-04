@@ -30,7 +30,7 @@ private func notices(_ chat: ChatModel) -> [String] {
 }
 
 @Test func anUnknownHarnessFailsLoudly() async {
-    let store = FileTranscriptStore(root: FileManager.default.temporaryDirectory)
+    let store = scratchSessions()
     let chat = ChatModel(store: store,
                          workingDirectory: FileManager.default.temporaryDirectory,
                          harness: HarnessID(rawValue: "ghost"),

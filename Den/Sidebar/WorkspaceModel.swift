@@ -2,6 +2,8 @@ import AppKit
 import Foundation
 import Observation
 import HarnessCore
+import DenStore
+import DenMemory
 
 @MainActor
 @Observable
@@ -12,21 +14,21 @@ final class WorkspaceModel {
 
     var workingDirectory: URL = URL(fileURLWithPath: NSHomeDirectory())
 
-    struct Folder: Identifiable, Codable, Equatable {
+    struct Folder: Identifiable, Equatable {
         let id: String
         var name: String
     }
 
     var folders: [Folder] = [] {
-        didSet { persistFolders(folders) }
+        didSet { persistLayout() }
     }
 
     var membership: [String: String] = [:] {
-        didSet { defaults.set(membership, forKey: Self.membershipKey) }
+        didSet { persistLayout() }
     }
 
     var sessionOrder: [String] = [] {
-        didSet { defaults.set(sessionOrder, forKey: Self.orderKey) }
+        didSet { persistLayout() }
     }
 
     var defaultHarness: HarnessID {
@@ -36,60 +38,66 @@ final class WorkspaceModel {
 
     var availableHarnesses: [HarnessID] { registry.ids }
 
-    private let store: FileTranscriptStore
+    private let store: any SessionRepository
+    private let sidebar: any SidebarRepository
+    @ObservationIgnored private var persistsLayout = false
     private let defaults: UserDefaults
     private let cache: SessionCache
     private let registry: HarnessRegistry
     private let attachmentsRoot: URL
+    let memory: MemoryModel?
     private var chats: [UUID: ChatModel] = [:]
-    private var legacyPathToFolder: [String: String] = [:]
 
-    private static let foldersKey = "Den.folders.v2"
-    private static let membershipKey = "Den.sessionFolders"
-    private static let orderKey = "Den.sessionOrder"
-    private static let legacyFoldersKey = "Den.folders"
-    private static let legacyNamesKey = "Den.folderNames"
-
-    static func live(_ environment: any AppEnvironment) -> WorkspaceModel {
-        let root = environment.sessionsRoot
-        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let workspace = WorkspaceModel(store: FileTranscriptStore(root: root),
+    static func live(_ environment: any AppEnvironment, repositories: Repositories) -> WorkspaceModel {
+        let workspace = WorkspaceModel(store: repositories.sessions, sidebar: repositories.sidebar,
                                        defaults: environment.defaults,
-                                       cache: SessionCache(defaults: environment.defaults),
+                                       cache: SessionCache(repositories),
                                        registry: environment.registry,
-                                       attachmentsRoot: environment.attachmentsRoot)
+                                       attachmentsRoot: environment.attachmentsRoot,
+                                       memory: MemoryModel(
+                                           repository: FileMemoryRepository(root: environment.memoryRoot),
+                                           marks: repositories.memoryMarks, defaults: environment.defaults,
+                                           registry: environment.registry))
         workspace.workingDirectory = environment.workingDirectory
         return workspace
     }
 
-    init(store: FileTranscriptStore, defaults: UserDefaults, cache: SessionCache,
-         registry: HarnessRegistry = .standard,
-         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
+    init(store: any SessionRepository, sidebar: any SidebarRepository, defaults: UserDefaults,
+         cache: SessionCache, registry: HarnessRegistry = .standard,
+         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot, memory: MemoryModel? = nil) {
+        self.memory = memory
         self.store = store
+        self.sidebar = sidebar
         self.defaults = defaults
         self.cache = cache
         self.registry = registry
         self.attachmentsRoot = attachmentsRoot
 
-        if let data = defaults.data(forKey: Self.foldersKey),
-           let decoded = try? JSONDecoder().decode([Folder].self, from: data) {
-            self.folders = decoded
-        } else {
-            let paths = defaults.array(forKey: Self.legacyFoldersKey) as? [String] ?? []
-            let names = defaults.dictionary(forKey: Self.legacyNamesKey) as? [String: String] ?? [:]
-            var migrated: [Folder] = []
-            for path in paths {
-                let folder = Folder(
-                    id: UUID().uuidString,
-                    name: names[path] ?? URL(fileURLWithPath: path).lastPathComponent)
-                migrated.append(folder)
-                legacyPathToFolder[path] = folder.id
-            }
-            self.folders = migrated
-            persistFolders(migrated)
+        do {
+            let layout = try sidebar.load()
+            self.folders = layout.folders.map { Folder(id: $0.id, name: $0.name) }
+            self.membership = Dictionary(layout.membership.map { ($0.key.uuidString, $0.value) },
+                                         uniquingKeysWith: { first, _ in first })
+            self.sessionOrder = layout.order.map(\.uuidString)
+            persistsLayout = true
+        } catch {
+            print("não consegui ler a barra lateral, e por isso não vou regravá-la: \(error)")
         }
-        self.membership = defaults.dictionary(forKey: Self.membershipKey) as? [String: String] ?? [:]
-        self.sessionOrder = defaults.array(forKey: Self.orderKey) as? [String] ?? []
+    }
+
+    private func persistLayout() {
+        guard persistsLayout else { return }
+        let placed = membership.compactMap { session, folder in
+            UUID(uuidString: session).map { ($0, folder) }
+        }
+        let layout = SidebarLayout(folders: folders.map { SidebarFolder(id: $0.id, name: $0.name) },
+                                   membership: Dictionary(placed, uniquingKeysWith: { first, _ in first }),
+                                   order: sessionOrder.compactMap { UUID(uuidString: $0) })
+        do {
+            try sidebar.save(layout)
+        } catch {
+            print("não consegui gravar a barra lateral: \(error)")
+        }
     }
 
     func renameFolder(_ id: String, to name: String) {
@@ -163,11 +171,6 @@ final class WorkspaceModel {
         }
     }
 
-    private func persistFolders(_ folders: [Folder]) {
-        guard let data = try? JSONEncoder().encode(folders) else { return }
-        defaults.set(data, forKey: Self.foldersKey)
-    }
-
     func addFolder() {
         folders.append(Folder(id: UUID().uuidString, name: "Nova pasta"))
     }
@@ -201,6 +204,7 @@ final class WorkspaceModel {
 
     private func adopt(_ chat: ChatModel) {
         let id = chat.sessionID
+        chat.memory = memory
         chat.isViewed = { [weak self] in
             self?.selectedID == id && NSApplication.shared.isActive
         }
@@ -248,25 +252,18 @@ final class WorkspaceModel {
     // MARK: - Actions
 
     func refresh() async {
-        guard let listing = try? await store.list() else { return }
-        summaries = listing.sessions
+        guard let listed = try? await store.list() else { return }
+        summaries = listed
+    }
 
-        if !legacyPathToFolder.isEmpty {
-            for summary in summaries where membership[summary.id.uuidString] == nil {
-                if let folderID = legacyPathToFolder[summary.workingDirectory.path] {
-                    membership[summary.id.uuidString] = folderID
-                }
-            }
-            legacyPathToFolder = [:]
-        }
-
-        for broken in listing.unreadable {
-            print("sessão ilegível em \(broken.location.path): \(broken.reason)")
-        }
+    private func leaveCurrent(for next: UUID?) {
+        guard let current = selectedID, current != next else { return }
+        chats[current]?.captureMemory(atLeast: MemoryModel.leaveThreshold)
     }
 
     func newSession(assignedTo folderID: String? = nil,
                     harness: HarnessID? = nil) async {
+        leaveCurrent(for: nil)
         if let selectedID,
            let summary = summaries.first(where: { $0.id == selectedID }) {
             workingDirectory = summary.workingDirectory
@@ -284,6 +281,7 @@ final class WorkspaceModel {
     }
 
     func select(_ id: UUID) async {
+        leaveCurrent(for: id)
         selectedID = id
         if let chat = chats[id] {
             if chat.hasUnread { chat.hasUnread = false }

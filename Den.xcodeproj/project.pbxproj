@@ -11,6 +11,10 @@
 		BE922E2A305C0F5300FFD487 /* ClaudeHarness in Frameworks */ = {isa = PBXBuildFile; productRef = BE922E29305C0F5300FFD487 /* ClaudeHarness */; };
 		BE922E2C305C0F5300FFD487 /* HarnessCore in Frameworks */ = {isa = PBXBuildFile; productRef = BE922E2B305C0F5300FFD487 /* HarnessCore */; };
 		BE922E2E305C0F5300FFD487 /* OpenCodeHarness in Frameworks */ = {isa = PBXBuildFile; productRef = BE922E2D305C0F5300FFD487 /* OpenCodeHarness */; };
+		BE57D0000000000000000001 /* DenStore in Frameworks */ = {isa = PBXBuildFile; productRef = BE57D0000000000000000002 /* DenStore */; };
+		BE57D0000000000000000003 /* DenStore in Frameworks */ = {isa = PBXBuildFile; productRef = BE57D0000000000000000004 /* DenStore */; };
+		BE57D0000000000000000005 /* DenMemory in Frameworks */ = {isa = PBXBuildFile; productRef = BE57D0000000000000000006 /* DenMemory */; };
+		BE57D0000000000000000007 /* DenMemory in Frameworks */ = {isa = PBXBuildFile; productRef = BE57D0000000000000000008 /* DenMemory */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -84,12 +88,16 @@
 				BE922E2C305C0F5300FFD487 /* HarnessCore in Frameworks */,
 				BE922E2A305C0F5300FFD487 /* ClaudeHarness in Frameworks */,
 				BE922E2E305C0F5300FFD487 /* OpenCodeHarness in Frameworks */,
+				BE57D0000000000000000001 /* DenStore in Frameworks */,
+				BE57D0000000000000000005 /* DenMemory in Frameworks */,
 			);
 		};
 		BE7E570000000000000000A5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				BE7E570000000000000000AD /* HarnessCore in Frameworks */,
+				BE57D0000000000000000003 /* DenStore in Frameworks */,
+				BE57D0000000000000000007 /* DenMemory in Frameworks */,
 			);
 		};
 		BE7E570000000000000000B5 /* Frameworks */ = {
@@ -145,6 +153,8 @@
 				BE922E29305C0F5300FFD487 /* ClaudeHarness */,
 				BE922E2B305C0F5300FFD487 /* HarnessCore */,
 				BE922E2D305C0F5300FFD487 /* OpenCodeHarness */,
+				BE57D0000000000000000002 /* DenStore */,
+				BE57D0000000000000000006 /* DenMemory */,
 			);
 			productName = Den;
 			productReference = BE5BD8D5305B606D00035C7F /* Den.app */;
@@ -173,6 +183,8 @@
 			name = DenTests;
 			packageProductDependencies = (
 				BE7E570000000000000000AC /* HarnessCore */,
+				BE57D0000000000000000004 /* DenStore */,
+				BE57D0000000000000000008 /* DenMemory */,
 			);
 			productName = DenTests;
 			productReference = BE7E570000000000000000A1 /* DenTests.xctest */;
@@ -620,6 +632,22 @@
 		BE922E2D305C0F5300FFD487 /* OpenCodeHarness */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = OpenCodeHarness;
+		};
+		BE57D0000000000000000002 /* DenStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DenStore;
+		};
+		BE57D0000000000000000004 /* DenStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DenStore;
+		};
+		BE57D0000000000000000006 /* DenMemory */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DenMemory;
+		};
+		BE57D0000000000000000008 /* DenMemory */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DenMemory;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
