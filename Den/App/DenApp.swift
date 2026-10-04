@@ -1,9 +1,11 @@
 import SwiftUI
+import DenStore
 
 @main
 struct DenApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let environment: any AppEnvironment
+    private let launch: StoreLaunch
     @State private var runConfigurations: RunConfigurationsModel
     @State private var worktrees: WorktreeModel
     @State private var monitor: PullRequestMonitor
@@ -11,6 +13,7 @@ struct DenApp: App {
     init() {
         let environment = resolveEnvironment(ProcessInfo.processInfo.environment)
         self.environment = environment
+        launch = StoreLaunch.open(environment.databaseFile)
         _runConfigurations = State(initialValue: RunConfigurationsModel(
             store: RunConfigurationStore(url: environment.runConfigurationsFile)))
         let ledger = TaskLedger(store: TaskWorktreeStore(url: environment.worktreesFile))
@@ -25,13 +28,17 @@ struct DenApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(environment: environment)
-                .environment(appDelegate.runs)
-                .environment(runConfigurations)
-                .environment(worktrees)
-                .environment(monitor)
-                .defaultAppStorage(environment.defaults)
-                .task { monitor.start() }
+            if let failure = launch.failure {
+                StoreFailureView(message: failure)
+            } else {
+                ContentView(environment: environment, repositories: launch.repositories)
+                    .environment(appDelegate.runs)
+                    .environment(runConfigurations)
+                    .environment(worktrees)
+                    .environment(monitor)
+                    .defaultAppStorage(environment.defaults)
+                    .task { monitor.start() }
+            }
         }
 
         .commands { HarnessCommands() }

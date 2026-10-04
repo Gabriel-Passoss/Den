@@ -6,7 +6,7 @@ import Foundation
     let environment = DevEnvironment()
     let support = URL.applicationSupportDirectory.appending(path: "Den Dev")
 
-    #expect(environment.sessionsRoot == support.appending(path: "sessions"))
+    #expect(environment.databaseFile == support.appending(path: "den.sqlite"))
     #expect(environment.attachmentsRoot == support.appending(path: "attachments"))
     #expect(environment.runConfigurationsFile
             == support.appending(path: "run-configurations.json"))

@@ -21,7 +21,7 @@ private func scratchRoot() -> URL {
 
     let environment = try #require(UITestEnvironment([UITestEnvironment.rootKey: root.path]))
 
-    #expect(environment.sessionsRoot.path.hasPrefix(root.path))
+    #expect(environment.databaseFile.path.hasPrefix(root.path))
     #expect(environment.attachmentsRoot.path.hasPrefix(root.path))
     #expect(environment.workingDirectory.path.hasPrefix(root.path))
     #expect(environment.runConfigurationsFile.path.hasPrefix(root.path))
@@ -38,8 +38,8 @@ private func scratchRoot() -> URL {
     let launch = [UITestEnvironment.rootKey: root.path]
     let first = try #require(UITestEnvironment(launch))
     defer { first.defaults.removeObject(forKey: "DenTests.relaunch") }
-    try FileManager.default.createDirectory(at: first.sessionsRoot,
-                                            withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try Data().write(to: first.databaseFile)
     first.defaults.set("kept", forKey: "DenTests.relaunch")
 
     let relaunched = try #require(UITestEnvironment(launch))

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import HarnessCore
+import DenStore
 @testable import Den
 
 @MainActor
@@ -8,7 +9,7 @@ struct LiveChatHarness {
     let chat: ChatModel
     let harness: FakeHarness
     let attachments: URL
-    let store: FileTranscriptStore
+    let store: any SessionRepository
 
     var session: FakeSession { harness.session }
     var log: HarnessLog { harness.log }
@@ -35,7 +36,8 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
     }
 
     let attachments = root.appending(path: "attachments")
-    let store = FileTranscriptStore(root: root)
+    let repositories = scratchRepositories()
+    let store = repositories.sessions
     let chat = ChatModel(store: store,
                          workingDirectory: root,
                          harness: harness.id,

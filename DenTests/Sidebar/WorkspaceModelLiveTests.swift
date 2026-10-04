@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import HarnessCore
+import DenStore
 @testable import Den
 
 @Test func liveBuildsTheWorkspaceOnTheEnvironmentItIsGiven() async throws {
@@ -15,19 +16,19 @@ import HarnessCore
     let environment = TestEnvironment(root: root, defaults: scratch.defaults,
                                       registry: HarnessRegistry(harnesses: [openCode]))
 
-    let workspace = WorkspaceModel.live(environment)
+    let repositories = try DenStore.open(at: environment.databaseFile).repositories
 
-    #expect(FileManager.default.fileExists(atPath: environment.sessionsRoot.path))
+    let workspace = WorkspaceModel.live(environment, repositories: repositories)
+
     #expect(workspace.workingDirectory == environment.workingDirectory)
     #expect(workspace.availableHarnesses == [openCodeID])
 
-    try await FileTranscriptStore(root: environment.sessionsRoot)
-        .saveMetadata(storedSession("Guardada"))
+    try await repositories.sessions.saveMetadata(storedSession("Guardada"))
     await workspace.refresh()
     #expect(workspace.summaries.map(\.title) == ["Guardada"])
 
     workspace.addFolder()
-    let reopened = WorkspaceModel(store: FileTranscriptStore(root: environment.sessionsRoot),
+    let reopened = WorkspaceModel(store: repositories.sessions,
                                   defaults: environment.defaults,
                                   cache: SessionCache(defaults: environment.defaults))
     #expect(reopened.folders.count == 1)

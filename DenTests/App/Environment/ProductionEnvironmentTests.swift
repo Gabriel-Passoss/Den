@@ -6,8 +6,8 @@ import Foundation
     let environment = ProductionEnvironment()
 
     #expect(environment.defaults == .standard)
-    #expect(environment.sessionsRoot
-            == URL.applicationSupportDirectory.appending(path: "Den/sessions"))
+    #expect(environment.databaseFile
+            == URL.applicationSupportDirectory.appending(path: "Den/den.sqlite"))
     #expect(environment.attachmentsRoot == ChatModel.standardAttachmentsRoot)
     #expect(environment.runConfigurationsFile
             == URL.applicationSupportDirectory.appending(path: "Den/run-configurations.json"))

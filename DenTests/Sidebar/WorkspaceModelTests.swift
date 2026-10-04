@@ -11,8 +11,7 @@ import HarnessCore
         let created = try #require(harness.model.folders.first)
         harness.model.renameFolder(created.id, to: "Backend")
 
-        let reopened = WorkspaceModel(store: harness.store, defaults: harness.defaults,
-                                      cache: SessionCache(defaults: harness.defaults))
+        let reopened = harness.reopened()
         #expect(reopened.folders.map(\.name) == ["Backend"])
         #expect(reopened.folders.map(\.id) == [created.id])
     }
@@ -24,8 +23,7 @@ import HarnessCore
         harness.model.membership = [session: "f1"]
         harness.model.sessionOrder = [session]
 
-        let reopened = WorkspaceModel(store: harness.store, defaults: harness.defaults,
-                                      cache: SessionCache(defaults: harness.defaults))
+        let reopened = harness.reopened()
         #expect(reopened.membership == [session: "f1"])
         #expect(reopened.sessionOrder == [session])
     }
@@ -397,8 +395,7 @@ import HarnessCore
         harness.model.defaultHarness = target
         #expect(harness.model.defaultHarness == target)
 
-        let reopened = WorkspaceModel(store: harness.store, defaults: harness.defaults,
-                                      cache: SessionCache(defaults: harness.defaults))
+        let reopened = harness.reopened()
         #expect(reopened.defaultHarness == target)
     }
 }

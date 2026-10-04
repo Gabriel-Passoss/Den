@@ -1,5 +1,6 @@
 import SwiftUI
 import HarnessCore
+import DenStore
 
 struct ContentView: View {
     @State private var workspace: WorkspaceModel
@@ -11,8 +12,8 @@ struct ContentView: View {
     @AppStorage("Den.sidebarVisible") private var sidebarVisible = true
     @AppStorage("Den.sidebarWidth") private var sidebarWidth: Double = 280
 
-    init(environment: any AppEnvironment) {
-        _workspace = State(initialValue: WorkspaceModel.live(environment))
+    init(environment: any AppEnvironment, repositories: Repositories) {
+        _workspace = State(initialValue: WorkspaceModel.live(environment, repositories: repositories))
     }
 
     var body: some View {
@@ -163,8 +164,9 @@ private struct EmptyHeader: View {
 
 #Preview {
     let environment = DevEnvironment()
+    let launch = StoreLaunch.open(environment.databaseFile)
     let ledger = TaskLedger(store: TaskWorktreeStore(url: environment.worktreesFile))
-    ContentView(environment: environment)
+    ContentView(environment: environment, repositories: launch.repositories)
         .environment(RunManager())
         .environment(RunConfigurationsModel(
             store: RunConfigurationStore(url: environment.runConfigurationsFile)))

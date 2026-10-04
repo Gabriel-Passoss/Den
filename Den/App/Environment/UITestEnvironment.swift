@@ -24,7 +24,7 @@ struct UITestEnvironment: RootedEnvironment {
         registry = HarnessRegistry.standard.pinning(pinned)
 
         defaults = UserDefaults(suiteName: Self.defaultsSuite) ?? .standard
-        if !FileManager.default.fileExists(atPath: sessionsRoot.path) {
+        if !FileManager.default.fileExists(atPath: databaseFile.path) {
             defaults.removePersistentDomain(forName: Self.defaultsSuite)
         }
 

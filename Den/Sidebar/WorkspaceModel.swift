@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Observation
 import HarnessCore
+import DenStore
 
 @MainActor
 @Observable
@@ -36,7 +37,7 @@ final class WorkspaceModel {
 
     var availableHarnesses: [HarnessID] { registry.ids }
 
-    private let store: FileTranscriptStore
+    private let store: any SessionRepository
     private let defaults: UserDefaults
     private let cache: SessionCache
     private let registry: HarnessRegistry
@@ -50,10 +51,8 @@ final class WorkspaceModel {
     private static let legacyFoldersKey = "Den.folders"
     private static let legacyNamesKey = "Den.folderNames"
 
-    static func live(_ environment: any AppEnvironment) -> WorkspaceModel {
-        let root = environment.sessionsRoot
-        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let workspace = WorkspaceModel(store: FileTranscriptStore(root: root),
+    static func live(_ environment: any AppEnvironment, repositories: Repositories) -> WorkspaceModel {
+        let workspace = WorkspaceModel(store: repositories.sessions,
                                        defaults: environment.defaults,
                                        cache: SessionCache(defaults: environment.defaults),
                                        registry: environment.registry,
@@ -62,7 +61,7 @@ final class WorkspaceModel {
         return workspace
     }
 
-    init(store: FileTranscriptStore, defaults: UserDefaults, cache: SessionCache,
+    init(store: any SessionRepository, defaults: UserDefaults, cache: SessionCache,
          registry: HarnessRegistry = .standard,
          attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
@@ -248,8 +247,8 @@ final class WorkspaceModel {
     // MARK: - Actions
 
     func refresh() async {
-        guard let listing = try? await store.list() else { return }
-        summaries = listing.sessions
+        guard let listed = try? await store.list() else { return }
+        summaries = listed
 
         if !legacyPathToFolder.isEmpty {
             for summary in summaries where membership[summary.id.uuidString] == nil {
@@ -258,10 +257,6 @@ final class WorkspaceModel {
                 }
             }
             legacyPathToFolder = [:]
-        }
-
-        for broken in listing.unreadable {
-            print("sessão ilegível em \(broken.location.path): \(broken.reason)")
         }
     }
 
