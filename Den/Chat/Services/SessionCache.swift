@@ -1,70 +1,41 @@
 import Foundation
 import HarnessCore
+import DenStore
 
 nonisolated struct SessionCache {
-    let defaults: UserDefaults
+    private let sessionPreferences: any SessionPreferencesRepository
+    private let harnessCache: any HarnessCacheRepository
 
-    init(defaults: UserDefaults) {
-        self.defaults = defaults
+    init(_ repositories: Repositories) {
+        sessionPreferences = repositories.preferences
+        harnessCache = repositories.harnessCache
     }
 
-    static let standard = SessionCache(defaults: .standard)
-
-    private func catalogKey(_ directory: URL, _ harness: HarnessID) -> String {
-        "Den.catalog." + harness.rawValue + "." + directory.standardizedFileURL.path
+    func remember(_ catalog: CommandCatalog, for directory: URL, harness: HarnessID) {
+        harnessCache.remember(catalog, for: directory, harness: harness)
     }
 
-    private func lastCatalogKey(_ harness: HarnessID) -> String {
-        "Den.catalog.last." + harness.rawValue
-    }
-
-    func remember(_ catalog: CommandCatalog, for directory: URL,
-                  harness: HarnessID) {
-        guard !catalog.isEmpty,
-              let data = try? JSONEncoder().encode(catalog) else { return }
-        defaults.set(data, forKey: catalogKey(directory, harness))
-        defaults.set(data, forKey: lastCatalogKey(harness))
-    }
-
-    func rememberedCatalog(for directory: URL,
-                           harness: HarnessID) -> CommandCatalog {
-        for key in [catalogKey(directory, harness), lastCatalogKey(harness)] {
-            if let data = defaults.data(forKey: key),
-               let catalog = try? JSONDecoder().decode(CommandCatalog.self, from: data) {
-                return catalog
-            }
-        }
-        return .empty
-    }
-
-    private func knobsKey(_ harness: HarnessID) -> String {
-        "Den.knobs." + harness.rawValue
+    func rememberedCatalog(for directory: URL, harness: HarnessID) -> CommandCatalog {
+        harnessCache.catalog(for: directory, harness: harness)
     }
 
     func remember(_ knobs: [HarnessKnob], for harness: HarnessID) {
-        guard !knobs.isEmpty, let data = try? JSONEncoder().encode(knobs) else { return }
-        defaults.set(data, forKey: knobsKey(harness))
+        harnessCache.remember(knobs, for: harness)
     }
 
     func rememberedKnobs(for harness: HarnessID) -> [HarnessKnob] {
-        guard let data = defaults.data(forKey: knobsKey(harness)),
-              let knobs = try? JSONDecoder().decode([HarnessKnob].self, from: data)
-        else { return [] }
-        return knobs
+        harnessCache.knobs(for: harness)
     }
 
-    private let preferencesKey = "Den.sessionPreferences"
-
     func preferences(for sessionID: UUID) -> [String: String] {
-        let all = defaults.dictionary(forKey: preferencesKey)
-            as? [String: [String: String]] ?? [:]
-        return all[sessionID.uuidString] ?? [:]
+        sessionPreferences.preferences(for: sessionID)
     }
 
     func setPreferences(_ values: [String: String], for sessionID: UUID) {
-        var all = defaults.dictionary(forKey: preferencesKey)
-            as? [String: [String: String]] ?? [:]
-        all[sessionID.uuidString] = values.isEmpty ? nil : values
-        defaults.set(all, forKey: preferencesKey)
+        do {
+            try sessionPreferences.setPreferences(values, for: sessionID)
+        } catch {
+            print("não consegui gravar as preferências da sessão: \(error)")
+        }
     }
 }

@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import HarnessCore
+import DenStore
 @testable import Den
 
 private let harness = HarnessID(rawValue: "test-harness")
@@ -65,16 +66,25 @@ private let other = HarnessID(rawValue: "other-harness")
     }
 }
 
-@Test func preferencesRoundTripPerSession() {
+@Test func preferencesRoundTripPerSession() async throws {
+    let repositories = scratchRepositories()
+    let cache = SessionCache(repositories)
+    let session = storedSession("com preferências")
+    try await repositories.sessions.saveMetadata(session)
+    #expect(cache.preferences(for: session.id) == [:])
+
+    cache.setPreferences(["theme": "dark"], for: session.id)
+    #expect(cache.preferences(for: session.id) == ["theme": "dark"])
+
+    cache.setPreferences([:], for: session.id)
+    #expect(cache.preferences(for: session.id) == [:])
+}
+
+@Test func preferencesOfASessionTheStoreDoesNotKnowAreDropped() {
     withTemporaryCache { cache in
-        let session = UUID()
-        #expect(cache.preferences(for: session) == [:])
-
-        cache.setPreferences(["theme": "dark"], for: session)
-        #expect(cache.preferences(for: session) == ["theme": "dark"])
-
-        cache.setPreferences([:], for: session)
-        #expect(cache.preferences(for: session) == [:])
+        let ghost = UUID()
+        cache.setPreferences(["theme": "dark"], for: ghost)
+        #expect(cache.preferences(for: ghost) == [:])
     }
 }
 

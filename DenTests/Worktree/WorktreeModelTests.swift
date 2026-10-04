@@ -23,7 +23,7 @@ private struct Bench {
     func chat(in directory: URL) -> ChatModel {
         ChatModel(store: repositories.sessions,
                   workingDirectory: directory, harness: harness.id,
-                  cache: SessionCache(defaults: defaults),
+                  cache: SessionCache(repositories),
                   registry: HarnessRegistry(harnesses: [harness]),
                   attachmentsRoot: scratch.appending(path: "attachments"))
     }
@@ -51,7 +51,7 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
         registry: HarnessRegistry(harnesses: [harness]), suggester: suggester)
     let bench = Bench(chat: ChatModel(store: repositories.sessions,
                                       workingDirectory: repo.checkout, harness: harness.id,
-                                      cache: SessionCache(defaults: scratchDefaults.defaults),
+                                      cache: SessionCache(repositories),
                                       registry: HarnessRegistry(harnesses: [harness]),
                                       attachmentsRoot: scratch.appending(path: "attachments")),
                       harness: harness, worktrees: worktrees, scratch: scratch,
@@ -206,9 +206,9 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
         ledger: TaskLedger(store: TaskWorktreeStore(url: many.appending(path: "ledger.json"))),
         root: many.appending(path: "wt"), defaults: scratchDefaults.defaults)
     let crowded = ChatModel(store: scratchSessions(),
-                            workingDirectory: many, cache: SessionCache(defaults: scratchDefaults.defaults))
+                            workingDirectory: many, cache: SessionCache(scratchRepositories()))
     let small = ChatModel(store: scratchSessions(),
-                          workingDirectory: few, cache: SessionCache(defaults: scratchDefaults.defaults))
+                          workingDirectory: few, cache: SessionCache(scratchRepositories()))
     await worktrees.prepare(crowded)
     await worktrees.prepare(small)
 

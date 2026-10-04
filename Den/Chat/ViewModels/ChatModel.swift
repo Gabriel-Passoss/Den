@@ -131,7 +131,7 @@ final class ChatModel {
     // MARK: - Creation
 
     init(store: any SessionRepository, workingDirectory: URL,
-         harness: HarnessID? = nil, cache: SessionCache = .standard,
+         harness: HarnessID? = nil, cache: SessionCache,
          registry: HarnessRegistry = .standard,
          attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
@@ -153,7 +153,7 @@ final class ChatModel {
     }
 
     init(store: any SessionRepository, restoring session: Session,
-         cache: SessionCache = .standard,
+         cache: SessionCache,
          registry: HarnessRegistry = .standard,
          attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store

@@ -30,6 +30,6 @@ import DenStore
     workspace.addFolder()
     let reopened = WorkspaceModel(store: repositories.sessions, sidebar: repositories.sidebar,
                                   defaults: environment.defaults,
-                                  cache: SessionCache(defaults: environment.defaults))
+                                  cache: SessionCache(repositories))
     #expect(reopened.folders.count == 1)
 }

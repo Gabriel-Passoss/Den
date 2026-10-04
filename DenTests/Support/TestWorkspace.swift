@@ -13,7 +13,7 @@ struct WorkspaceHarness {
 
     func reopened() -> WorkspaceModel {
         WorkspaceModel(store: repositories.sessions, sidebar: repositories.sidebar, defaults: defaults,
-                       cache: SessionCache(defaults: defaults))
+                       cache: SessionCache(repositories))
     }
 }
 
@@ -36,7 +36,7 @@ func withWorkspace(seed: (UserDefaults) -> Void = { _ in },
     seed(defaults)
     let repositories = scratchRepositories()
     let model = WorkspaceModel(store: repositories.sessions, sidebar: repositories.sidebar, defaults: defaults,
-                               cache: SessionCache(defaults: defaults),
+                               cache: SessionCache(repositories),
                                attachmentsRoot: root.appending(path: "attachments"))
     try await body(WorkspaceHarness(model: model, defaults: defaults, repositories: repositories))
 }

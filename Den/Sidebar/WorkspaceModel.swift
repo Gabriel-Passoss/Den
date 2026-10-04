@@ -48,7 +48,7 @@ final class WorkspaceModel {
     static func live(_ environment: any AppEnvironment, repositories: Repositories) -> WorkspaceModel {
         let workspace = WorkspaceModel(store: repositories.sessions, sidebar: repositories.sidebar,
                                        defaults: environment.defaults,
-                                       cache: SessionCache(defaults: environment.defaults),
+                                       cache: SessionCache(repositories),
                                        registry: environment.registry,
                                        attachmentsRoot: environment.attachmentsRoot)
         workspace.workingDirectory = environment.workingDirectory
