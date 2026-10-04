@@ -165,7 +165,7 @@ private struct EmptyHeader: View {
 #Preview {
     let environment = DevEnvironment()
     let launch = StoreLaunch.open(environment.databaseFile)
-    let ledger = TaskLedger(store: TaskWorktreeStore(url: environment.worktreesFile))
+    let ledger = TaskLedger(repository: launch.repositories.taskWorktrees)
     ContentView(environment: environment, repositories: launch.repositories)
         .environment(RunManager())
         .environment(RunConfigurationsModel(

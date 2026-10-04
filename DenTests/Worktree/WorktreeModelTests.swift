@@ -46,7 +46,7 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
     harness.quickPrompt = oneShot
     let repositories = scratchRepositories()
     let worktrees = WorktreeModel(
-        ledger: TaskLedger(store: TaskWorktreeStore(url: scratch.appending(path: "task-worktrees.json"))),
+        ledger: TaskLedger(repository: repositories.taskWorktrees),
         root: scratch.appending(path: "worktrees"), defaults: scratchDefaults.defaults, maker: maker,
         registry: HarnessRegistry(harnesses: [harness]), suggester: suggester)
     let bench = Bench(chat: ChatModel(store: repositories.sessions,
@@ -57,6 +57,7 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
                       harness: harness, worktrees: worktrees, scratch: scratch,
                       checkout: repo.checkout, defaults: scratchDefaults.defaults, repositories: repositories)
     await worktrees.prepare(bench.chat)
+    await bench.chat.persistMetadata()
     try await body(bench)
     await bench.chat.stop()
 }
@@ -123,7 +124,7 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
         #expect(bench.worktrees.worktree(for: bench.chat.sessionID)?.branch == "feat/NS-7-ajusta-o-login")
         #expect(!bench.worktrees.isOffered(bench.chat))
         #expect(bench.worktrees.phase(for: bench.chat.sessionID) == nil)
-        let reopened = TaskLedger(store: TaskWorktreeStore(url: bench.scratch.appending(path: "task-worktrees.json")))
+        let reopened = TaskLedger(repository: bench.repositories.taskWorktrees)
         #expect(reopened.worktree(for: bench.chat.sessionID)?.sessionDirectory.path == worktree.path)
     }
 }
@@ -203,7 +204,7 @@ private func withBench(maker: WorktreeMaker = WorktreeMaker(),
         try? FileManager.default.removeItem(at: few)
     }
     let worktrees = WorktreeModel(
-        ledger: TaskLedger(store: TaskWorktreeStore(url: many.appending(path: "ledger.json"))),
+        ledger: TaskLedger(repository: scratchRepositories().taskWorktrees),
         root: many.appending(path: "wt"), defaults: scratchDefaults.defaults)
     let crowded = ChatModel(store: scratchSessions(),
                             workingDirectory: many, cache: SessionCache(scratchRepositories()))

@@ -13,10 +13,11 @@ struct DenApp: App {
     init() {
         let environment = resolveEnvironment(ProcessInfo.processInfo.environment)
         self.environment = environment
-        launch = StoreLaunch.open(environment.databaseFile)
+        let launch = StoreLaunch.open(environment.databaseFile)
+        self.launch = launch
         _runConfigurations = State(initialValue: RunConfigurationsModel(
             store: RunConfigurationStore(url: environment.runConfigurationsFile)))
-        let ledger = TaskLedger(store: TaskWorktreeStore(url: environment.worktreesFile))
+        let ledger = TaskLedger(repository: launch.repositories.taskWorktrees)
         _worktrees = State(initialValue: WorktreeModel(
             ledger: ledger, root: environment.worktreesRoot, defaults: environment.defaults,
             registry: environment.registry))
