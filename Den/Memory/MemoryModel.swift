@@ -38,6 +38,7 @@ final class MemoryModel {
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var known: [UUID: MemoryCaptureMark]
     @ObservationIgnored private var capturing: Set<UUID> = []
+    @ObservationIgnored private var unbriefed: Set<UUID> = []
 
     init(repository: any MemoryRepository, marks: any SessionDocumentRepository<MemoryCaptureMark>,
          defaults: UserDefaults, registry: HarnessRegistry = .standard,
@@ -87,6 +88,21 @@ final class MemoryModel {
         return MemoryRecall.preamble(shelves(for: directory)) { [repository] page, scope in
             repository.file(for: page.slug, in: scope)
         }
+    }
+
+    func sessionStarted(_ session: UUID, fresh: Bool) {
+        if fresh {
+            unbriefed.insert(session)
+        } else {
+            unbriefed.remove(session)
+        }
+    }
+
+    func opening(_ outgoing: String, typed: String, session: UUID, directory: URL) -> String {
+        guard unbriefed.contains(session), !typed.hasPrefix("/") else { return outgoing }
+        unbriefed.remove(session)
+        guard let preamble = preamble(for: directory) else { return outgoing }
+        return MemoryRecall.message(preamble: preamble, request: outgoing)
     }
 
     func capture(session: UUID, entries: [TranscriptEntry], directory: URL, harness: HarnessID,

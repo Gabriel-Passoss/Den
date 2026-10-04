@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import HarnessCore
 import DenStore
+import DenMemory
 
 @MainActor
 @Observable
@@ -43,6 +44,7 @@ final class WorkspaceModel {
     private let cache: SessionCache
     private let registry: HarnessRegistry
     private let attachmentsRoot: URL
+    let memory: MemoryModel?
     private var chats: [UUID: ChatModel] = [:]
 
     static func live(_ environment: any AppEnvironment, repositories: Repositories) -> WorkspaceModel {
@@ -50,14 +52,19 @@ final class WorkspaceModel {
                                        defaults: environment.defaults,
                                        cache: SessionCache(repositories),
                                        registry: environment.registry,
-                                       attachmentsRoot: environment.attachmentsRoot)
+                                       attachmentsRoot: environment.attachmentsRoot,
+                                       memory: MemoryModel(
+                                           repository: FileMemoryRepository(root: environment.memoryRoot),
+                                           marks: repositories.memoryMarks, defaults: environment.defaults,
+                                           registry: environment.registry))
         workspace.workingDirectory = environment.workingDirectory
         return workspace
     }
 
     init(store: any SessionRepository, sidebar: any SidebarRepository, defaults: UserDefaults,
          cache: SessionCache, registry: HarnessRegistry = .standard,
-         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
+         attachmentsRoot: URL = ChatModel.standardAttachmentsRoot, memory: MemoryModel? = nil) {
+        self.memory = memory
         self.store = store
         self.sidebar = sidebar
         self.defaults = defaults
@@ -190,6 +197,7 @@ final class WorkspaceModel {
 
     private func adopt(_ chat: ChatModel) {
         let id = chat.sessionID
+        chat.memory = memory
         chat.isViewed = { [weak self] in
             self?.selectedID == id && NSApplication.shared.isActive
         }
@@ -241,8 +249,14 @@ final class WorkspaceModel {
         summaries = listed
     }
 
+    private func leaveCurrent(for next: UUID?) {
+        guard let current = selectedID, current != next else { return }
+        chats[current]?.captureMemory(atLeast: MemoryModel.leaveThreshold)
+    }
+
     func newSession(assignedTo folderID: String? = nil,
                     harness: HarnessID? = nil) async {
+        leaveCurrent(for: nil)
         if let selectedID,
            let summary = summaries.first(where: { $0.id == selectedID }) {
             workingDirectory = summary.workingDirectory
@@ -260,6 +274,7 @@ final class WorkspaceModel {
     }
 
     func select(_ id: UUID) async {
+        leaveCurrent(for: id)
         selectedID = id
         if let chat = chats[id] {
             if chat.hasUnread { chat.hasUnread = false }
