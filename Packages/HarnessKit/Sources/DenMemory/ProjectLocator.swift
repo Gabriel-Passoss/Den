@@ -4,7 +4,7 @@ public struct ProjectIdentity: Hashable, Sendable {
     public let root: URL
 
     public init(root: URL) {
-        self.root = URL(fileURLWithPath: root.standardizedFileURL.path, isDirectory: true)
+        self.root = URL(fileURLWithPath: root.resolvingSymlinksInPath().path, isDirectory: true)
     }
 
     public var name: String { root.lastPathComponent }
@@ -20,9 +20,8 @@ public enum ProjectLocator {
         var probe = directory.standardizedFileURL
         while true {
             let marker = probe.appending(path: ".git")
-            var isDirectory: ObjCBool = false
-            if FileManager.default.fileExists(atPath: marker.path, isDirectory: &isDirectory) {
-                let origin = isDirectory.boolValue ? nil : origin(ofWorktreeAt: probe, marker: marker)
+            if let isFolder = try? marker.resourceValues(forKeys: [.isDirectoryKey]).isDirectory {
+                let origin = isFolder ? nil : origin(ofWorktreeAt: probe, marker: marker)
                 return ProjectIdentity(root: origin ?? probe)
             }
             guard probe.pathComponents.count > 1 else { return nil }

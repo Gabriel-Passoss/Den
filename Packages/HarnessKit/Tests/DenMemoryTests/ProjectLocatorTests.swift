@@ -12,7 +12,7 @@ import DenMemory
     let fromRoot = try #require(ProjectLocator.project(containing: repository))
     let fromInside = try #require(ProjectLocator.project(containing: deep))
 
-    #expect(fromRoot.root.path == repository.standardizedFileURL.path)
+    #expect(fromRoot == ProjectIdentity(root: repository))
     #expect(fromRoot.name == "den")
     #expect(fromInside == fromRoot)
 }
@@ -50,8 +50,8 @@ import DenMemory
     let unreadable = try scratch.folder("code/odd")
     try scratch.write("nada que se pareça com um ponteiro", to: "code/odd/.git")
 
-    #expect(ProjectLocator.project(containing: submodule)?.root.path == submodule.standardizedFileURL.path)
-    #expect(ProjectLocator.project(containing: unreadable)?.root.path == unreadable.standardizedFileURL.path)
+    #expect(ProjectLocator.project(containing: submodule) == ProjectIdentity(root: submodule))
+    #expect(ProjectLocator.project(containing: unreadable) == ProjectIdentity(root: unreadable))
 }
 
 @Test func aFolderOutsideAnyRepositoryHasNoProject() throws {
@@ -70,6 +70,25 @@ import DenMemory
     #expect(work.slug != personal.slug)
     #expect(work.slug == again.slug)
     #expect(work == again)
+    #expect(work.root.hasDirectoryPath)
+    #expect(work.root == URL(fileURLWithPath: "/Users/gabi/work/Meu App", isDirectory: true))
     #expect(work.slug.wholeMatch(of: /meu-app-[0-9a-f]{8}/) != nil)
     #expect(work.slug == "meu-app-" + String(work.slug.suffix(8)))
+}
+
+@Test func aRepositoryReachedThroughASymlinkIsStillTheSameProjectAsItsWorktree() throws {
+    let scratch = try Scratch()
+    defer { scratch.remove() }
+    let origin = try scratch.folder("disk/den")
+    let administrative = try scratch.folder("disk/den/.git/worktrees/fix")
+    let worktree = try scratch.folder("worktrees/fix")
+    try scratch.write("gitdir: \(administrative.resolvingSymlinksInPath().path)\n", to: "worktrees/fix/.git")
+    let shortcut = scratch.root.appending(path: "code")
+    try FileManager.default.createSymbolicLink(at: shortcut, withDestinationURL: scratch.root.appending(path: "disk"))
+
+    let throughShortcut = try #require(ProjectLocator.project(containing: shortcut.appending(path: "den")))
+
+    #expect(throughShortcut == ProjectLocator.project(containing: worktree))
+    #expect(throughShortcut == ProjectLocator.project(containing: origin))
+    #expect(throughShortcut.slug == ProjectIdentity(root: origin).slug)
 }
