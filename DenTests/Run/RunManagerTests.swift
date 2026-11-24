@@ -196,19 +196,17 @@ private func command(_ name: String = "API", _ command: String = "npm run dev",
     #expect(!manager.hasActiveProcesses)
 }
 
-@Test func forgetDropsAnIdleInstanceOnly() async {
+@Test func discardStopsAndDropsTheInstance() async {
     let launcher = FakeLauncher()
     let manager = makeManager(launcher)
     let api = command()
     await manager.start(api, in: project)
 
-    manager.forget(api.id)
-    #expect(manager.instance(for: api.id) != nil)
+    await manager.discard(api.id)
 
-    await manager.stop(api.id)
-    await waitUntil { manager.instance(for: api.id)?.state == .stopped }
-    manager.forget(api.id)
     #expect(manager.instance(for: api.id) == nil)
+    #expect(launcher.processes[0].terminations == 1)
+    #expect(!manager.hasActiveProcesses)
 }
 
 @Test func theRealPipelineRunsAColoredCommandEndToEnd() async throws {
@@ -313,4 +311,56 @@ private func settle() async {
     await stopping.value
     await quitting.value
     #expect(done.raised)
+}
+
+@Test func aStopRacingANaturalExitKeepsTheExitStatus() async throws {
+    let launcher = FakeLauncher()
+    let manager = makeManager(launcher)
+    let api = command()
+    await manager.start(api, in: project)
+    let instance = try #require(manager.instance(for: api.id))
+
+    launcher.processes[0].exit(.code(2))
+    await manager.stop(api.id)
+    await settle()
+
+    #expect(instance.state == .exited(.code(2)))
+    #expect(launcher.processes[0].terminations == 0)
+    #expect(!manager.hasActiveProcesses)
+}
+
+@Test func aStopThatOutlivesTheKillStillSettles() async throws {
+    let launcher = FakeLauncher()
+    let manager = makeManager(launcher)
+    let api = command()
+    await manager.start(api, in: project)
+    let instance = try #require(manager.instance(for: api.id))
+    launcher.processes[0].surviveTermination()
+
+    await manager.stop(api.id)
+
+    #expect(instance.state == .stopped)
+    #expect(!manager.isActive(api.id))
+}
+
+@Test func discardingDuringARestartLaunchesNothing() async {
+    let launcher = FakeLauncher()
+    let manager = makeManager(launcher)
+    let api = command()
+    await manager.start(api, in: project)
+    let first = launcher.processes[0]
+    first.holdTermination()
+
+    let restarting = Task { await manager.start(api, in: project) }
+    await waitUntil { first.terminations == 1 }
+    let discarding = Task { await manager.discard(api.id) }
+    await settle()
+    first.releaseTermination()
+    await restarting.value
+    await discarding.value
+    await settle()
+
+    #expect(launcher.processes.count == 1)
+    #expect(manager.instance(for: api.id) == nil)
+    #expect(!manager.hasActiveProcesses)
 }

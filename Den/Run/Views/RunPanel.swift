@@ -178,8 +178,7 @@ struct RunPanel: View {
 
     private func remove(_ item: RunConfiguration) {
         Task {
-            await runs.stop(item.id)
-            runs.forget(item.id)
+            await runs.discard(item.id)
             configurations.remove(item.id, from: root)
         }
     }
