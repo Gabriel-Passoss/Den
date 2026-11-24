@@ -8,18 +8,14 @@ struct RunFolderPicker: View {
     @State private var rootMarker: String?
     @State private var query = ""
 
-    private var filtered: [RunFolder] {
-        RunFolderIndex.filter(folders ?? [], query: query)
+    private var entries: [RunFolderEntry] {
+        guard let folders else { return [.root] }
+        return RunFolderIndex.entries(folders, query: query, selection: selection)
     }
 
-    private var showsRoot: Bool {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        return trimmed.isEmpty || root.lastPathComponent.localizedCaseInsensitiveContains(trimmed)
-    }
-
-    private var pinned: String? {
-        guard let folders else { return nil }
-        return RunFolderIndex.pinnedSelection(selection, in: folders)
+    private var noFolderMatches: Bool {
+        !query.trimmingCharacters(in: .whitespaces).isEmpty
+            && !entries.contains { if case .folder = $0 { true } else { false } }
     }
 
     var body: some View {
@@ -38,23 +34,15 @@ struct RunFolderPicker: View {
             Rectangle().fill(Theme.border).frame(height: 1)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    if let pinned {
-                        row(path: pinned, title: pinned, marker: nil,
-                            missing: !CommandSpec.directory(pinned, in: root).isExistingDirectory)
-                    }
-                    if showsRoot {
-                        row(path: "", title: "Raiz do projeto (\(root.lastPathComponent))",
-                            marker: rootMarker, missing: false)
-                    }
-                    ForEach(filtered) { folder in
-                        row(path: folder.path, title: folder.path, marker: folder.marker, missing: false)
+                    ForEach(entries) { entry in
+                        entryRow(entry)
                     }
                     if folders == nil {
                         ProgressView()
                             .controlSize(.small)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                    } else if filtered.isEmpty, !showsRoot {
+                    } else if noFolderMatches {
                         Text("Nenhuma pasta encontrada")
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textTertiary)
@@ -70,6 +58,20 @@ struct RunFolderPicker: View {
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
             .strokeBorder(Theme.borderStrong, lineWidth: 1))
         .task(id: root.path) { await load() }
+    }
+
+    @ViewBuilder
+    private func entryRow(_ entry: RunFolderEntry) -> some View {
+        switch entry {
+        case .root:
+            row(path: "", title: "Raiz do projeto (\(root.lastPathComponent))",
+                marker: rootMarker, missing: false)
+        case .pinned(let path):
+            row(path: path, title: path, marker: nil,
+                missing: !CommandSpec.directory(path, in: root).isExistingDirectory)
+        case .folder(let folder):
+            row(path: folder.path, title: folder.path, marker: folder.marker, missing: false)
+        }
     }
 
     private func row(path: String, title: String, marker: String?, missing: Bool) -> some View {

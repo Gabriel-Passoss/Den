@@ -176,3 +176,10 @@ private func launch(_ command: String,
 
     #expect(kill(lingering, 0) != 0)
 }
+
+@Test func theGuardDoesNotDependOnPath() async throws {
+    let (_, recorder) = try launch("/bin/sleep 0.5; /bin/echo alive", environment: ["PATH": "/nonexistent"])
+    await waitUntil { recorder.exitStatus != nil }
+    #expect(recorder.exitStatus == .code(0))
+    #expect(recorder.text == "alive\n")
+}

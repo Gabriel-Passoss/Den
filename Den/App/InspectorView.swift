@@ -7,7 +7,17 @@ struct InspectorView: View {
     let runRoot: URL
     let runActive: Bool
 
-    @State private var shown: InspectorPane = .changes
+    @State private var shown: InspectorPane
+
+    init(pane: Binding<InspectorPane>, gitChanges: GitChangesModel, directory: URL,
+         runRoot: URL, runActive: Bool) {
+        _pane = pane
+        self.gitChanges = gitChanges
+        self.directory = directory
+        self.runRoot = runRoot
+        self.runActive = runActive
+        _shown = State(initialValue: pane.wrappedValue.shown(after: .changes))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,8 +64,8 @@ struct InspectorView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.panel)
-        .onChange(of: pane, initial: true) {
-            if pane != .closed { shown = pane }
+        .onChange(of: pane) {
+            shown = pane.shown(after: shown)
         }
     }
 

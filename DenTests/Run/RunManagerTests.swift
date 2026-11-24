@@ -196,19 +196,17 @@ private func command(_ name: String = "API", _ command: String = "npm run dev",
     #expect(!manager.hasActiveProcesses)
 }
 
-@Test func forgetDropsAnIdleInstanceOnly() async {
+@Test func discardStopsAndDropsTheInstance() async {
     let launcher = FakeLauncher()
     let manager = makeManager(launcher)
     let api = command()
     await manager.start(api, in: project)
 
-    manager.forget(api.id)
-    #expect(manager.instance(for: api.id) != nil)
+    await manager.discard(api.id)
 
-    await manager.stop(api.id)
-    await waitUntil { manager.instance(for: api.id)?.state == .stopped }
-    manager.forget(api.id)
     #expect(manager.instance(for: api.id) == nil)
+    #expect(launcher.processes[0].terminations == 1)
+    #expect(!manager.hasActiveProcesses)
 }
 
 @Test func theRealPipelineRunsAColoredCommandEndToEnd() async throws {
@@ -313,4 +311,63 @@ private func settle() async {
     await stopping.value
     await quitting.value
     #expect(done.raised)
+}
+
+private struct Started {
+    let launcher: FakeLauncher
+    let manager: RunManager
+    let api: RunConfiguration
+    let instance: RunInstance
+
+    var id: UUID { api.id }
+    var process: FakeProcess { launcher.processes[0] }
+}
+
+private func startedRun() async throws -> Started {
+    let launcher = FakeLauncher()
+    let manager = makeManager(launcher)
+    let api = command()
+    await manager.start(api, in: project)
+    let instance = try #require(manager.instance(for: api.id))
+    return Started(launcher: launcher, manager: manager, api: api, instance: instance)
+}
+
+@Test func aStopRacingANaturalExitKeepsTheExitStatus() async throws {
+    let run = try await startedRun()
+
+    run.process.exit(.code(2))
+    await run.manager.stop(run.id)
+    await settle()
+
+    #expect(run.instance.state == .exited(.code(2)))
+    #expect(run.process.terminations == 0)
+    #expect(!run.manager.hasActiveProcesses)
+}
+
+@Test func aStopThatOutlivesTheKillStillSettles() async throws {
+    let run = try await startedRun()
+    run.process.surviveTermination()
+
+    await run.manager.stop(run.id)
+
+    #expect(run.instance.state == .stopped)
+    #expect(!run.manager.isActive(run.id))
+}
+
+@Test func discardingDuringARestartLaunchesNothing() async throws {
+    let run = try await startedRun()
+    run.process.holdTermination()
+
+    let restarting = Task { await run.manager.start(run.api, in: project) }
+    await waitUntil { run.process.terminations == 1 }
+    let discarding = Task { await run.manager.discard(run.id) }
+    await settle()
+    run.process.releaseTermination()
+    await restarting.value
+    await discarding.value
+    await settle()
+
+    #expect(run.launcher.processes.count == 1)
+    #expect(run.manager.instance(for: run.id) == nil)
+    #expect(!run.manager.hasActiveProcesses)
 }

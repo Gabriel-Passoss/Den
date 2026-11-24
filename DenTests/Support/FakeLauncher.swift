@@ -9,6 +9,7 @@ nonisolated final class FakeProcess: RunningProcess, @unchecked Sendable {
     private let lock = NSLock()
     private var terminateCalls = 0
     private var holding = false
+    private var survives = false
     private var waiter: CheckedContinuation<Void, Never>?
 
     init(pid: Int32, onOutput: @escaping @Sendable (Data) -> Void,
@@ -25,6 +26,8 @@ nonisolated final class FakeProcess: RunningProcess, @unchecked Sendable {
 
     func holdTermination() { lock.withLock { holding = true } }
 
+    func surviveTermination() { lock.withLock { survives = true } }
+
     func releaseTermination() {
         let pending: CheckedContinuation<Void, Never>? = lock.withLock {
             holding = false
@@ -35,8 +38,11 @@ nonisolated final class FakeProcess: RunningProcess, @unchecked Sendable {
     }
 
     func terminate(grace: Duration) async {
-        lock.withLock { terminateCalls += 1 }
-        onExit(.signal(SIGTERM))
+        let dies: Bool = lock.withLock {
+            terminateCalls += 1
+            return !survives
+        }
+        if dies { onExit(.signal(SIGTERM)) }
         await withCheckedContinuation { continuation in
             let resumeNow: Bool = lock.withLock {
                 guard holding else { return true }

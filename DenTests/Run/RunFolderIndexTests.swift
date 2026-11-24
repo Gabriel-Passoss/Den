@@ -52,3 +52,10 @@ import Foundation
     #expect(RunFolderIndex.pinnedSelection("/elsewhere", in: folders) == "/elsewhere")
     #expect(RunFolderIndex.pinnedSelection("apps/deleted", in: folders) == "apps/deleted")
 }
+
+@Test func theProjectRootLeadsEvenWhenTheSearchMissesIt() {
+    let folders = ["apps", "apps/api"].map { RunFolder(path: $0, marker: nil) }
+    #expect(RunFolderIndex.entries(folders, query: "zzz", selection: "") == [.root])
+    #expect(RunFolderIndex.entries(folders, query: "api", selection: "/elsewhere")
+            == [.root, .pinned("/elsewhere"), .folder(RunFolder(path: "apps/api", marker: nil))])
+}

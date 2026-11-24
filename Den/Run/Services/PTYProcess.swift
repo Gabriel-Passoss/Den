@@ -57,7 +57,7 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
 
     static let guardScript = """
         exec 3<&0
-        (cat <&3; trap '' TERM INT HUP; kill -TERM -$$; sleep 3; kill -KILL -$$) >/dev/null 2>&1 &
+        (/bin/cat <&3; trap '' TERM INT HUP; kill -TERM -$$; /bin/sleep 3; kill -KILL -$$) >/dev/null 2>&1 &
         exec 3<&-
         exec "$0" -c "$1"
         """
