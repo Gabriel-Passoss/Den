@@ -22,8 +22,8 @@ struct ChatHeader: View {
         }
         .onKeyboardShortcut("0", modifiers: [.option, .command]) { toggle(.changes) }
         .onKeyboardShortcut("9", modifiers: [.option, .command]) { toggle(.run) }
-        .onChange(of: pane) {
-            if pane != .closed { lastOpenPane = pane }
+        .onChange(of: pane, initial: true) {
+            lastOpenPane = pane.shown(after: lastOpenPane)
         }
     }
 

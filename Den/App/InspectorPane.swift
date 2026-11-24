@@ -13,4 +13,8 @@ enum InspectorPane: String {
     }
 
     static let storageKey = "Den.inspector"
+
+    func shown(after previous: InspectorPane) -> InspectorPane {
+        self == .closed ? previous : self
+    }
 }
