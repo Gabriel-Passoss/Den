@@ -92,9 +92,6 @@ public actor ACPChannel {
         }
     }
 
-    /// `cause` is why the CLI went away, such as its exit status and stderr.
-    /// Requests waiting on it, and any sent after, fail with that instead of a
-    /// bare `channelClosed`.
     private func markClosed(by cause: (any Error)? = nil) {
         liveness = .closed
         closedBy = cause

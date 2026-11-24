@@ -35,8 +35,6 @@ struct RunPanel: View {
         }
     }
 
-    // MARK: - Header
-
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "folder")
@@ -64,8 +62,6 @@ struct RunPanel: View {
         .frame(height: 44)
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.border).frame(height: 1) }
     }
-
-    // MARK: - Content
 
     private var emptyState: some View {
         VStack(spacing: 10) {
@@ -173,8 +169,6 @@ struct RunPanel: View {
         .help(label)
         .accessibilityLabel(label)
     }
-
-    // MARK: - Actions
 
     private func run(_ item: RunConfiguration) {
         selectedID = item.id

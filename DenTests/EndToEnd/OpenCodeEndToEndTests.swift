@@ -3,9 +3,6 @@ import Foundation
 import HarnessCore
 @testable import Den
 
-// These run the real OpenCodeHarness, ACPChannel and ProcessTransport against
-// a FakeCLI speaking JSON-RPC, replaying a turn recorded from `opencode acp`.
-
 private let recordedSessionID = "ses_f36efb87cffeg77EZ6KnLXjEmd"
 
 private let recordedConfigOptions = #"""
@@ -25,9 +22,8 @@ private func handshake(_ cli: FakeCLI, opening method: String = "session/new") t
     ])
 }
 
-/// The recorded turn, cut where OpenCode waits for the permission answer. Its
-/// closing line answered the recorded prompt's id, so it answers ours instead.
-private func recordedTurn() throws -> (untilAsking: [String], afterAnswer: [String]) {
+private func recordedTurnCutAtThePermissionAsk() throws
+    -> (untilAsking: [String], afterAnswer: [String]) {
     let lines = try RecordedSession.openCode("turn-with-permission")
     let asking = try #require(lines.firstIndex { $0.contains("session/request_permission") })
     let recordedClosing = try #require(lines.last)
@@ -39,8 +35,6 @@ private func recordedTurn() throws -> (untilAsking: [String], afterAnswer: [Stri
 private func sent(_ cli: FakeCLI, _ method: String) -> [String] {
     cli.received.filter { $0.contains(FakeCLI.request(method)) }
 }
-
-// MARK: - Session
 
 @Test func anOpenCodeConversationHandshakesOverACP() async throws {
     try await withEndToEnd { e2e in
@@ -71,7 +65,7 @@ private func sent(_ cli: FakeCLI, _ method: String) -> [String] {
 }
 
 @Test func aRecordedTurnWithAPermissionPlaysThroughACP() async throws {
-    let recorded = try recordedTurn()
+    let recorded = try recordedTurnCutAtThePermissionAsk()
     try await withEndToEnd { e2e in
         try handshake(e2e.openCode)
         try e2e.openCode.on(FakeCLI.request("session/prompt"), reply: recorded.untilAsking)
@@ -118,7 +112,7 @@ private func sent(_ cli: FakeCLI, _ method: String) -> [String] {
 }
 
 @Test func aRestoredOpenCodeConversationLoadsItsSession() async throws {
-    let recorded = try recordedTurn()
+    let recorded = try recordedTurnCutAtThePermissionAsk()
     try await withEndToEnd { e2e in
         try handshake(e2e.openCode)
         try e2e.openCode.on(FakeCLI.request("session/prompt"),
@@ -141,8 +135,6 @@ private func sent(_ cli: FakeCLI, _ method: String) -> [String] {
         #expect(restored.isLive)
     }
 }
-
-// MARK: - Handing over between harnesses
 
 @Test func switchingToOpenCodeHandsTheConversationOver() async throws {
     try await withEndToEnd { e2e in
@@ -169,7 +161,7 @@ private func sent(_ cli: FakeCLI, _ method: String) -> [String] {
 }
 
 @Test func eachReplyKeepsTheHarnessThatWroteItAcrossAHandoffAndARelaunch() async throws {
-    let recorded = try recordedTurn()
+    let recorded = try recordedTurnCutAtThePermissionAsk()
     try await withEndToEnd { e2e in
         try e2e.claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
         try handshake(e2e.openCode)

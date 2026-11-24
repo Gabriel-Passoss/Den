@@ -102,12 +102,17 @@ struct TranscriptRow: View {
     }
 
     private func step(_ line: ChatLine) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        let verb = Text(Self.verb(for: line.verb))
+            .foregroundStyle(Theme.textMuted)
+        let detail = Text(MessageBubble.clipped(line.text))
+            .font(.system(size: 12, design: .monospaced))
+            .foregroundStyle(Theme.text)
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: Self.icon(for: line.verb))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Theme.textMuted)
                 .frame(width: 14)
-            Text("\(Text(Self.verb(for: line.verb)).foregroundStyle(Theme.textMuted)) \(Text(MessageBubble.clipped(line.text)).font(.system(size: 12, design: .monospaced)).foregroundStyle(Theme.text))")
+            Text("\(verb) \(detail)")
                 .font(.system(size: 13))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)

@@ -43,8 +43,6 @@ private func shape(_ chat: ChatModel) -> [String] {
     #expect(shape(chat) == ["assistant:real"])
 }
 
-// MARK: - Tools
-
 @Test func questionToolCallsAndTheirResultsStayHidden() {
     let chat = restored([
         entry(.toolCall(ToolCall(id: "q1", rawName: "AskUserQuestion",
@@ -76,8 +74,6 @@ private func shape(_ chat: ChatModel) -> [String] {
     ])
     #expect(shape(chat) == ["toolResult:falhou: no such file"])
 }
-
-// MARK: - Digests
 
 @Test func theAnswerAfterACompactionBecomesTheSummaryDigest() throws {
     let compaction = ContextCompaction(trigger: .automatic, tokensBefore: 155_000,
@@ -125,8 +121,6 @@ private func shape(_ chat: ChatModel) -> [String] {
     #expect(shape(chat) == ["assistant:done"])
 }
 
-// MARK: - Notices
-
 @Test func silentNoticesNeverBecomeLines() {
     let chat = restored([
         entry(.systemNotice(subtype: "init", text: "booting")),
@@ -172,8 +166,6 @@ private func shape(_ chat: ChatModel) -> [String] {
     #expect(shape(chat) == ["notice:denied by policy"])
 }
 
-// MARK: - Turn results
-
 @Test func aFailedTurnAnnouncesItsStopReason() {
     let chat = restored([
         entry(.turnResult(TurnResult(usage: .zero, stopReason: "max_tokens",
@@ -189,8 +181,6 @@ private func shape(_ chat: ChatModel) -> [String] {
     ])
     #expect(chat.lines.isEmpty)
 }
-
-// MARK: - Attachments
 
 private func withAttachedImage(_ body: (URL, Data) throws -> Void) throws {
     let root = FileManager.default.temporaryDirectory

@@ -245,8 +245,6 @@ final class WorkspaceModel {
         var name: String { folder.name }
     }
 
-    // MARK: - Actions
-
     func refresh() async {
         guard let listing = try? await store.list() else { return }
         summaries = listing.sessions

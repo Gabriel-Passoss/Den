@@ -1,11 +1,5 @@
 import XCTest
 
-/// Drives the real app through its accessibility tree. Each test gets its own
-/// data root and fake CLIs, so no real session, preference or CLI is touched.
-///
-/// This runner is sandboxed: it can read anywhere but write only inside its
-/// container, which the app cannot reach. So the app owns the data root, under
-/// /tmp, and the fake CLIs' steps travel in the launch environment.
 final class ConversationUITests: XCTestCase {
     private var root: URL!
     private var claude: FakeCLI!
@@ -33,17 +27,14 @@ final class ConversationUITests: XCTestCase {
         app.launchEnvironment["DEN_UI_TEST_ROOT"] = root.path
         app.launchEnvironment["DEN_PROJECT_SETUP"] = projectSetup
         app.launchEnvironment.merge(extraEnvironment) { $1 }
-        for cli in [claude!, openCode!] {
-            app.launchEnvironment.merge(cli.launchEnvironment) { $1 }
-        }
+        app.launchEnvironment.merge(claude.launchEnvironment) { $1 }
+        app.launchEnvironment.merge(openCode.launchEnvironment) { $1 }
         app.launchEnvironment["DEN_CLI_claude-code"] = claude.executable
         app.launchEnvironment["DEN_CLI_opencode"] = openCode.executable
         app.launch()
         return app
     }
 
-    /// Fails with the accessibility tree attached, which is what to read when a
-    /// query stops matching.
     @MainActor
     private func require(_ element: XCUIElement, in app: XCUIApplication,
                          file: StaticString = #filePath, line: UInt = #line) {
@@ -52,7 +43,13 @@ final class ConversationUITests: XCTestCase {
         tree.name = "accessibility tree"
         tree.lifetime = .keepAlways
         add(tree)
-        XCTFail("never appeared: \(element)", file: file, line: line)
+        XCTFail("never appeared: \(element) — read the attached accessibility tree",
+                file: file, line: line)
+    }
+
+    @MainActor
+    private func clickThroughFailingHitTest(_ element: XCUIElement) {
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
     }
 
     @MainActor
@@ -77,7 +74,6 @@ final class ConversationUITests: XCTestCase {
         return composer
     }
 
-    /// Opens a conversation from the empty window and sends its first turn.
     @MainActor
     private func startConversation(_ text: String, in app: XCUIApplication) {
         openComposer(in: app).typeText(text + "\n")
@@ -174,8 +170,6 @@ final class ConversationUITests: XCTestCase {
         XCTAssertTrue(message.waitForNonExistence(timeout: patience))
     }
 
-    // MARK: - Conversation
-
     @MainActor
     func testAFirstConversationGetsItsReplyAndATitle() throws {
         try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
@@ -191,7 +185,7 @@ final class ConversationUITests: XCTestCase {
 
     @MainActor
     func testAllowingFromThePermissionCardFinishesTheTurn() throws {
-        let recorded = try RecordedSession.claudePermission()
+        let recorded = try RecordedSession.claudeWritePermission()
         try claude.on(FakeCLI.userTurn, reply: recorded.untilAsking)
         try claude.on(FakeCLI.permissionAnswer, reply: recorded.afterAnswer)
         let app = launch()
@@ -199,9 +193,7 @@ final class ConversationUITests: XCTestCase {
         startConversation("Crie prova.txt com o texto ok.", in: app)
         let allow = app.buttons["Permitir"]
         require(allow, in: app)
-        // The card's buttons answer the accessibility hit test as not hittable,
-        // though a real click lands on them, so click where the button is.
-        allow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+        clickThroughFailingHitTest(allow)
 
         require(text(containing: "criado com o conte", in: app), in: app)
         XCTAssertFalse(allow.exists)
@@ -266,8 +258,6 @@ final class ConversationUITests: XCTestCase {
         require(menu.buttons["Nova pasta"], in: app)
     }
 
-    // MARK: - Mentions
-
     private let bigProject = """
         mkdir -p admin-web/src orders-api/src
         : > orders-api/pom.xml
@@ -320,8 +310,6 @@ final class ConversationUITests: XCTestCase {
         XCTAssertFalse(text(containing: "worktrees/feature-1/orders-api", in: app).exists)
     }
 
-    // MARK: - Sidebar
-
     @MainActor
     private func sessionMenu(in app: XCUIApplication) -> XCUIElement {
         startConversation("Diga apenas OK e nada mais.", in: app)
@@ -354,7 +342,6 @@ final class ConversationUITests: XCTestCase {
         let app = launch()
 
         sessionMenu(in: app).buttons["Apagar sessão…"].click()
-        // The Touch Bar mirrors the alert's buttons, so look inside the sheet.
         let confirm = app.sheets.buttons["Apagar"]
         require(confirm, in: app)
         confirm.click()

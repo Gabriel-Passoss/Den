@@ -81,8 +81,6 @@ struct MarkdownText: View {
         }
     }
 
-    // MARK: - Parsing
-
     struct Block: Identifiable {
         let id: Int
         let kind: Kind

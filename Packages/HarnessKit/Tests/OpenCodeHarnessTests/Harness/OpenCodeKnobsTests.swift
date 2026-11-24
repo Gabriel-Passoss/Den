@@ -4,7 +4,11 @@ import HarnessCore
 @testable import OpenCodeHarness
 
 private func value(_ text: String) -> JSONValue {
-    try! JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    do {
+        return try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    } catch {
+        preconditionFailure("the recorded fixture is not JSON: \(error)")
+    }
 }
 
 private let recordedConfigOptions = value(#"""

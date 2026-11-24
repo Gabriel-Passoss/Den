@@ -14,8 +14,6 @@ struct LiveChatHarness {
     var log: HarnessLog { harness.log }
 }
 
-/// Builds a ChatModel whose registry contains only fakes, so nothing reaches a
-/// real CLI. `configure` runs before the registry is built.
 @MainActor
 func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
                   alongside others: [FakeHarness] = [],
@@ -47,10 +45,6 @@ func withLiveChat(configure: (inout FakeHarness) -> Void = { _ in },
                                    attachments: attachments, store: store))
 }
 
-/// The update stream is consumed by a detached task, so assertions about events
-/// have to wait for it rather than read straight after emitting. Running out of
-/// patience is a failure, not a quiet return — otherwise the wait reads like an
-/// assertion while proving nothing.
 @MainActor
 func settle(within patience: Duration = .seconds(10),
             until reached: @MainActor () -> Bool,

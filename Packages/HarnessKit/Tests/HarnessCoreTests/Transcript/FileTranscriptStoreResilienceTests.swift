@@ -233,8 +233,6 @@ private func texts(of session: Session) -> [String] {
              "quatro linhas boas mais a cauda cortada")
 }
 
-// MARK: - session.json: a damaged session must not vanish silently
-
 private let futureHandoffJSON = #"{"summarizeWithModel":{"model":"m-9","tokens":800}}"#
 
 private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) -> Data {
@@ -329,8 +327,6 @@ private func sessionJSONWithFutureHandoff(session: Session, segment: Segment) ->
             == damaged.resolvingSymlinksInPath().path)
     #expect(listing.unreadable.first?.reason.isEmpty == false)
 }
-
-// MARK: - updatedAt follows the transcript, not just the metadata
 
 @Test func updatedAtFollowsTheTranscriptAndNotOnlyTheMetadata() async throws {
     let root = try makeRoot()

@@ -194,9 +194,7 @@ case "record":
                     break
                 }
             }
-        } catch is ProcessTransport.ExitFailure {
-            // The exit status is reported below, after the summary.
-        }
+        } catch is ProcessTransport.ExitFailure {}
 
         if let outputPath {
             if let writeFailure {

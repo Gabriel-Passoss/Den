@@ -49,6 +49,20 @@ exata no `PATH` (por exemplo via Homebrew), ela é usada direto.
 O Xcode 16+ lê o `.editorconfig`, então o editor já indenta e termina linhas
 do jeito que os hooks esperam.
 
+## Onde o "porquê" fica
+
+Código não leva comentário aqui (regra `no_comments`), então o que um
+comentário carregaria e não cabe num nome fica em `docs/`:
+
+- `docs/fake-cli.md` — o protocolo entre o `FakeCLI` e o script de shell que
+  ele dirige: gatilhos, passos, `__ID__` e os dois construtores.
+- `docs/harnesskit.md` — as decisões do pacote: por que nenhuma leitura
+  bloqueia thread, por que o fim do stream carrega o motivo, e como um formato
+  desconhecido sobrevive no transcript.
+- `docs/testes.md` — a infraestrutura de teste: o pool de suites de defaults,
+  por que esperar faz parte da asserção, e os comportamentos do XCUITest que os
+  testes de UI contornam.
+
 ## No dia a dia
 
 - **SwiftFormat mexeu no arquivo**: o commit para, o arquivo fica corrigido;
@@ -147,11 +161,16 @@ o resultado de cada mutante como artefato.
 ## Dívida registrada (baselines)
 
 Os gates foram ligados num código que já existia. O que já estava lá ficou
-registrado e não bloqueia; **qualquer coisa nova bloqueia**:
+registrado e não bloqueia; **qualquer coisa nova bloqueia**.
+
+O baseline do SwiftLint começou com 276 entradas e hoje tem 23: saíram os
+comentários (214), os force unwraps e force tries, o `master`/`slave` do PTY,
+as closures em posição trailing e a tupla de cinco membros. O que ficou está
+descrito abaixo.
 
 | Arquivo | O que guarda |
 |---|---|
-| `.swiftlint-baseline.json` | violações do SwiftLint que já existiam (funções e arquivos longos, force unwraps, `master`/`slave` no PTY…) e os comentários que já estavam no código |
+| `.swiftlint-baseline.json` | o que sobrou da dívida do SwiftLint: funções, tipos e arquivos acima do limite de tamanho e de complexidade (quase tudo no `ChatModel` e no `GitChangesPanel`), as linhas longas que são JSON gravado dos CLIs e um aninhamento que um teste exige |
 | `.jscpd-baseline.json` | clones que já existiam (ex.: `ControlChannel` × `ACPChannel`, `ClaudeDiscovery` × `OpenCodeDiscovery`, vários testes) |
 | `.periphery-baseline.json` | o que o Periphery acha no app e não dá para apagar: `@State` usado só via `$`, exigência de protocolo que o app ainda não chama, propriedade lida só pelo `Equatable` sintetizado, e `RunInstance.configurationID` |
 | `.mutation-baseline.json` | mutantes que já sobreviviam no HarnessKit, casados pelo texto da linha |
@@ -186,20 +205,17 @@ Depois rode `Scripts/quality/check` e commite o que a nova versão pedir.
 
 Coisas que também dá para verificar estaticamente e que ainda não estão ligadas:
 
-1. **Swift 6 language mode no app** (`SWIFT_VERSION = 6`). O pacote já usa; no
-   app, o modo 5 ainda deixa passar como warning corridas de dados que o modo 6
-   transforma em erro — os 7 warnings corrigidos agora eram desse tipo.
-2. **Acessibilidade**: as regras opt-in `accessibility_label_for_image` e
+1. **Acessibilidade**: as regras opt-in `accessibility_label_for_image` e
    `accessibility_trait_for_button` do SwiftLint acham hoje 49 imagens sem
    rótulo (ou sem `.accessibilityHidden(true)`, se forem decorativas) e 6 botões
    feitos com `onTapGesture`.
-3. **Strings e localização**: `SWIFT_EMIT_LOC_STRINGS` está ligado no app; um
+2. **Strings e localização**: `SWIFT_EMIT_LOC_STRINGS` está ligado no app; um
    String Catalog com a verificação de chaves faltando/obsoletas do Xcode pegaria
    textos sem tradução.
-4. **Revisão de dependências e licenças** quando o projeto passar a ter pacotes
+3. **Revisão de dependências e licenças** quando o projeto passar a ter pacotes
    de terceiros (hoje não tem): `swift package show-dependencies` +
    verificação de licenças, e Dependabot para as GitHub Actions.
-5. **GitHub**: ligar *secret scanning* com *push protection* e exigir os jobs
+4. **GitHub**: ligar *secret scanning* com *push protection* e exigir os jobs
    `Quality` como status checks obrigatórios na proteção da `main`.
-6. **Spell check** de identificadores e comentários com
+5. **Spell check** de identificadores e comentários com
    [typos](https://github.com/crate-ci/typos), que tem hook de pre-commit.
