@@ -33,7 +33,7 @@ private struct Rig {
 private func makeRig(sessions: Int = 1, host: String = "github.com", limit: Int = 3) -> Rig {
     let file = FileManager.default.temporaryDirectory
         .appending(path: "DenTests-" + UUID().uuidString).appending(path: "task-worktrees.json")
-    let ledger = TaskLedger(store: TaskWorktreeStore(url: file))
+    let ledger = TaskLedger(repository: scratchRepositories().taskWorktrees)
     let ids = (0..<sessions).map { index -> UUID in
         let id = UUID()
         let path = URL(fileURLWithPath: "/wt/api/task-\(index)")

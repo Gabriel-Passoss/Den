@@ -1,22 +1,23 @@
 import Foundation
 import Observation
+import DenStore
 
 @MainActor
 @Observable
 final class TaskLedger {
-    private(set) var entries: [UUID: TaskWorktreeStore.Entry]
-    @ObservationIgnored private let store: TaskWorktreeStore
+    private(set) var entries: [UUID: TaskWorktreeEntry]
+    @ObservationIgnored private let repository: any SessionDocumentRepository<TaskWorktreeEntry>
 
-    init(store: TaskWorktreeStore) {
-        self.store = store
-        self.entries = store.load()
+    init(repository: any SessionDocumentRepository<TaskWorktreeEntry>) {
+        self.repository = repository
+        self.entries = repository.all()
     }
 
     func worktree(for id: UUID) -> TaskWorktree? { entries[id]?.worktree }
 
     func record(_ worktree: TaskWorktree, for id: UUID) {
-        entries[id] = TaskWorktreeStore.Entry(worktree: worktree)
-        persist()
+        entries[id] = TaskWorktreeEntry(worktree: worktree)
+        persist(id)
     }
 
     func update(_ worktree: TaskWorktree, for id: UUID) {
@@ -31,12 +32,12 @@ final class TaskLedger {
         entry.pullRequests = pullRequests
         entry.dismissed = dismissed
         entries[id] = entry
-        persist()
+        persist(id)
     }
 
     func forget(_ id: UUID) {
         guard entries.removeValue(forKey: id) != nil else { return }
-        persist()
+        persist(id)
     }
 
     func pullRequests(for id: UUID) -> [String: PullRequest] {
@@ -47,7 +48,7 @@ final class TaskLedger {
         guard var entry = entries[id], entry.pullRequests[path] != pr else { return }
         entry.pullRequests[path] = pr
         entries[id] = entry
-        persist()
+        persist(id)
     }
 
     func dismissedSignature(for id: UUID, worktree path: String) -> String? {
@@ -58,14 +59,18 @@ final class TaskLedger {
         guard var entry = entries[id] else { return }
         entry.dismissed[path] = signature
         entries[id] = entry
-        persist()
+        persist(id)
     }
 
-    private func persist() {
+    private func persist(_ id: UUID) {
         do {
-            try store.save(entries)
+            if let entry = entries[id] {
+                try repository.save(entry, for: id)
+            } else {
+                try repository.remove(id)
+            }
         } catch {
-            print("não consegui gravar as worktrees de tarefa: \(error)")
+            print("não consegui gravar a worktree de tarefa: \(error)")
         }
     }
 }

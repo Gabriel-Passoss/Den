@@ -133,27 +133,6 @@
     "occurrence": 0
   },
   {
-    "file": "Packages/HarnessKit/Sources/HarnessCore/Transcript/FileTranscriptStore.swift",
-    "code": "? $0.id.uuidString < $1.id.uuidString",
-    "original": "<",
-    "replacement": ">=",
-    "occurrence": 0
-  },
-  {
-    "file": "Packages/HarnessKit/Sources/HarnessCore/Transcript/FileTranscriptStore.swift",
-    "code": "if errno == EINTR { continue }",
-    "original": "==",
-    "replacement": "!=",
-    "occurrence": 0
-  },
-  {
-    "file": "Packages/HarnessKit/Sources/HarnessCore/Transcript/FileTranscriptStore.swift",
-    "code": "var openLine = false",
-    "original": "false",
-    "replacement": "true",
-    "occurrence": 0
-  },
-  {
     "file": "Packages/HarnessKit/Sources/OpenCodeHarness/Mapping/OpenCodeEventMapper.swift",
     "code": "if contextTokens == 0, read > 0 {",
     "original": ">",

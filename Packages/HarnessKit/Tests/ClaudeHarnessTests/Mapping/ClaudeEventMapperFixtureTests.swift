@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import HarnessCore
+import DenStore
 @testable import ClaudeHarness
 
 private let clock = Date(timeIntervalSince1970: 1_000_000)
@@ -131,7 +132,7 @@ func everyToolResultPointsAtAToolCallInTheSameTranscript(name: String) throws {
     let segment = Segment(harness: .claudeCode, harnessSessionID: UUID().uuidString, model: "claude-opus-5")
     let session = Session(title: "corpus", workingDirectory: root, segments: [segment])
 
-    let store = FileTranscriptStore(root: root)
+    let store = try DenStore.inMemory().sessions
     try await store.saveMetadata(session)
     for entry in entries {
         try await store.append(entry, to: segment.id, in: session.id)

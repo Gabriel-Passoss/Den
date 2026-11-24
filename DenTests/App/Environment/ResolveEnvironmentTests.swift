@@ -52,7 +52,7 @@ private func scratchURL() -> URL {
                                          debugBuild: true)
 
     #expect(environment is UITestEnvironment)
-    #expect(environment.sessionsRoot.path.hasPrefix(root.path))
+    #expect(environment.databaseFile.path.hasPrefix(root.path))
 }
 
 @Test func theDefaultFollowsTheBuildTheTestsRunIn() {

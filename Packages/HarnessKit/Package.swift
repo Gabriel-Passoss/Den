@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "HarnessCore", targets: ["HarnessCore"]),
         .library(name: "ClaudeHarness", targets: ["ClaudeHarness"]),
         .library(name: "OpenCodeHarness", targets: ["OpenCodeHarness"]),
+        .library(name: "DenStore", targets: ["DenStore"]),
         .executable(name: "harness-probe", targets: ["harness-probe"]),
     ],
     targets: [
@@ -15,12 +16,12 @@ let package = Package(
         .target(name: "HarnessTestSupport"),
         .testTarget(
             name: "HarnessCoreTests",
-            dependencies: ["HarnessCore", "HarnessTestSupport"]
+            dependencies: ["HarnessCore", "HarnessTestSupport", "DenStore"]
         ),
         .target(name: "ClaudeHarness", dependencies: ["HarnessCore"]),
         .testTarget(
             name: "ClaudeHarnessTests",
-            dependencies: ["ClaudeHarness", "HarnessCore", "HarnessTestSupport"],
+            dependencies: ["ClaudeHarness", "HarnessCore", "HarnessTestSupport", "DenStore"],
 
             resources: [.copy("Fixtures")]
         ),
@@ -32,6 +33,12 @@ let package = Package(
 
             resources: [.copy("Fixtures")]
         ),
+
+        .target(name: "SQLiteKit"),
+        .testTarget(name: "SQLiteKitTests", dependencies: ["SQLiteKit"]),
+
+        .target(name: "DenStore", dependencies: ["HarnessCore", "SQLiteKit"]),
+        .testTarget(name: "DenStoreTests", dependencies: ["DenStore", "HarnessCore", "SQLiteKit"]),
 
         .target(name: "HarnessProbeArguments"),
         .testTarget(name: "HarnessProbeArgumentsTests", dependencies: ["HarnessProbeArguments"]),

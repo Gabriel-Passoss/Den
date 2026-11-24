@@ -1,26 +1,20 @@
 import Testing
 import Foundation
+import HarnessCore
+import DenStore
 @testable import Den
 
-private func temporaryFile() -> URL {
-    FileManager.default.temporaryDirectory
-        .appending(path: "DenTests-" + UUID().uuidString)
-        .appending(path: "task-worktrees.json")
-}
-
 private struct Shelf {
-    let url = temporaryFile()
-    let id = UUID()
+    let repositories = scratchRepositories()
+    let id: UUID
 
-    var ledger: TaskLedger { TaskLedger(store: TaskWorktreeStore(url: url)) }
-
-    func write(_ text: String) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
-        try Data(text.utf8).write(to: url)
+    init() async throws {
+        let session = storedSession("tarefa")
+        try await repositories.sessions.saveMetadata(session)
+        id = session.id
     }
 
-    func remove() { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    var ledger: TaskLedger { TaskLedger(repository: repositories.taskWorktrees) }
 }
 
 func sampleWorktree(branch: String = "den/NS-1-fix") -> TaskWorktree {
@@ -32,37 +26,8 @@ func sampleWorktree(branch: String = "den/NS-1-fix") -> TaskWorktree {
                                   remote: GitHubRemote(host: "github.com", owner: "den", name: "api"))])
 }
 
-@Test func aMissingWorktreeFileLoadsAsEmpty() {
-    #expect(TaskWorktreeStore(url: temporaryFile()).load().isEmpty)
-}
-
-@Test func savedWorktreesComeBackIntact() throws {
-    let url = temporaryFile()
-    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let store = TaskWorktreeStore(url: url)
-    let id = UUID()
-
-    try store.save([id: .init(worktree: sampleWorktree())])
-
-    #expect(store.load() == [id: .init(worktree: sampleWorktree())])
-    let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
-    #expect(object?["version"] as? Int == 1)
-    #expect((object?["sessions"] as? [String: Any])?.keys.first == id.uuidString)
-}
-
-@Test func aCorruptWorktreeFileIsSetAside() throws {
-    let shelf = Shelf()
-    defer { shelf.remove() }
-    try shelf.write("{nope")
-
-    #expect(TaskWorktreeStore(url: shelf.url).load().isEmpty)
-    let siblings = try FileManager.default.contentsOfDirectory(atPath: shelf.url.deletingLastPathComponent().path)
-    #expect(siblings.contains { $0.hasPrefix("task-worktrees.corrupt-") })
-}
-
-@Test func theLedgerWritesThroughAndForgets() {
-    let shelf = Shelf()
-    defer { shelf.remove() }
+@Test func theLedgerWritesThroughAndForgets() async throws {
+    let shelf = try await Shelf()
     let ledger = shelf.ledger
 
     ledger.record(sampleWorktree(), for: shelf.id)
@@ -83,24 +48,19 @@ func sampleWorktree(branch: String = "den/NS-1-fix") -> TaskWorktree {
     #expect(mirrored.displayLocation == "~/.den/worktrees/scalemed/x")
 }
 
-@Test func aFileFromTheFirstDeliveryStillLoads() throws {
-    let shelf = Shelf()
-    defer { shelf.remove() }
-    try shelf.write("""
-        {"version": 1, "sessions": {"\(shelf.id.uuidString)": {"worktree": {"branch": "den/x",
-         "sessionDirectory": "file:///wt/api/x", "repos": []}}}}
-        """)
-
-    let entry = try #require(TaskWorktreeStore(url: shelf.url).load()[shelf.id])
+@Test func anEntryFromTheFirstDeliveryStillDecodes() throws {
+    let json = """
+        {"worktree": {"branch": "den/x", "sessionDirectory": "file:///wt/api/x", "repos": []}}
+        """
+    let entry = try JSONDecoder().decode(TaskWorktreeEntry.self, from: Data(json.utf8))
 
     #expect(entry.worktree.branch == "den/x")
     #expect(entry.pullRequests.isEmpty)
     #expect(entry.dismissed.isEmpty)
 }
 
-@Test func theLedgerKeepsPullRequestsAndDismissals() {
-    let shelf = Shelf()
-    defer { shelf.remove() }
+@Test func theLedgerKeepsPullRequestsAndDismissals() async throws {
+    let shelf = try await Shelf()
     let path = "/wt/api/NS-1-fix"
     let ledger = shelf.ledger
     ledger.record(sampleWorktree(), for: shelf.id)
@@ -116,9 +76,8 @@ func sampleWorktree(branch: String = "den/NS-1-fix") -> TaskWorktree {
     #expect(shelf.ledger.pullRequests(for: shelf.id).isEmpty)
 }
 
-@Test func aMovedWorktreeKeepsItsPullRequestAndDismissalUnderTheNewPath() {
-    let shelf = Shelf()
-    defer { shelf.remove() }
+@Test func aMovedWorktreeKeepsItsPullRequestAndDismissalUnderTheNewPath() async throws {
+    let shelf = try await Shelf()
     let ledger = shelf.ledger
     ledger.record(sampleWorktree(), for: shelf.id)
     ledger.setPullRequest(makePullRequest(number: 80), for: shelf.id, worktree: "/wt/api/NS-1-fix")
@@ -136,13 +95,36 @@ func sampleWorktree(branch: String = "den/NS-1-fix") -> TaskWorktree {
     #expect(reopened.dismissedSignature(for: shelf.id, worktree: "/wt/api/NS-1-fix") == nil)
 }
 
-@Test func aRecordForAnUnknownSessionIsNeverInvented() {
-    let shelf = Shelf()
-    defer { shelf.remove() }
+@Test func aRecordForAnUnknownSessionIsNeverInvented() async throws {
+    let shelf = try await Shelf()
     let ledger = shelf.ledger
 
     ledger.update(sampleWorktree(), for: UUID())
     ledger.setPullRequest(makePullRequest(), for: UUID(), worktree: "/wt/x")
 
     #expect(ledger.entries.isEmpty)
+}
+
+@Test func aLedgerOverAnEmptyStoreStartsEmpty() async throws {
+    #expect(try await Shelf().ledger.entries.isEmpty)
+}
+
+@Test func deletingTheSessionForgetsItsWorktree() async throws {
+    let shelf = try await Shelf()
+    shelf.ledger.record(sampleWorktree(), for: shelf.id)
+
+    try await shelf.repositories.sessions.delete(shelf.id)
+
+    #expect(shelf.ledger.worktree(for: shelf.id) == nil)
+}
+
+@Test func aWorktreeForASessionTheStoreDoesNotKnowLivesOnlyInMemory() async throws {
+    let shelf = try await Shelf()
+    let ledger = shelf.ledger
+    let stranger = UUID()
+
+    ledger.record(sampleWorktree(), for: stranger)
+
+    #expect(ledger.worktree(for: stranger) == sampleWorktree())
+    #expect(shelf.ledger.worktree(for: stranger) == nil)
 }

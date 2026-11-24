@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import HarnessCore
+import DenStore
 
 private func entry(_ kind: TranscriptEntry.Kind) -> TranscriptEntry {
     TranscriptEntry(timestamp: Date(timeIntervalSince1970: 1_000_000),
@@ -101,10 +102,7 @@ private let harnessA = HarnessID(rawValue: "harness-a")
 private let harnessB = HarnessID(rawValue: "harness-b")
 
 @Test func aSessionThatChangedHarnessSurvivesTheStore() async throws {
-    let root = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appending(path: "handoff-\(UUID().uuidString)")
-    let store = FileTranscriptStore(root: root)
-    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try DenStore.inMemory().sessions
 
     let first = Segment(harness: harnessA,
                         harnessSessionID: UUID().uuidString, model: "m1")
@@ -133,14 +131,11 @@ private let harnessB = HarnessID(rawValue: "harness-b")
     #expect(loaded.allEntries.count == 2)
 
     let listed = try await store.list()
-    #expect(listed.sessions.first?.harnesses == [harnessA, harnessB])
+    #expect(listed.first?.harnesses == [harnessA, harnessB])
 }
 
 @Test func appendingToASegmentTheMetadataDoesNotKnowIsRefused() async throws {
-    let root = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appending(path: "handoff-\(UUID().uuidString)")
-    let store = FileTranscriptStore(root: root)
-    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try DenStore.inMemory().sessions
 
     let first = Segment(harness: harnessA, harnessSessionID: "a", model: "m")
     let session = Session(id: UUID(), title: "t",
@@ -149,7 +144,7 @@ private let harnessB = HarnessID(rawValue: "harness-b")
     try await store.saveMetadata(session)
 
     let orphan = Segment(harness: harnessB, harnessSessionID: "b", model: "m")
-    await #expect(throws: TranscriptStoreError.segmentNotFound(orphan.id)) {
+    await #expect(throws: SessionRepositoryError.segmentNotFound(orphan.id)) {
         try await store.append(conversation[0], to: orphan.id, in: session.id)
     }
 }

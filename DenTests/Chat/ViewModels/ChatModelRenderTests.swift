@@ -16,7 +16,7 @@ private func restored(_ entries: [TranscriptEntry]) -> ChatModel {
     let segment = Segment(harness: HarnessID(rawValue: "test-" + UUID().uuidString),
                           harnessSessionID: "", model: "", entries: entries)
     let session = Session(title: "restored", workingDirectory: root, segments: [segment])
-    return ChatModel(store: FileTranscriptStore(root: root),
+    return ChatModel(store: scratchSessions(),
                      restoring: session, cache: scratchCache)
 }
 

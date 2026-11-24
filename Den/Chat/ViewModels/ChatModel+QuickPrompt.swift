@@ -20,7 +20,8 @@ extension ChatModel {
 
     func turnEnded(_ result: TurnResult) {
         Task { await refreshContextUsage() }
-        if !result.isError { suggestReply() }
+        guard !result.isError else { return }
+        suggestReply()
     }
 
     func generateTitle(from text: String) {

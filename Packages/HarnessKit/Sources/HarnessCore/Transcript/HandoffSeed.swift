@@ -58,7 +58,7 @@ public enum HandoffSeed: Sendable {
         ([preamble, ""] + lines).joined(separator: "\n\n")
     }
 
-    static func line(of entry: TranscriptEntry) -> String? {
+    public static func line(of entry: TranscriptEntry) -> String? {
         switch entry.kind {
         case .userMessage(let text, _):
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -23,7 +23,7 @@ private func question(_ text: String) -> TranscriptEntry {
         Segment(harness: openCode, harnessSessionID: "", model: "",
                 entries: [question("e agora"), reply("do OpenCode")]),
     ])
-    let chat = ChatModel(store: FileTranscriptStore(root: root), restoring: session,
+    let chat = ChatModel(store: scratchSessions(), restoring: session,
                          cache: scratchCache)
 
     let replies = chat.lines.filter { $0.role == .assistant }

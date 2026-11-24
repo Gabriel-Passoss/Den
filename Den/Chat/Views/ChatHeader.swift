@@ -68,7 +68,7 @@ struct ChatHeader: View {
                 }
         }
         .buttonStyle(DenButtonStyle(kind: .secondary))
-        .help(pane == .closed ? "Mostrar alterações e execução (⌥⌘0 / ⌥⌘9)"
+        .help(pane == .closed ? "Mostrar alterações, execução e memória (⌥⌘0 / ⌥⌘9 / ⌥⌘8)"
                               : "Ocultar painel")
         .accessibilityLabel(pane == .closed ? "Mostrar painel" : "Ocultar painel")
     }

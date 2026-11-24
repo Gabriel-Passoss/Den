@@ -39,14 +39,15 @@ struct InspectorView: View {
                         .iconLabel()
                 }
                 .buttonStyle(.denGhost)
-                .help(shown == .run ? "Recolher painel (⌥⌘9)" : "Recolher painel (⌥⌘0)")
+                .help("Recolher painel (\(shown.shortcut))")
                 .accessibilityLabel("Fechar painel")
             }
 
             Group {
-                if shown == .run {
+                switch shown {
+                case .run:
                     RunPanel(root: runRoot)
-                } else {
+                case .changes, .closed:
                     GitChangesPanel(model: gitChanges, directory: directory)
                 }
             }

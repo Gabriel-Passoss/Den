@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import HarnessCore
+import DenStore
 @testable import Den
 
 nonisolated let claudeCodeID = HarnessID(rawValue: "claude-code")
@@ -27,6 +28,7 @@ struct EndToEnd {
     let attachments: URL
 
     fileprivate let environment: TestEnvironment
+    fileprivate let repositories: Repositories
     fileprivate let opened = Opened()
 
     func newChat(on harness: HarnessID = claudeCodeID) async throws -> ChatModel {
@@ -38,7 +40,7 @@ struct EndToEnd {
     }
 
     func relaunched() -> WorkspaceModel {
-        let workspace = WorkspaceModel.live(environment)
+        let workspace = WorkspaceModel.live(environment, repositories: repositories)
         opened.workspaces.append(workspace)
         return workspace
     }
@@ -65,7 +67,8 @@ func withEndToEnd(_ body: (EndToEnd) async throws -> Void) async throws {
                                       ]))
     let project = environment.workingDirectory
     try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-    let workspace = WorkspaceModel.live(environment)
+    let repositories = try DenStore.open(at: environment.databaseFile).repositories
+    let workspace = WorkspaceModel.live(environment, repositories: repositories)
 
     defer {
         scratch.remove()
@@ -76,7 +79,7 @@ func withEndToEnd(_ body: (EndToEnd) async throws -> Void) async throws {
 
     let e2e = EndToEnd(workspace: workspace, claude: claude, openCode: openCode,
                        project: project, attachments: environment.attachmentsRoot,
-                       environment: environment)
+                       environment: environment, repositories: repositories)
     e2e.opened.workspaces.append(workspace)
     var failure: (any Error)?
     do { try await body(e2e) } catch { failure = error }

@@ -105,7 +105,7 @@ final class ChatModel {
 
     func knob(_ id: String) -> HarnessKnob? { knobs.first { $0.id == id } }
 
-    private let store: FileTranscriptStore
+    private let store: any SessionRepository
     private let cache: SessionCache
     let registry: HarnessRegistry
     private let attachmentsRoot: URL
@@ -118,7 +118,7 @@ final class ChatModel {
 
     private var harnessSessionID: String
 
-    private var entries: [TranscriptEntry] = []
+    private(set) var entries: [TranscriptEntry] = []
 
     private var segmentStart = 0
 
@@ -128,8 +128,8 @@ final class ChatModel {
 
     var isLive: Bool { session != nil }
 
-    init(store: FileTranscriptStore, workingDirectory: URL,
-         harness: HarnessID? = nil, cache: SessionCache = .standard,
+    init(store: any SessionRepository, workingDirectory: URL,
+         harness: HarnessID? = nil, cache: SessionCache,
          registry: HarnessRegistry = .standard,
          attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
@@ -150,8 +150,8 @@ final class ChatModel {
         catalog = cache.rememberedCatalog(for: workingDirectory, harness: harness)
     }
 
-    init(store: FileTranscriptStore, restoring session: Session,
-         cache: SessionCache = .standard,
+    init(store: any SessionRepository, restoring session: Session,
+         cache: SessionCache,
          registry: HarnessRegistry = .standard,
          attachmentsRoot: URL = ChatModel.standardAttachmentsRoot) {
         self.store = store
