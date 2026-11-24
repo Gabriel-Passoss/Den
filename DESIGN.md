@@ -103,6 +103,11 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 - 2026-11-23 — Na janela mínima, o painel da tarefa recolhe e abre por um botão no topo — em 860 px o chat precisa da largura disponível.
 - 2026-11-23 — Design do board, da tela de Agentes e da tela da tarefa aprovado pelo autor no arquivo `Den` do Penpot — libera o planejamento da implementação em SwiftUI.
 - 2026-11-23 — Import no Penpot: 39 tokens e DenButtonStyle, ChipSurface + ChipLabel, HarnessBadge e DenMenuList desenhados; os outros 9 componentes ficam só no código — são as peças que board, sidebar e chat mais usam.
+- 2026-11-23 — Sub-tasks acompanham o card pai e não andam sozinhas pelas colunas — decisão do autor.
+- 2026-11-23 — O contexto do agente é por task, e a orquestração fornece somente o necessário para a tarefa, conforme a configuração do agente — decisão do autor.
+- 2026-11-23 — Por enquanto, cada etapa usa o harness e o modelo padrão do seu agente — decisão do autor.
+- 2026-11-23 — Por enquanto, o Den não terá conversas livres — decisão do autor.
+- 2026-11-23 — O grilling acontece em Especificação, e Backlog não tem agente nem dispara nada — confirmado pelo autor.
 - 2026-11-23 — As cinco cores dos pets entram em `Theme.swift` com os valores do Penpot — o board e a tela de Agentes passam a ter uma fonte única.
 - 2026-11-23 — `textFaint` passa de `#555C6C` para `#767D90`, com 4,6:1 sobre `canvas` — ele já é usado em estados e metadados, que precisam ser legíveis.
 - 2026-11-23 — Tipografia, espaçamento e raio ganham escalas a partir dos valores mais usados no código — as views atuais migram aos poucos, durante o redesenho.
@@ -110,12 +115,6 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 
 ## Open questions
 
-- O grill-me-with-docs acontece dentro de "Especificação"? (assumed)
-- Backlog não tem agente e não dispara nada? (assumed)
-- As sub-tasks andam pelas colunas individualmente ou acompanham o card pai?
-- O contexto de cada agente é definido por etapa globalmente, por projeto, ou pode ser ajustado por task?
-- Cada etapa pode usar um harness e modelo diferentes?
-- O que acontece com as conversas livres atuais, que não pertencem a uma task?
 - `grill-me-with-docs` é uma skill já existente? Onde ela fica?
 - O Penpot ainda precisa receber o novo `textFaint`, as escalas e `focusRingWidth`, listados em `pendingInPenpot` no `design-sync.json`.
 - Na implementação, a fila de mensagens e os estados "enviando", "respondida" e "não vale mais" da decisão precisam ser adicionados ao chat atual, porque ainda não existem no código.
