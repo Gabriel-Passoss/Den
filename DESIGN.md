@@ -102,15 +102,14 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 - 2026-11-23 — Na janela mínima, o painel da tarefa recolhe e abre por um botão no topo — em 860 px o chat precisa da largura disponível.
 - 2026-11-23 — Design do board, da tela de Agentes e da tela da tarefa aprovado pelo autor no arquivo `Den` do Penpot — libera o planejamento da implementação em SwiftUI.
 - 2026-11-23 — Import no Penpot: 39 tokens e DenButtonStyle, ChipSurface + ChipLabel, HarnessBadge e DenMenuList desenhados; os outros 9 componentes ficam só no código — são as peças que board, sidebar e chat mais usam.
+- 2026-11-23 — Sub-tasks acompanham o card pai e não andam sozinhas pelas colunas — decisão do autor.
+- 2026-11-23 — O contexto do agente é por task, e a orquestração fornece somente o necessário para a tarefa, conforme a configuração do agente — decisão do autor.
+- 2026-11-23 — Por enquanto, cada etapa usa o harness e o modelo padrão do seu agente — decisão do autor.
+- 2026-11-23 — Por enquanto, o Den não terá conversas livres — decisão do autor.
+- 2026-11-23 — O grilling acontece em Especificação, e Backlog não tem agente nem dispara nada — confirmado pelo autor.
 
 ## Open questions
 
-- O grill-me-with-docs acontece dentro de "Especificação"? (assumed)
-- Backlog não tem agente e não dispara nada? (assumed)
-- As sub-tasks andam pelas colunas individualmente ou acompanham o card pai?
-- O contexto de cada agente é definido por etapa globalmente, por projeto, ou pode ser ajustado por task?
-- Cada etapa pode usar um harness e modelo diferentes?
-- O que acontece com as conversas livres atuais, que não pertencem a uma task?
 - `grill-me-with-docs` é uma skill já existente? Onde ela fica?
 - `textFaint` (`#555C6C`) tem contraste de cerca de 2,8:1 sobre `canvas`. Ele não deve ser usado para estado ou metadado no board, e pode precisar de ajuste.
 - O estado de foco de `DenButtonStyle` está desenhado como proposto e ainda não existe no código.
