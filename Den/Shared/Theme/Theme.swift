@@ -32,7 +32,7 @@ enum Theme {
     static let textSecondary = Color(hex: 0xB8BFCE)
     static let textMuted = Color(hex: 0x9AA2B4)
     static let textTertiary = Color(hex: 0x7F879A)
-    static let textFaint = Color(hex: 0x555C6C)
+    static let textFaint = Color(hex: 0x767D90)
 
     static let accent = Color(hex: 0x8B93FF)
     static let accentSoft = Color(hex: 0xA8AEFF)
@@ -54,6 +54,39 @@ enum Theme {
     static let alertBorder = Color(hex: 0x4D3F1F)
     static let alertText = Color(hex: 0xEBC46A)
 
+    static let petSpec = Color(hex: 0x5AA9F2)
+    static let petImpl = Color(hex: 0xC98A5A)
+    static let petTest = Color(hex: 0x2FBFA8)
+    static let petStd = Color(hex: 0x9B7BEA)
+    static let petPr = Color(hex: 0xE57FB0)
+
+    static let font10: CGFloat = 10
+    static let font11: CGFloat = 11
+    static let font12: CGFloat = 12
+    static let font13: CGFloat = 13
+    static let font14: CGFloat = 14
+    static let font17: CGFloat = 17
+    static let font24: CGFloat = 24
+
+    static let space2: CGFloat = 2
+    static let space4: CGFloat = 4
+    static let space6: CGFloat = 6
+    static let space8: CGFloat = 8
+    static let space10: CGFloat = 10
+    static let space12: CGFloat = 12
+    static let space16: CGFloat = 16
+    static let space20: CGFloat = 20
+    static let space24: CGFloat = 24
+
+    static let radius4: CGFloat = 4
+    static let radius6: CGFloat = 6
+    static let radius8: CGFloat = 8
+    static let radius10: CGFloat = 10
+    static let radius12: CGFloat = 12
+    static let radius16: CGFloat = 16
+
+    static let focusRingWidth: CGFloat = 2
+
     static let headerHeight: CGFloat = 52
     static let trafficLightsInset: CGFloat = 78
 }
@@ -62,7 +95,7 @@ struct DenButtonStyle: ButtonStyle {
     enum Kind { case primary, secondary, ghost }
 
     var kind: Kind
-    var radius: CGFloat = 8
+    var radius: CGFloat = Theme.radius8
 
     func makeBody(configuration: Configuration) -> some View {
         StyledLabel(configuration: configuration, kind: kind, radius: radius)
@@ -75,6 +108,7 @@ struct DenButtonStyle: ButtonStyle {
 
         @State private var hovering = false
         @Environment(\.isEnabled) private var isEnabled
+        @Environment(\.isFocused) private var isFocused
 
         var body: some View {
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -86,6 +120,12 @@ struct DenButtonStyle: ButtonStyle {
                         shape.strokeBorder(Theme.borderControl, lineWidth: 1)
                     }
                 }
+                .overlay {
+                    if isEnabled, isFocused {
+                        shape.strokeBorder(Theme.accentSoft, lineWidth: Theme.focusRingWidth)
+                    }
+                }
+                .focusEffectDisabled()
                 .contentShape(shape)
                 .opacity(isEnabled ? 1 : 0.45)
                 .onHover { hovering = $0 }

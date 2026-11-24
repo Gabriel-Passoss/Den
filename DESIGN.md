@@ -41,7 +41,8 @@ Design system source: `Den/Shared/Theme/Theme.swift`; the Penpot guide mirrors i
 
 No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só para o desenho.
 
-- 37 tokens de cor: superfícies, bordas, texto, accent, estados de diff e alerta.
+- 42 tokens de cor: superfícies, bordas, texto, accent, estados de diff, alerta e pets.
+- Escalas em pontos: tipografia (`font10` a `font24`), espaçamento (`space2` a `space24`) e raio (`radius4` a `radius16`).
 - Acento índigo (`accent` `#8B93FF`, `action` `#6E78F7`) sobre neutros escuros (`canvas` `#0F1115`).
 - Componentes base: `DenButtonStyle` (primary, secondary, ghost), `PillLabel`, `ChipLabel`, `IconLabel`, `ChipSurface`, `DenMenu`.
 - Fonte do sistema e SF Symbols, como já usados nas views.
@@ -107,14 +108,15 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 - 2026-11-23 — Por enquanto, cada etapa usa o harness e o modelo padrão do seu agente — decisão do autor.
 - 2026-11-23 — Por enquanto, o Den não terá conversas livres — decisão do autor.
 - 2026-11-23 — O grilling acontece em Especificação, e Backlog não tem agente nem dispara nada — confirmado pelo autor.
+- 2026-11-23 — As cinco cores dos pets entram em `Theme.swift` com os valores do Penpot — o board e a tela de Agentes passam a ter uma fonte única.
+- 2026-11-23 — `textFaint` passa de `#555C6C` para `#767D90`, com 4,6:1 sobre `canvas` — ele já é usado em estados e metadados, que precisam ser legíveis.
+- 2026-11-23 — Tipografia, espaçamento e raio ganham escalas a partir dos valores mais usados no código — as views atuais migram aos poucos, durante o redesenho.
+- 2026-11-23 — O foco de `DenButtonStyle` é um contorno interno de 2 pt em `accentSoft`, com o raio do botão — segue o estado desenhado no Penpot.
 
 ## Open questions
 
 - `grill-me-with-docs` é uma skill já existente? Onde ela fica?
-- `textFaint` (`#555C6C`) tem contraste de cerca de 2,8:1 sobre `canvas`. Ele não deve ser usado para estado ou metadado no board, e pode precisar de ajuste.
-- O estado de foco de `DenButtonStyle` está desenhado como proposto e ainda não existe no código.
-- O código não tem tokens de tipografia, espaçamento e raio. O redesenho deve propor uma escala?
-- As cinco cores dos pets (`petSpec`, `petImpl`, `petTest`, `petStd`, `petPr`) estão propostas no Penpot e ainda precisam entrar em `Theme.swift` por um export aprovado.
+- O Penpot ainda precisa receber o novo `textFaint`, as escalas e `focusRingWidth`, listados em `pendingInPenpot` no `design-sync.json`.
 - Na implementação, a fila de mensagens e os estados "enviando", "respondida" e "não vale mais" da decisão precisam ser adicionados ao chat atual, porque ainda não existem no código.
 - As peças do chat estão desenhadas nas telas 3.x a partir dos valores do código, mas ainda não são componentes da biblioteca do Penpot. Vale registrá-las no guia?
 - Só uma referência foi indicada (Linear). Vale acrescentar uma referência de app nativo de Mac?
