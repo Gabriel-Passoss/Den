@@ -121,7 +121,7 @@ struct DenButtonStyle: ButtonStyle {
                     }
                 }
                 .overlay {
-                    if isEnabled && isFocused {
+                    if isEnabled, isFocused {
                         shape.strokeBorder(Theme.accentSoft, lineWidth: Theme.focusRingWidth)
                     }
                 }
