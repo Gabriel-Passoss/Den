@@ -7,6 +7,20 @@ nonisolated struct RunFolder: Equatable, Identifiable, Sendable {
     var id: String { path }
 }
 
+nonisolated enum RunFolderEntry: Equatable, Identifiable, Sendable {
+    case root
+    case pinned(String)
+    case folder(RunFolder)
+
+    var id: String {
+        switch self {
+        case .root: ""
+        case .pinned(let path): path
+        case .folder(let folder): folder.path
+        }
+    }
+}
+
 nonisolated enum RunFolderIndex {
     static let markers = [
         "package.json", "Makefile", "Cargo.toml", "Package.swift", "go.mod",
@@ -52,5 +66,10 @@ nonisolated enum RunFolderIndex {
     static func pinnedSelection(_ selection: String, in folders: [RunFolder]) -> String? {
         guard !selection.isEmpty, !folders.contains(where: { $0.path == selection }) else { return nil }
         return selection
+    }
+
+    static func entries(_ folders: [RunFolder], query: String, selection: String) -> [RunFolderEntry] {
+        let pinned = pinnedSelection(selection, in: folders).map { [RunFolderEntry.pinned($0)] } ?? []
+        return [.root] + pinned + filter(folders, query: query).map(RunFolderEntry.folder)
     }
 }
