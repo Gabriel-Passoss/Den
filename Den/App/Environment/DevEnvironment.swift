@@ -8,7 +8,6 @@ struct DevEnvironment: AppEnvironment {
     let defaults = userDefaults(inSuite: DevEnvironment.defaultsSuite)
 
     var databaseFile: URL { support.appending(path: "den.sqlite") }
-    var memoryRoot: URL { URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".den-dev/memory") }
     var attachmentsRoot: URL { support.appending(path: "attachments") }
     var runConfigurationsFile: URL { support.appending(path: "run-configurations.json") }
     var worktreesRoot: URL { URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".den-dev/worktrees") }

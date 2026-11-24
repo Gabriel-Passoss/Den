@@ -22,7 +22,6 @@ extension ChatModel {
         Task { await refreshContextUsage() }
         guard !result.isError else { return }
         suggestReply()
-        captureMemory(atLeast: MemoryModel.turnThreshold)
     }
 
     func generateTitle(from text: String) {

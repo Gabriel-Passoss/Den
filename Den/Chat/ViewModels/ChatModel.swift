@@ -109,7 +109,6 @@ final class ChatModel {
     private let cache: SessionCache
     let registry: HarnessRegistry
     private let attachmentsRoot: URL
-    var memory: MemoryModel?
     var runner: any CommandRunner = SystemCommandRunner()
     var installation: HarnessInstallation?
     private var session: (any HarnessSession)?
@@ -241,7 +240,6 @@ final class ChatModel {
                 ? .resume(harnessSessionID: harnessSessionID)
                 : .fresh
             hasLaunched = true
-            memory?.sessionStarted(sessionID, fresh: start == .fresh)
 
             let live = adapter.makeSession(
                 installation: installation,
@@ -342,8 +340,7 @@ final class ChatModel {
             await nameFromFirstTurn(text.isEmpty ? "Anexo" : text)
         }
 
-        let seeded = pendingSeed.map { HandoffSeed.message(seed: $0, request: text) } ?? text
-        let outgoing = memory?.opening(seeded, typed: text, session: sessionID, directory: workingDirectory) ?? seeded
+        let outgoing = pendingSeed.map { HandoffSeed.message(seed: $0, request: text) } ?? text
         pendingSeed = nil
 
         isBusy = true

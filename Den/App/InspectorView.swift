@@ -6,7 +6,6 @@ struct InspectorView: View {
     let directory: URL
     let runRoot: URL
     let runActive: Bool
-    let chat: ChatModel
 
     @State private var shown: InspectorPane = .changes
 
@@ -30,9 +29,6 @@ struct InspectorView: View {
                             .accessibilityLabel("Em execução")
                     }
                 }
-                if chat.memory != nil {
-                    tab(.memory, title: "Memória", icon: "brain") { EmptyView() }
-                }
                 Spacer(minLength: 4)
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { pane = .closed }
@@ -51,8 +47,6 @@ struct InspectorView: View {
                 switch shown {
                 case .run:
                     RunPanel(root: runRoot)
-                case .memory:
-                    if let memory = chat.memory { MemoryPanel(memory: memory, chat: chat) }
                 case .changes, .closed:
                     GitChangesPanel(model: gitChanges, directory: directory)
                 }
