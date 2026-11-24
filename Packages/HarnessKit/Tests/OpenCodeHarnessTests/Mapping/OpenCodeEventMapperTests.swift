@@ -24,7 +24,11 @@ private func kindName(_ kind: TranscriptEntry.Kind) -> String {
 }
 
 private func update(_ text: String) -> JSONValue {
-    try! JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    do {
+        return try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    } catch {
+        preconditionFailure("the recorded fixture is not JSON: \(error)")
+    }
 }
 
 private func runFixture(_ name: String) throws -> MappedOutput {
@@ -50,8 +54,6 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     }
     return all
 }
-
-// MARK: - A espinha da fixture real
 
 @Test func theRecordedTurnProducesItsSpine() throws {
     let output = try runFixture("turn-with-permission")
@@ -167,8 +169,6 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     #expect(compaction.tokensBefore == 87_000)
     #expect(compaction.tokensAfter == 7_000)
 }
-
-// MARK: - Variants the fixture does not cover
 
 @Test func aThoughtChunkBecomesThinkingNotText() {
     var subject = mapper()
@@ -293,8 +293,6 @@ private func runFixture(_ name: String) throws -> MappedOutput {
     #expect(result.stopReason == "cancelled")
     #expect(result.isError == false)
 }
-
-// MARK: - Compaction
 
 private let summaryChunk = #"""
 {"sessionUpdate":"agent_message_chunk","messageId":"m1",

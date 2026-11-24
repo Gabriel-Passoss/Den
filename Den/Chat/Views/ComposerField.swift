@@ -9,7 +9,7 @@ struct ComposerField: View {
 
     var body: some View {
         ComposerTextView(text: $chat.prompt, focusRequested: $focusRequested,
-                         placeholder: placeholder,
+                         accessibilityPlaceholder: placeholder,
                          ghost: chat.visibleSuggestion ?? "",
                          onSubmit: submit,
                          onPaste: { chat.capturePaste($0) },

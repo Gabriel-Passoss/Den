@@ -5,7 +5,7 @@ struct DevEnvironment: AppEnvironment {
 
     private let support = URL.applicationSupportDirectory.appending(path: "Den Dev")
 
-    let defaults = UserDefaults(suiteName: DevEnvironment.defaultsSuite)!
+    let defaults = userDefaults(inSuite: DevEnvironment.defaultsSuite)
 
     var databaseFile: URL { support.appending(path: "den.sqlite") }
     var memoryRoot: URL { URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".den-dev/memory") }

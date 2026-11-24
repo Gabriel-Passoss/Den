@@ -1,29 +1,17 @@
 import Foundation
 
-/// A stand-in for a harness CLI (`Scripts/fake-cli/fake-cli`), so the real
-/// transport, channel and event mapper run end to end with no network and no
-/// bill.
-///
-/// Each step waits for an inbound line containing its trigger and answers with
-/// its reply. `__ID__` in a reply becomes the id of the last JSON-RPC request
-/// the app sent. Claude control requests from the app (interrupt, permission
-/// mode) are answered with success without needing a step.
 nonisolated final class FakeCLI {
     struct Launch {
         let directory: String
         let arguments: [String]
     }
 
-    /// Where the steps are written as a test adds them.
     let directory: URL
-    /// Where the running CLI keeps its step counter and what it saw.
     let state: URL
     let executable: String
     private let scenarioKey: String?
     private var steps = 0
 
-    /// A fake whose files the app can read directly: the unit tests, which the
-    /// app hosts.
     convenience init() throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "FakeCLI-" + UUID().uuidString)
@@ -38,9 +26,6 @@ nonisolated final class FakeCLI {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable)
     }
 
-    /// A fake for the app a UI test launches. The test runner is sandboxed and
-    /// the app cannot run or read what it writes, so the steps travel in
-    /// `launchEnvironment` and the CLI keeps its state under `root`.
     convenience init(appRoot root: URL, harness: String) throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "FakeCLI-" + UUID().uuidString)
@@ -66,7 +51,6 @@ nonisolated final class FakeCLI {
             .write(to: step.appendingPathExtension("reply"), atomically: true, encoding: .utf8)
     }
 
-    /// The CLI dies when the trigger arrives, the way a crash looks from outside.
     func on(_ trigger: String, exit status: Int32, stderr: String) throws {
         let step = try addStep(trigger)
         try String(status).write(to: step.appendingPathExtension("exit"),
@@ -75,7 +59,6 @@ nonisolated final class FakeCLI {
                          atomically: true, encoding: .utf8)
     }
 
-    /// What one-shot `-p` runs print, which is how titles get generated.
     func answerTitles(with title: String) throws {
         try title.write(to: directory.appending(path: "title"), atomically: true, encoding: .utf8)
     }
@@ -84,7 +67,6 @@ nonisolated final class FakeCLI {
         try reply.write(to: directory.appending(path: "reply"), atomically: true, encoding: .utf8)
     }
 
-    /// The steps so far, for a fake made with `init(appRoot:harness:)`.
     var launchEnvironment: [String: String] {
         guard let scenarioKey else { return [:] }
         let files = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil)?
@@ -112,8 +94,6 @@ nonisolated final class FakeCLI {
         }
     }
 
-    /// Every line the app wrote to the CLI's stdin, with JSON's escaped slashes
-    /// undone so methods read as `session/prompt`.
     var received: [String] {
         guard let text = try? String(contentsOf: state.appending(path: "received"),
                                      encoding: .utf8) else { return [] }
@@ -140,29 +120,21 @@ nonisolated final class FakeCLI {
 }
 
 extension FakeCLI {
-    /// Claude stream-json: a user turn on stdin.
     static let userTurn = #""type":"user""#
 
-    /// Claude stream-json: the app's answer to a permission request.
     static let permissionAnswer = #""type":"control_response""#
 
-    /// ACP: a JSON-RPC request from the app.
     static func request(_ method: String) -> String { #""method":"\#(method)""# }
 
-    /// ACP: the app's answer to a request the CLI sent.
     static let answer = #""result":"#
 }
 
-/// Sessions HarnessKit recorded from the real CLIs, kept under its test
-/// fixtures. Replaying them holds the app to what the CLIs actually emit.
 nonisolated enum RecordedSession {
     static func claude(_ name: String) throws -> [String] {
         try lines(of: name)
     }
 
-    /// The recorded Write permission, cut where the CLI stops to wait for the
-    /// app's answer.
-    static func claudePermission() throws -> (untilAsking: [String], afterAnswer: [String]) {
+    static func claudeWritePermission() throws -> (untilAsking: [String], afterAnswer: [String]) {
         let lines = try claude("permission-request")
         guard let asking = lines.firstIndex(where: { $0.contains(#""subtype":"can_use_tool""#) })
         else { throw CocoaError(.fileReadCorruptFile) }
@@ -182,4 +154,9 @@ nonisolated enum RecordedSession {
 
 nonisolated private final class TestBundle {}
 
-nonisolated private let testResources = Bundle(for: TestBundle.self).resourceURL!
+nonisolated private let testResources: URL = {
+    guard let resources = Bundle(for: TestBundle.self).resourceURL else {
+        preconditionFailure("the test bundle has no resource folder")
+    }
+    return resources
+}()

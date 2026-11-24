@@ -67,7 +67,7 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
     }
 
     let pid: Int32
-    private let master: Int32
+    private let hostEnd: Int32
     private let input: Int32
     private let queue: DispatchQueue
     private let onOutput: @Sendable (Data) -> Void
@@ -80,11 +80,11 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
     private var exitSource: DispatchSourceProcess?
     private var buffer = [UInt8](repeating: 0, count: 65_536)
 
-    private init(pid: Int32, master: Int32, input: Int32,
+    private init(pid: Int32, hostEnd: Int32, input: Int32,
                  onOutput: @escaping @Sendable (Data) -> Void,
                  onExit: @escaping @Sendable (ProcessExit) -> Void) {
         self.pid = pid
-        self.master = master
+        self.hostEnd = hostEnd
         self.input = input
         self.queue = DispatchQueue(label: "Den.PTYProcess.\(pid)", qos: .userInitiated)
         self.onOutput = onOutput
@@ -99,20 +99,20 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
         guard FileManager.default.isExecutableFile(atPath: request.shell) else {
             throw LaunchError.spawnFailed(ENOENT)
         }
-        var master: Int32 = -1
-        var slave: Int32 = -1
+        var hostEnd: Int32 = -1
+        var childEnd: Int32 = -1
         var size = winsize(ws_row: rows, ws_col: columns, ws_xpixel: 0, ws_ypixel: 0)
-        guard openpty(&master, &slave, nil, nil, &size) == 0 else {
+        guard openpty(&hostEnd, &childEnd, nil, nil, &size) == 0 else {
             throw LaunchError.terminalUnavailable(errno)
         }
         var inputPipe: [Int32] = [-1, -1]
         guard pipe(&inputPipe) == 0 else {
             let code = errno
-            close(master)
-            close(slave)
+            close(hostEnd)
+            close(childEnd)
             throw LaunchError.terminalUnavailable(code)
         }
-        for descriptor in [master, slave] + inputPipe {
+        for descriptor in [hostEnd, childEnd] + inputPipe {
             _ = fcntl(descriptor, F_SETFD, FD_CLOEXEC)
         }
 
@@ -135,8 +135,8 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
         posix_spawn_file_actions_init(&actions)
         defer { posix_spawn_file_actions_destroy(&actions) }
         posix_spawn_file_actions_adddup2(&actions, inputPipe[0], 0)
-        posix_spawn_file_actions_adddup2(&actions, slave, 1)
-        posix_spawn_file_actions_adddup2(&actions, slave, 2)
+        posix_spawn_file_actions_adddup2(&actions, childEnd, 1)
+        posix_spawn_file_actions_adddup2(&actions, childEnd, 2)
         posix_spawn_file_actions_addchdir(&actions, request.directory.path)
 
         let arguments = arguments(for: request)
@@ -147,16 +147,16 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
                 posix_spawn(&pid, arguments[0], &actions, &attributes, argv, envp)
             }
         }
-        close(slave)
+        close(childEnd)
         close(inputPipe[0])
         guard result == 0 else {
-            close(master)
+            close(hostEnd)
             close(inputPipe[1])
             throw LaunchError.spawnFailed(result)
         }
 
-        _ = fcntl(master, F_SETFL, fcntl(master, F_GETFL) | O_NONBLOCK)
-        let process = PTYProcess(pid: pid, master: master, input: inputPipe[1],
+        _ = fcntl(hostEnd, F_SETFL, fcntl(hostEnd, F_GETFL) | O_NONBLOCK)
+        let process = PTYProcess(pid: pid, hostEnd: hostEnd, input: inputPipe[1],
                                  onOutput: onOutput, onExit: onExit)
         process.startMonitoring()
         return process
@@ -184,9 +184,9 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
     }
 
     private func startMonitoring() {
-        let read = DispatchSource.makeReadSource(fileDescriptor: master, queue: queue)
+        let read = DispatchSource.makeReadSource(fileDescriptor: hostEnd, queue: queue)
         read.setEventHandler { self.drain() }
-        read.setCancelHandler { close(self.master) }
+        read.setCancelHandler { close(self.hostEnd) }
         let exit = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: queue)
         exit.setEventHandler { self.collect(blocking: true) }
         readSource = read
@@ -198,7 +198,7 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
 
     private func drain() {
         while readOpen {
-            let count = buffer.withUnsafeMutableBytes { Darwin.read(master, $0.baseAddress, $0.count) }
+            let count = buffer.withUnsafeMutableBytes { Darwin.read(hostEnd, $0.baseAddress, $0.count) }
             if count > 0 {
                 onOutput(Data(buffer[0..<count]))
                 continue
@@ -235,6 +235,11 @@ nonisolated final class PTYProcess: RunningProcess, @unchecked Sendable {
                                         _ body: (UnsafePointer<UnsafeMutablePointer<CChar>?>) -> R) -> R {
         let pointers: [UnsafeMutablePointer<CChar>?] = strings.map { strdup($0) } + [nil]
         defer { pointers.forEach { free($0) } }
-        return pointers.withUnsafeBufferPointer { body($0.baseAddress!) }
+        return pointers.withUnsafeBufferPointer { buffer in
+            guard let base = buffer.baseAddress else {
+                preconditionFailure("the argument list always holds its nil terminator")
+            }
+            return body(base)
+        }
     }
 }

@@ -82,7 +82,7 @@ private func scratchRoot() -> URL {
 @Test func aProjectSetupWaitsWithoutServingTheMainRunLoop() {
     let root = scratchRoot()
     defer { try? FileManager.default.removeItem(at: root) }
-    final class Probe { var served = false }
+    nonisolated final class Probe: @unchecked Sendable { var served = false }
     let probe = Probe()
 
     RunLoop.main.perform(inModes: [.default]) { probe.served = true }

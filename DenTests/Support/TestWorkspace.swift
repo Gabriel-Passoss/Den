@@ -17,9 +17,6 @@ struct WorkspaceHarness {
     }
 }
 
-/// Builds a WorkspaceModel on a throwaway defaults suite and a throwaway store
-/// root. `seed` runs before the model exists, so it can plant legacy keys for
-/// the migration that happens in init.
 @MainActor
 func withWorkspace(seed: (UserDefaults) -> Void = { _ in },
                    _ body: (WorkspaceHarness) async throws -> Void) async throws {

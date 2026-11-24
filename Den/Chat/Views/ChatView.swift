@@ -133,8 +133,6 @@ struct ChatView: View {
         }
     }
 
-    // MARK: - Transcript
-
     private var transcript: some View {
         let blocks = chat.blocks
         let starts = Self.turnStarts(in: blocks)

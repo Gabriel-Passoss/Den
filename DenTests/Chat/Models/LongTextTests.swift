@@ -6,8 +6,6 @@ private func lines(_ count: Int, width: Int) -> String {
     (0..<count).map { _ in String(repeating: "x", count: width) }.joined(separator: "\n")
 }
 
-// MARK: - Deciding what is long
-
 @Test func fiveLinesWithTwoHundredCharactersIsLong() {
     let text = lines(5, width: 40)
     #expect(text.count >= 200)
@@ -46,8 +44,6 @@ private func lines(_ count: Int, width: Int) -> String {
     #expect(LongText.lineCount("\n\n") == 0)
 }
 
-// MARK: - Collapsed preview
-
 @Test func previewKeepsOnlyTheFirstLines() {
     let text = "one\ntwo\nthree\nfour\nfive\nsix"
     #expect(LongText.preview(text, lines: 4) == "one\ntwo\nthree\nfour")
@@ -57,8 +53,6 @@ private func lines(_ count: Int, width: Int) -> String {
     let text = String(repeating: "x", count: 5_000) + "\nsecond"
     #expect(LongText.preview(text, lines: 4, limit: 300) == String(repeating: "x", count: 300))
 }
-
-// MARK: - Labels
 
 @Test func lineLabelAgreesInNumber() {
     #expect(LongText.lineLabel(1) == "1 linha")

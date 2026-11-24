@@ -4,8 +4,6 @@ import HarnessCore
 import DenStore
 @testable import Den
 
-// MARK: - Folder persistence
-
 @Test func foldersSurviveANewModelOnTheSameStore() async throws {
     try await withWorkspace { harness in
         harness.model.addFolder()
@@ -44,8 +42,6 @@ import DenStore
     }
 }
 
-// MARK: - Ordering
-
 @Test func sessionsWithoutAStoredOrderFallBackToRecency() async throws {
     try await withWorkspace { harness in
         harness.model.summaries = [summary("older", updated: 100),
@@ -70,12 +66,10 @@ import DenStore
         let fresh = summary("fresh", updated: 1)
         harness.model.summaries = [ranked, fresh]
         harness.model.sessionOrder = [ranked.id.uuidString]
-        // Unranked wins regardless of how stale it is, so a new session surfaces.
-        #expect(harness.model.looseSessions.map(\.title) == ["fresh", "ranked"])
+        #expect(harness.model.looseSessions.map(\.title) == ["fresh", "ranked"],
+                "an unranked session outranks any ranked one, however stale, so a new session surfaces")
     }
 }
-
-// MARK: - Grouping
 
 @Test func sessionsLandInTheirFolder() async throws {
     try await withWorkspace { harness in
@@ -104,8 +98,6 @@ import DenStore
         #expect(harness.model.looseSessions.map(\.title) == ["orphan"])
     }
 }
-
-// MARK: - Search
 
 @Test func searchMatchesTitleOrWorkingDirectory() async throws {
     try await withWorkspace { harness in
@@ -137,8 +129,6 @@ import DenStore
         #expect(harness.model.folderGroups.isEmpty)
     }
 }
-
-// MARK: - Folder operations
 
 @Test func renameFolderTrimsAndIgnoresBlankNames() async throws {
     try await withWorkspace { harness in
@@ -205,8 +195,6 @@ import DenStore
     }
 }
 
-// MARK: - Placing sessions
-
 @Test func placeSessionAdoptsTheTargetFolder() async throws {
     try await withWorkspace { harness in
         let moving = summary("moving")
@@ -242,8 +230,6 @@ import DenStore
         #expect(harness.model.membership[session.uuidString] == nil)
     }
 }
-
-// MARK: - Sessions backed by the store
 
 @Test func selectRestoresAChatWithoutBringingItToLife() async throws {
     try await withWorkspace { harness in
@@ -324,8 +310,6 @@ import DenStore
     }
 }
 
-// MARK: - Default harness
-
 @Test func theDefaultHarnessRoundTripsThroughTheInjectedDefaults() async throws {
     try await withWorkspace { harness in
         #expect(harness.model.defaultHarness == HarnessRegistry.standard.fallback)
@@ -342,9 +326,9 @@ import DenStore
 @Test func anUnknownStoredHarnessFallsBack() async throws {
     try await withWorkspace(seed: { defaults in
         defaults.set("ghost-harness", forKey: "Den.defaultHarness")
-    }) { harness in
+    }, { harness in
         #expect(harness.model.defaultHarness == HarnessRegistry.standard.fallback)
-    }
+    })
 }
 
 nonisolated final class SidebarSpy: SidebarRepository, @unchecked Sendable {

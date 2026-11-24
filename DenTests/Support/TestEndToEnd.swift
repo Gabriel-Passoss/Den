@@ -7,8 +7,6 @@ import DenStore
 nonisolated let claudeCodeID = HarnessID(rawValue: "claude-code")
 nonisolated let openCodeID = HarnessID(rawValue: "opencode")
 
-/// How long an end-to-end wait tolerates: real processes start, so this is
-/// generous, and it only runs out when something is actually wrong.
 let processPatience: Duration = .seconds(10)
 
 @MainActor
@@ -33,8 +31,6 @@ struct EndToEnd {
     fileprivate let repositories: Repositories
     fileprivate let opened = Opened()
 
-    /// Opens a conversation the way the "Nova conversa" button does, and waits
-    /// for its CLI to be up — killing it earlier would lose the launch record.
     func newChat(on harness: HarnessID = claudeCodeID) async throws -> ChatModel {
         let cli = harness == openCodeID ? openCode : claude
         let launched = cli.launches.count
@@ -43,8 +39,6 @@ struct EndToEnd {
         return try #require(workspace.active)
     }
 
-    /// A second workspace over the same disk and defaults: what the next app
-    /// launch sees.
     func relaunched() -> WorkspaceModel {
         let workspace = WorkspaceModel.live(environment, repositories: repositories)
         opened.workspaces.append(workspace)
@@ -52,16 +46,11 @@ struct EndToEnd {
     }
 }
 
-/// Every workspace a test opened, so their CLIs get stopped even when the
-/// test throws halfway.
 @MainActor
 private final class Opened {
     var workspaces: [WorkspaceModel] = []
 }
 
-/// Runs `body` against the real harnesses, transport and transcript store,
-/// with each CLI pinned to a `FakeCLI`. Nothing reaches a real CLI or the
-/// user's own sessions.
 @MainActor
 func withEndToEnd(_ body: (EndToEnd) async throws -> Void) async throws {
     let scratch = ScratchDefaults()

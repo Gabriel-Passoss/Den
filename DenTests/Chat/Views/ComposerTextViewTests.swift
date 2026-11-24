@@ -9,8 +9,6 @@ private func lines(_ height: CGFloat) -> Double {
     Double(height / line)
 }
 
-// MARK: - Height
-
 @Test func anEmptyPromptIsOneLineTall() {
     #expect(lines(ComposerTextView.height(of: "", width: 400)) == 1)
 }
@@ -39,8 +37,6 @@ private func lines(_ height: CGFloat) -> Double {
     #expect(lines(ComposerTextView.height(of: text, width: 400))
             == Double(ComposerTextView.maxLines))
 }
-
-// MARK: - Paste
 
 @MainActor
 @Test func pastingHandsTheTextToTheChatFirst() {
@@ -91,7 +87,7 @@ private final class GhostLog {
 @MainActor
 private func composer(ghost: String, log: GhostLog) -> ComposerTextView.Coordinator {
     ComposerTextView.Coordinator(ComposerTextView(
-        text: .constant(""), focusRequested: .constant(false), placeholder: "",
+        text: .constant(""), focusRequested: .constant(false), accessibilityPlaceholder: "",
         ghost: ghost, onSubmit: {}, onPaste: { _ in false },
         onAcceptGhost: { log.accepted += 1 }, onDismissGhost: { log.dismissed += 1 }))
 }

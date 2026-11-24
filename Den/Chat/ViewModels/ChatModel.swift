@@ -129,8 +129,6 @@ final class ChatModel {
 
     var isLive: Bool { session != nil }
 
-    // MARK: - Creation
-
     init(store: any SessionRepository, workingDirectory: URL,
          harness: HarnessID? = nil, cache: SessionCache,
          registry: HarnessRegistry = .standard,
@@ -220,8 +218,6 @@ final class ChatModel {
         guard let branch else { return folder }
         return "\(folder) · branch \(branch)"
     }
-
-    // MARK: - Lifecycle
 
     func start() async {
         guard session == nil else { return }
@@ -487,8 +483,6 @@ final class ChatModel {
             settings.compactMapValues { $0.isEmpty ? nil : $0 }, for: sessionID)
     }
 
-    /// A setting the running CLI cannot take waits for the turn in flight to
-    /// end, then relaunches it.
     private var relaunchAfterTurn = false
 
     private func relaunchIfIdle() async {
@@ -563,8 +557,6 @@ final class ChatModel {
         title = generated
         await persistMetadata()
     }
-
-    // MARK: - Rendering
 
     private func apply(_ update: SessionUpdate) {
         switch update {
@@ -769,8 +761,6 @@ final class ChatModel {
     }
 
     private var writingHarness: HarnessID?
-
-    // MARK: - System notices arriving as user messages
 
     private var awaitingCompactionSummary = false
 
