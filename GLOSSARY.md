@@ -77,7 +77,7 @@ De onde vêm as tasks de um projeto, escolhida na criação dele: criadas no Den
 _Avoid_: fonte, provider
 
 **Pendência**:
-Algo aberto em uma task que só o usuário resolve: uma decisão pedida pelo agente (permissão ou pergunta) ou um problema (falha, execução interrompida, mudança na origem).
+Algo aberto em uma task que só o usuário resolve: uma decisão pedida pelo agente (permissão ou pergunta) ou um problema (falha, execução interrompida, pendência ilegível, mudança na origem).
 _Avoid_: alerta, bloqueio
 
 **Precisa de mim**:

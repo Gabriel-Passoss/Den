@@ -58,6 +58,7 @@ private func damaged(_ task: (Flow) throws -> BoardTask, by sql: String) throws 
             .problem(.subagentFailed(SubtaskID())),
             .problem(.executionFailed("sem rede")),
             .problem(.interrupted),
+            .problem(.unreadable),
         ]
         return [BoardTask(title: "Exportar relatório", stage: flow.doing, enteredStageAt: monday,
                           execution: .finished, pendencies: kinds.map { Pendency(kind: $0) })]
@@ -67,7 +68,7 @@ private func damaged(_ task: (Flow) throws -> BoardTask, by sql: String) throws 
     #expect(loaded.tasks.map(\.needsMe) == [true])
 }
 
-private let unreadable = Pendency.Kind.problem(.executionFailed("pendência ilegível"))
+private let unreadable = Pendency.Kind.problem(.unreadable)
 
 @Test func aMoveThatDoesNotDecodeIsDroppedAndTheRestOfTheTaskLoads() throws {
     let (saved, task) = try damaged({ flow in

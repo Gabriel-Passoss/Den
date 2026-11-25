@@ -25,7 +25,7 @@ enum TaskJournal {
 
 private extension Pendency {
     static func unreadable(_ id: UUID? = nil) -> Pendency {
-        Pendency(id: id.map(PendencyID.init) ?? PendencyID(), kind: .problem(.executionFailed("pendência ilegível")))
+        Pendency(id: id.map(PendencyID.init) ?? PendencyID(), kind: .problem(.unreadable))
     }
 }
 
@@ -108,6 +108,8 @@ private struct StoredPendency: Codable {
             self.message = message
         case .interrupted:
             self.problem = "interrupted"
+        case .unreadable:
+            self.problem = "unreadable"
         }
     }
 
@@ -138,6 +140,7 @@ private struct StoredPendency: Codable {
         case "subagentFailed": subtask.map { .subagentFailed(SubtaskID(rawValue: $0)) }
         case "executionFailed": message.map { .executionFailed($0) }
         case "interrupted": .interrupted
+        case "unreadable": .unreadable
         default: nil
         }
     }
