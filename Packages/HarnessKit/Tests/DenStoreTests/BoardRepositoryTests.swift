@@ -11,6 +11,12 @@ private func denProject(in boards: any BoardRepository) throws -> Project {
     try boards.createProject(named: "Den", at: repo)
 }
 
+private let sqliteConstraint: Int32 = 19
+
+private func uniqueConstraintFailed(on columns: String) -> DatabaseError {
+    .sqlite(code: sqliteConstraint, message: "UNIQUE constraint failed: \(columns)")
+}
+
 private func savedAndReopened(_ board: Board) throws -> Board {
     let scratch = try ScratchStore()
     defer { scratch.remove() }
@@ -133,7 +139,7 @@ private func savedAndReopened(_ board: Board) throws -> Board {
     try boards.save(flow.board, of: project.id)
     let repeated = Stage(name: "Repetida")
 
-    #expect(throws: (any Error).self) {
+    #expect(throws: uniqueConstraintFailed(on: "stages.id")) {
         try boards.save(Board(stages: [Stage(name: "Nova"), repeated, repeated]), of: project.id)
     }
 
@@ -180,7 +186,9 @@ private func savedAndReopened(_ board: Board) throws -> Board {
     try flow.board.createTask(titled: "Corrigir login", origin: jira, at: monday)
     try flow.board.createTask(titled: "Corrigir login de novo", origin: jira, at: tuesday)
 
-    #expect(throws: (any Error).self) { try boards.save(flow.board, of: project.id) }
+    #expect(throws: uniqueConstraintFailed(on: "tasks.project_id, tasks.origin_app, tasks.origin_key")) {
+        try boards.save(flow.board, of: project.id)
+    }
 
     #expect(try boards.board(of: project.id).tasks.isEmpty)
 }
