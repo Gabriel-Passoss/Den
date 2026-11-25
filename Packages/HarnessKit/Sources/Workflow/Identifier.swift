@@ -1,5 +1,6 @@
 import Foundation
 
+// periphery:ignore
 public struct Identifier<Subject>: Hashable, Sendable, Codable {
     public let rawValue: UUID
 

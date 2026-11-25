@@ -16,9 +16,7 @@ import Workflow
 
 @Test func runningTheAgentAgainClosesWhatWaitedForTheUserButKeepsProblems() throws {
     var flow = try Flow()
-    let id = try flow.runningTask(in: flow.doing)
-    try flow.board.conclude(id, with: .undecided)
-    let problem = try flow.board.reportProblem(.executionFailed("sem rede"), on: id)
+    let (id, problem) = try flow.taskWaitingWithAProblem()
 
     try flow.board.startExecution(of: id)
 

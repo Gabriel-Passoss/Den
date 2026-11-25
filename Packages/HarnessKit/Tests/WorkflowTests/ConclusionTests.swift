@@ -7,10 +7,7 @@ import Workflow
 
     #expect(try flow.board.conclude(id, with: .undecided) == .waitingForUser)
 
-    let task = try flow.current(id)
-    #expect(task.stage == flow.doing)
-    #expect(task.execution == .finished)
-    #expect(task.pendencies.map(\.kind) == [.stageFinished])
+    try flow.expectStillInDoing(id, waitingOn: [.stageFinished])
 }
 
 @Test func anAgentReturnsTheTaskToMeWithItsPassage() throws {
@@ -61,10 +58,7 @@ func anAgentMoveTheBoardCannotTakeBecomesAProblem(refusal: MoveRefusal, withPass
     let outcome = try flow.board.conclude(id, with: .move(to: destination, passage: withPassage ? passage() : nil))
 
     #expect(outcome == .refused(refusal))
-    let task = try flow.current(id)
-    #expect(task.stage == flow.doing)
-    #expect(task.execution == .finished)
-    #expect(task.pendencies.map(\.kind) == [.problem(.moveRefused(refusal))])
+    try flow.expectStillInDoing(id, waitingOn: [.problem(.moveRefused(refusal))])
 }
 
 @Test func anAgentCannotConcludeATaskWithOpenSubtasks() throws {

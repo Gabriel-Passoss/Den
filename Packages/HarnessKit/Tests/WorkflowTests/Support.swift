@@ -38,7 +38,25 @@ struct Flow {
         return id
     }
 
+    mutating func runningTaskWithSubtask() throws -> (TaskID, SubtaskID) {
+        let id = try runningTask(in: doing)
+        return (id, try board.addSubtask(titled: "Tela", to: id))
+    }
+
+    mutating func taskWaitingWithAProblem() throws -> (TaskID, PendencyID) {
+        let id = try runningTask(in: doing)
+        try board.conclude(id, with: .undecided)
+        return (id, try board.reportProblem(.executionFailed("sem rede"), on: id))
+    }
+
     func current(_ id: TaskID) throws -> BoardTask {
         try #require(board.task(id))
+    }
+
+    func expectStillInDoing(_ id: TaskID, waitingOn kinds: [Pendency.Kind]) throws {
+        let task = try current(id)
+        #expect(task.stage == doing)
+        #expect(task.execution == .finished)
+        #expect(task.pendencies.map(\.kind) == kinds)
     }
 }

@@ -21,8 +21,7 @@ import Workflow
 
 @Test func progressGoesFromAnyStateToAnyOther() throws {
     var flow = try Flow()
-    let id = try flow.runningTask(in: flow.doing)
-    let subtask = try flow.board.addSubtask(titled: "Tela", to: id)
+    let (id, subtask) = try flow.runningTaskWithSubtask()
 
     for progress in [SubtaskProgress.done, .pending, .inProgress, .done] {
         try flow.board.setProgress(progress, of: subtask)
@@ -33,8 +32,7 @@ import Workflow
 
 @Test func progressOnlyChangesWhileTheMainAgentRuns() throws {
     var flow = try Flow()
-    let id = try flow.runningTask(in: flow.doing)
-    let subtask = try flow.board.addSubtask(titled: "Tela", to: id)
+    let (id, subtask) = try flow.runningTaskWithSubtask()
     try flow.board.endExecution(of: id)
 
     #expect(throws: WorkflowError.executionNotRunning) { try flow.board.setProgress(.done, of: subtask) }
@@ -44,8 +42,7 @@ import Workflow
 
 @Test func aSubagentRunsOnceAtATime() throws {
     var flow = try Flow()
-    let id = try flow.runningTask(in: flow.doing)
-    let subtask = try flow.board.addSubtask(titled: "Tela", to: id)
+    let (id, subtask) = try flow.runningTaskWithSubtask()
 
     try flow.board.startSubagent(for: subtask)
     #expect(try flow.current(id).subtasks.map(\.execution) == [.running])
@@ -59,8 +56,7 @@ import Workflow
 
 @Test func aFailedSubagentBecomesAProblemOnTheParent() throws {
     var flow = try Flow()
-    let id = try flow.runningTask(in: flow.doing)
-    let subtask = try flow.board.addSubtask(titled: "Tela", to: id)
+    let (id, subtask) = try flow.runningTaskWithSubtask()
     try flow.board.startSubagent(for: subtask)
     try flow.board.setProgress(.inProgress, of: subtask)
 
