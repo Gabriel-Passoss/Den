@@ -8,6 +8,14 @@ Den é um app macOS que orquestra harnesses de agentes de código a partir de um
 Uma unidade de trabalho que atravessa o workflow, criada no Den ou trazida de uma integração externa.
 _Avoid_: card (é só como a task aparece no board), tarefa, ticket, issue
 
+**ID** (`TaskKey`):
+O identificador legível e único de uma task no projeto, que aparece no card. Uma task importada herda o ID da origem e o acompanha quando ele muda lá, e a troca fica no histórico. Uma task criada no Den recebe o prefixo do projeto e o próximo número de um contador que só sobe.
+_Avoid_: código, número, identidade (a identidade da task é interna e nunca muda)
+
+**Prefixo**:
+As letras que abrem o ID das tasks criadas no Den, escolhidas na criação do projeto. Trocá-lo vale só para as tasks novas.
+_Avoid_: sigla, código do projeto
+
 **Sub-task**:
 Uma parte de uma task, criada pelo agente que está com ela, que existe só no Den e acompanha a task pai sem ter etapa própria.
 _Avoid_: task filha, sub-card
@@ -61,7 +69,7 @@ O avanço de uma sub-task: pendente, em andamento ou concluída. Quem o muda é 
 _Avoid_: andamento, status, etapa (sub-tasks não têm etapa)
 
 **Origem**:
-De onde uma task veio: criada no Den ou importada de um app de tarefas externo, como o Jira.
+De onde vêm as tasks de um projeto, escolhida na criação dele: criadas no Den ou importadas de um app de tarefas externo, como o Jira. Um projeto com origem externa não cria tasks no Den.
 _Avoid_: fonte, provider
 
 **Pendência**:
