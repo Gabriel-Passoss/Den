@@ -40,7 +40,10 @@ let package = Package(
         .testTarget(name: "SQLiteKitTests", dependencies: ["SQLiteKit"]),
 
         .target(name: "DenStore", dependencies: ["HarnessCore", "SQLiteKit", "Workflow"]),
-        .testTarget(name: "DenStoreTests", dependencies: ["DenStore", "HarnessCore", "SQLiteKit", "Workflow"]),
+        .testTarget(
+            name: "DenStoreTests",
+            dependencies: ["DenStore", "HarnessCore", "SQLiteKit", "Workflow", "WorkflowTestSupport"]
+        ),
 
         .target(name: "Workflow"),
         .target(name: "WorkflowTestSupport", dependencies: ["Workflow"]),

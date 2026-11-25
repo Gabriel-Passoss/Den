@@ -12,6 +12,8 @@ public protocol BoardRepository: Sendable {
     func projects() throws -> [Project]
 
     func board(of project: ProjectID) throws -> Board
+
+    func save(_ board: Board, of project: ProjectID) throws
 }
 
 struct SQLiteBoardRepository: BoardRepository {
@@ -39,8 +41,41 @@ struct SQLiteBoardRepository: BoardRepository {
         }
     }
 
-    func board(of _: ProjectID) throws -> Board {
-        Board()
+    func board(of project: ProjectID) throws -> Board {
+        try database.read { connection in
+            Board(stages: try Self.stages(of: project, in: connection))
+        }
+    }
+
+    func save(_ board: Board, of project: ProjectID) throws {
+        try database.write { connection in
+            try connection.execute("DELETE FROM stages WHERE project_id = ?", [Self.key(project)])
+            try Self.insert(board.stages, of: project, in: connection)
+        }
+    }
+
+    private static func stages(of project: ProjectID, in connection: Connection) throws -> [Stage] {
+        try connection.query("""
+            SELECT id, name, agent, is_final FROM stages WHERE project_id = ? ORDER BY position
+            """, [key(project)]) { row in
+            UUID(uuidString: row.text(0)).map {
+                Stage(id: StageID(rawValue: $0), name: row.text(1), agent: row[2].textValue.map(AgentID.init),
+                      isFinal: row[3] == .integer(1))
+            }
+        }.compactMap(\.self)
+    }
+
+    private static func insert(_ stages: [Stage], of project: ProjectID, in connection: Connection) throws {
+        for (position, stage) in stages.enumerated() {
+            try connection.execute("""
+                INSERT INTO stages (id, project_id, position, name, agent, is_final) VALUES (?, ?, ?, ?, ?, ?)
+                """, [key(stage.id), key(project), .integer(Int64(position)), .text(stage.name),
+                      stage.agent.map { .text($0.rawValue) } ?? .null, .integer(stage.isFinal ? 1 : 0)])
+        }
+    }
+
+    private static func key(_ id: some WorkflowIdentifier) -> Value {
+        .text(id.rawValue.uuidString)
     }
 
     private static func directory(at path: String) -> URL {
