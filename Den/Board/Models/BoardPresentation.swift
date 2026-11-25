@@ -3,7 +3,10 @@ import Workflow
 nonisolated enum BoardPresentation {
     static func columns(for board: Board) -> [ColumnDisplay] {
         board.stages.map { stage in
-            ColumnDisplay(id: stage.id, cards: board.tasks(in: stage.id).map { card(for: $0, in: stage) })
+            ColumnDisplay(id: stage.id,
+                          name: stage.name,
+                          isFinal: stage.isFinal,
+                          cards: board.tasks(in: stage.id).map { card(for: $0, in: stage) })
         }
     }
 
@@ -30,8 +33,16 @@ nonisolated enum BoardPresentation {
 }
 
 nonisolated struct ColumnDisplay: Equatable, Identifiable {
+    static let finalStageLabel = "Etapa final"
+
     let id: StageID
+    let name: String
+    let isFinal: Bool
     let cards: [CardDisplay]
+
+    var taskCount: Int {
+        cards.count
+    }
 }
 
 nonisolated struct CardDisplay: Equatable, Identifiable {
