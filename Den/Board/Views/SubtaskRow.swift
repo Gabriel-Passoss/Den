@@ -1,0 +1,29 @@
+import SwiftUI
+import Workflow
+
+struct SubtaskRow: View {
+    let subtask: SubtaskDisplay
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.space8) {
+            Text(subtask.title)
+                .font(.system(size: Theme.font12))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            StatusIndicator(status: subtask.status)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+#Preview("Estados") {
+    VStack(alignment: .leading, spacing: Theme.space8) {
+        ForEach([TaskStatus.failed, .running, .concluded, .notStarted], id: \.self) { status in
+            SubtaskRow(subtask: SubtaskDisplay(id: SubtaskID(), title: "Tela de exportação", status: status))
+        }
+    }
+    .frame(width: 260)
+    .padding(Theme.space24)
+    .background(Theme.raised)
+}

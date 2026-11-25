@@ -5,6 +5,14 @@ struct TaskCard: View {
     let card: CardDisplay
     var isSelected = false
     var isDragging = false
+    @State private var isExpanded: Bool
+
+    init(card: CardDisplay, isSelected: Bool = false, isDragging: Bool = false, isExpanded: Bool = false) {
+        self.card = card
+        self.isSelected = isSelected
+        self.isDragging = isDragging
+        _isExpanded = State(initialValue: isExpanded)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.space8) {
@@ -21,6 +29,12 @@ struct TaskCard: View {
             StatusIndicator(status: card.status)
             if let subtasks = card.subtasks {
                 SubtaskProgressBar(count: subtasks)
+                expandToggle
+            }
+            if isExpanded {
+                VStack(alignment: .leading, spacing: Theme.space6) {
+                    ForEach(card.subtaskRows) { SubtaskRow(subtask: $0) }
+                }
             }
         }
         .padding(Theme.space12)
@@ -32,6 +46,21 @@ struct TaskCard: View {
         .rotationEffect(.degrees(isDragging ? 1.5 : 0))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var expandToggle: some View {
+        Button {
+            withAnimation(.snappy) { isExpanded.toggle() }
+        } label: {
+            HStack(spacing: Theme.space4) {
+                Text(isExpanded ? "Recolher sub-tasks" : "Mostrar sub-tasks")
+                    .font(.system(size: Theme.font11, weight: .medium))
+                    .foregroundStyle(Theme.textTertiary)
+                Chevron(size: 8)
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var shape: RoundedRectangle {
@@ -57,10 +86,12 @@ private struct SubtaskProgressBar: View {
 }
 
 private func taskCardPreview(key: String = "", title: String = "Exportar relatório", status: TaskStatus = .stopped,
-                             subtasks: [Subtask] = [], selected: Bool = false, dragging: Bool = false) -> some View {
-    TaskCard(card: CardDisplay(id: TaskID(), key: key, title: title, status: status,
-                               subtasks: SubtaskCount(subtasks)),
-             isSelected: selected, isDragging: dragging)
+                             subtasks: [Subtask] = [], rows: [TaskStatus] = [], selected: Bool = false,
+                             dragging: Bool = false, expanded: Bool = false) -> some View {
+    let subtaskRows = zip(subtasks, rows).map { SubtaskDisplay(id: $0.id, title: $0.title, status: $1) }
+    return TaskCard(card: CardDisplay(id: TaskID(), key: key, title: title, status: status,
+                                      subtasks: SubtaskCount(subtasks), subtaskRows: subtaskRows),
+                    isSelected: selected, isDragging: dragging, isExpanded: expanded)
         .frame(width: 260)
         .padding(Theme.space24)
         .background(Theme.sidebar)
@@ -75,14 +106,28 @@ private func taskCardPreview(key: String = "", title: String = "Exportar relató
                     title: "Exportar o relatório mensal de vendas em PDF com filtros por região, período e vendedor")
 }
 
-#Preview("Com sub-tasks") {
-    taskCardPreview(key: "DEN-42", status: .running,
-                    subtasks: [Subtask(title: "Tela", progress: .done), Subtask(title: "API", progress: .inProgress),
-                               Subtask(title: "Testes")])
-}
-
 #Preview("Sem sub-tasks") { taskCardPreview(key: "DEN-42", status: .concluded) }
 
 #Preview("Selecionado") { taskCardPreview(key: "DEN-42", status: .needsMe, selected: true) }
 
 #Preview("Arrastando") { taskCardPreview(key: "DEN-42", status: .running, dragging: true) }
+
+#Preview("Recolhido com progresso") {
+    taskCardPreview(key: "DEN-42", status: .running,
+                    subtasks: [Subtask(title: "Tela", progress: .done), Subtask(title: "API", execution: .running),
+                               Subtask(title: "Testes")],
+                    rows: [.concluded, .running, .notStarted])
+}
+
+#Preview("Expandido com uma falha") {
+    taskCardPreview(key: "DEN-42", status: .failed,
+                    subtasks: [Subtask(title: "Tela", progress: .done), Subtask(title: "API"),
+                               Subtask(title: "Testes")],
+                    rows: [.concluded, .failed, .notStarted], expanded: true)
+}
+
+#Preview("Todas concluídas") {
+    taskCardPreview(key: "DEN-42", status: .concluded,
+                    subtasks: [Subtask(title: "Tela", progress: .done), Subtask(title: "API", progress: .done)],
+                    rows: [.concluded, .concluded], expanded: true)
+}

@@ -12,7 +12,18 @@ nonisolated enum BoardPresentation {
 
     private static func card(for task: BoardTask, in stage: Stage) -> CardDisplay {
         CardDisplay(id: task.id, title: task.title, status: status(of: task, in: stage),
-                    subtasks: SubtaskCount(task.subtasks))
+                    subtasks: SubtaskCount(task.subtasks),
+                    subtaskRows: task.subtasks.map { row(for: $0, of: task) })
+    }
+
+    private static func row(for subtask: Subtask, of task: BoardTask) -> SubtaskDisplay {
+        SubtaskDisplay(id: subtask.id, title: subtask.title, status: status(of: subtask, in: task))
+    }
+
+    private static func status(of subtask: Subtask, in task: BoardTask) -> TaskStatus {
+        if task.pendencies.contains(where: { $0.kind == .problem(.subagentFailed(subtask.id)) }) { return .failed }
+        if subtask.progress == .done { return .concluded }
+        return subtask.execution == .running ? .running : .notStarted
     }
 
     private static func status(of task: BoardTask, in stage: Stage) -> TaskStatus {
@@ -52,10 +63,17 @@ nonisolated struct CardDisplay: Equatable, Identifiable {
     let title: String
     let status: TaskStatus
     let subtasks: SubtaskCount?
+    var subtaskRows: [SubtaskDisplay] = []
 
     var isActive: Bool {
         status == .running
     }
+}
+
+nonisolated struct SubtaskDisplay: Equatable, Identifiable {
+    let id: SubtaskID
+    let title: String
+    let status: TaskStatus
 }
 
 nonisolated struct SubtaskCount: Equatable {
