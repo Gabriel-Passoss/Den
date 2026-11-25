@@ -2,8 +2,9 @@ import SwiftUI
 
 struct TaskCard: View {
     let card: CardDisplay
-    var isSelected = false
-    var isDragging = false
+    let isSelected: Bool
+    let isDragging: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded: Bool
 
     init(card: CardDisplay, isSelected: Bool = false, isDragging: Bool = false, isExpanded: Bool = false) {
@@ -40,22 +41,23 @@ struct TaskCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.raised, in: shape)
         .overlay(shape.strokeBorder(isSelected ? Theme.accent : Theme.borderCard,
-                                    lineWidth: isSelected ? 1.5 : 1))
-        .shadow(color: .black.opacity(isDragging ? 0.45 : 0), radius: isDragging ? 12 : 0, y: isDragging ? 6 : 0)
-        .rotationEffect(.degrees(isDragging ? 1.5 : 0))
+                                    lineWidth: isSelected ? Theme.emphasisStroke : 1))
+        .shadow(color: isDragging ? Theme.liftShadow : .clear,
+                radius: isDragging ? Theme.space12 : 0, y: isDragging ? Theme.space6 : 0)
+        .rotationEffect(.degrees(isDragging ? Theme.dragTilt : 0))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var expandToggle: some View {
         Button {
-            withAnimation(.snappy) { isExpanded.toggle() }
+            withAnimation(reduceMotion ? nil : .snappy) { isExpanded.toggle() }
         } label: {
             HStack(spacing: Theme.space4) {
                 Text(isExpanded ? "Recolher sub-tasks" : "Mostrar sub-tasks")
                     .font(.system(size: Theme.font11, weight: .medium))
                     .foregroundStyle(Theme.textTertiary)
-                Chevron(size: 8)
+                Chevron()
                     .rotationEffect(.degrees(isExpanded ? 180 : 0))
             }
         }

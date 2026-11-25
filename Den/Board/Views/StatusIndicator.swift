@@ -31,7 +31,7 @@ private struct ActivityPulse: View {
     var body: some View {
         Circle()
             .trim(from: 0, to: 0.3)
-            .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+            .stroke(color, style: StrokeStyle(lineWidth: Theme.emphasisStroke, lineCap: .round))
             .rotationEffect(.degrees(turning ? 360 : 0))
             .animation(reduceMotion ? nil : .linear(duration: 1.2).repeatForever(autoreverses: false),
                        value: turning)
