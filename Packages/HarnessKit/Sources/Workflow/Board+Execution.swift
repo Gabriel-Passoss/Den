@@ -43,6 +43,12 @@ public extension Board {
         tasks[try taskIndex(id)].agentMovesInARow = 0
     }
 
+    mutating func interruptRunningExecutions() {
+        for index in tasks.indices where tasks[index].interruptRunningExecutions() {
+            tasks[index].open(.problem(.interrupted))
+        }
+    }
+
     internal func runningTaskIndex(_ id: TaskID) throws -> Int {
         let index = try taskIndex(id)
         guard tasks[index].execution == .running else { throw WorkflowError.executionNotRunning }

@@ -42,17 +42,26 @@ extension BoardTask {
         history.append(Movement(from: stage, to: destination, author: author, at: date, passage: passage))
         stage = destination
         enteredStageAt = date
-        for index in subtasks.indices where subtasks[index].execution == .running {
-            subtasks[index].execution = .idle
-        }
+        stopSubagents(becoming: .idle)
         stopExecution(becoming: .idle)
+    }
+
+    mutating func interruptRunningExecutions() -> Bool {
+        let wasRunning = execution == .running || subtasks.contains { $0.execution == .running }
+        if execution == .running { execution = .idle }
+        stopSubagents(becoming: .idle)
+        return wasRunning
     }
 
     mutating func stopExecution(becoming state: Execution) {
         execution = state
         pendencies.removeAll { $0.isDecision }
+        stopSubagents(becoming: .finished)
+    }
+
+    private mutating func stopSubagents(becoming state: Execution) {
         for index in subtasks.indices where subtasks[index].execution == .running {
-            subtasks[index].execution = .finished
+            subtasks[index].execution = state
         }
     }
 }

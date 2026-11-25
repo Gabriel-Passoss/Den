@@ -145,7 +145,7 @@ private func savedAndReopened(_ board: Board) throws -> Board {
     let board = Board(stages: flow.board.stages, tasks: [
         BoardTask(title: "Exportar relatório", details: "em CSV", stage: flow.backlog, enteredStageAt: monday),
         BoardTask(title: "Corrigir login", origin: .external(app: "jira", key: "DEN-7"), stage: flow.doing,
-                  enteredStageAt: Date(timeIntervalSince1970: 1_234.5), execution: .running, agentMovesInARow: 2),
+                  enteredStageAt: Date(timeIntervalSince1970: 1_234.5), execution: .finished, agentMovesInARow: 2),
         BoardTask(title: "Revisar textos", stage: flow.testing, enteredStageAt: tuesday, execution: .finished),
         BoardTask(title: "Publicar", origin: .external(app: "jira", key: "DEN-8"), stage: flow.done,
                   enteredStageAt: wednesday),
@@ -217,12 +217,12 @@ private func savedAndReopened(_ board: Board) throws -> Board {
     #expect(try scratch.raw().read { try $0.query("SELECT count(*) FROM tasks") { $0[0] } } == [.integer(0)])
 }
 
-@Test func subtasksComeBackInOrderWithEveryProgressAndExecutionAfterReopeningTheStore() throws {
+@Test func subtasksComeBackInOrderWithTheirProgressAndExecutionAfterReopeningTheStore() throws {
     let flow = try Flow()
     let board = Board(stages: flow.board.stages, tasks: [
         BoardTask(title: "Exportar relatório", stage: flow.doing, enteredStageAt: monday, subtasks: [
             Subtask(title: "Tela", progress: .done, execution: .finished),
-            Subtask(title: "Botão", progress: .inProgress, execution: .running),
+            Subtask(title: "Botão", progress: .inProgress, execution: .idle),
             Subtask(title: "Arquivo", progress: .pending, execution: .idle),
         ]),
         BoardTask(title: "Corrigir login", stage: flow.backlog, enteredStageAt: tuesday, subtasks: [
@@ -231,4 +231,20 @@ private func savedAndReopened(_ board: Board) throws -> Board {
     ])
 
     #expect(try savedAndReopened(board) == board)
+}
+
+@Test func aTaskThatWasRunningWhenTheAppClosedComesBackInterruptedAndNeedingMe() throws {
+    var flow = try Flow()
+    let (id, subtask) = try flow.runningTaskWithSubtask()
+    try flow.board.setProgress(.inProgress, of: subtask)
+    try flow.board.startSubagent(for: subtask)
+
+    let reopened = try savedAndReopened(flow.board)
+
+    let task = try #require(reopened.task(id))
+    #expect(task.execution == .idle)
+    #expect(task.subtasks.map(\.execution) == [.idle])
+    #expect(task.subtasks.map(\.progress) == [.inProgress])
+    #expect(task.pendencies.map(\.kind) == [.problem(.interrupted)])
+    #expect(reopened.tasks(in: flow.doing).first?.needsMe == true)
 }

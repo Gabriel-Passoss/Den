@@ -106,6 +106,8 @@ private struct StoredPendency: Codable {
         case .executionFailed(let message):
             self.problem = "executionFailed"
             self.message = message
+        case .interrupted:
+            self.problem = "interrupted"
         }
     }
 
@@ -135,6 +137,7 @@ private struct StoredPendency: Codable {
         case "passageFailed": .passageFailed
         case "subagentFailed": subtask.map { .subagentFailed(SubtaskID(rawValue: $0)) }
         case "executionFailed": message.map { .executionFailed($0) }
+        case "interrupted": .interrupted
         default: nil
         }
     }

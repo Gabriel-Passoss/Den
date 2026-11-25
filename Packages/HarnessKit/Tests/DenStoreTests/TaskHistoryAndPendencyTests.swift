@@ -57,6 +57,7 @@ private func damaged(_ task: (Flow) throws -> BoardTask, by sql: String) throws 
             .problem(.passageFailed),
             .problem(.subagentFailed(SubtaskID())),
             .problem(.executionFailed("sem rede")),
+            .problem(.interrupted),
         ]
         return [BoardTask(title: "Exportar relatório", stage: flow.doing, enteredStageAt: monday,
                           execution: .finished, pendencies: kinds.map { Pendency(kind: $0) })]

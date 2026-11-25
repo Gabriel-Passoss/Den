@@ -42,10 +42,12 @@ struct SQLiteBoardRepository: BoardRepository {
     }
 
     func board(of project: ProjectID) throws -> Board {
-        try database.read { connection in
+        var board = try database.read { connection in
             Board(stages: try Self.stages(of: project, in: connection),
                   tasks: try Self.tasks(of: project, in: connection))
         }
+        board.interruptRunningExecutions()
+        return board
     }
 
     func save(_ board: Board, of project: ProjectID) throws {
