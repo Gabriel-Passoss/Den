@@ -1,9 +1,25 @@
 enum Schema {
-    static let migrations = [initial, projects, stages, tasks, taskJournal]
+    static let migrations = [initial, projects, stages, tasks, taskChats, subtasks, taskJournal]
 
     private static let taskJournal = """
         ALTER TABLE tasks ADD COLUMN history TEXT NOT NULL DEFAULT '[]';
         ALTER TABLE tasks ADD COLUMN pendencies TEXT NOT NULL DEFAULT '[]';
+        """
+
+    private static let subtasks = """
+        CREATE TABLE subtasks (
+            id        TEXT PRIMARY KEY,
+            task_id   TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+            position  INTEGER NOT NULL,
+            title     TEXT NOT NULL,
+            progress  TEXT NOT NULL,
+            execution TEXT NOT NULL,
+            UNIQUE (task_id, position)
+        ) STRICT;
+        """
+
+    private static let taskChats = """
+        ALTER TABLE tasks ADD COLUMN session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL;
         """
 
     private static let tasks = """

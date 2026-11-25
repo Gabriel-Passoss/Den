@@ -11,6 +11,15 @@ private func denProject(in boards: any BoardRepository) throws -> Project {
     try boards.createProject(named: "Den", at: repo)
 }
 
+private func savedAndReopened(_ board: Board) throws -> Board {
+    let scratch = try ScratchStore()
+    defer { scratch.remove() }
+    let boards = try scratch.open().repositories.boards
+    let project = try denProject(in: boards)
+    try boards.save(board, of: project.id)
+    return try scratch.open().repositories.boards.board(of: project.id)
+}
+
 @Test func aCreatedProjectIsListed() throws {
     let boards = try DenStore.inMemory().boards
 
@@ -132,10 +141,6 @@ private func denProject(in boards: any BoardRepository) throws -> Project {
 }
 
 @Test func savedTasksComeBackInTheirStagesAfterReopeningTheStore() throws {
-    let scratch = try ScratchStore()
-    defer { scratch.remove() }
-    let boards = try scratch.open().repositories.boards
-    let project = try denProject(in: boards)
     let flow = try Flow()
     let board = Board(stages: flow.board.stages, tasks: [
         BoardTask(title: "Exportar relatório", details: "em CSV", stage: flow.backlog, enteredStageAt: monday),
@@ -146,23 +151,24 @@ private func denProject(in boards: any BoardRepository) throws -> Project {
                   enteredStageAt: wednesday),
     ])
 
-    try boards.save(board, of: project.id)
-
-    #expect(try scratch.open().repositories.boards.board(of: project.id) == board)
+    #expect(try savedAndReopened(board) == board)
 }
 
-@Test func aTaskRemovedFromTheBoardIsGoneAfterTheNextSave() throws {
+@Test func aTaskRemovedFromTheBoardIsGoneWithItsSubtasksAfterTheNextSave() throws {
     let boards = try DenStore.inMemory().boards
     let project = try denProject(in: boards)
     var flow = try Flow()
-    let kept = try flow.task(in: flow.doing)
-    let removed = try flow.task(at: tuesday)
+    let (kept, _) = try flow.runningTaskWithSubtask()
+    let removed = try flow.runningTask(in: flow.testing)
+    try flow.board.addSubtask(titled: "Botão", to: removed)
     try boards.save(flow.board, of: project.id)
 
     try flow.board.deleteTask(removed)
     try boards.save(flow.board, of: project.id)
 
-    #expect(try boards.board(of: project.id).tasks.map(\.id) == [kept])
+    let tasks = try boards.board(of: project.id).tasks
+    #expect(tasks.map(\.id) == [kept])
+    #expect(tasks.flatMap(\.subtasks).map(\.title) == ["Tela"])
 }
 
 @Test func theSameExternalOriginTwiceInAProjectIsRefused() throws {
@@ -209,4 +215,20 @@ private func denProject(in boards: any BoardRepository) throws -> Project {
     }
 
     #expect(try scratch.raw().read { try $0.query("SELECT count(*) FROM tasks") { $0[0] } } == [.integer(0)])
+}
+
+@Test func subtasksComeBackInOrderWithEveryProgressAndExecutionAfterReopeningTheStore() throws {
+    let flow = try Flow()
+    let board = Board(stages: flow.board.stages, tasks: [
+        BoardTask(title: "Exportar relatório", stage: flow.doing, enteredStageAt: monday, subtasks: [
+            Subtask(title: "Tela", progress: .done, execution: .finished),
+            Subtask(title: "Botão", progress: .inProgress, execution: .running),
+            Subtask(title: "Arquivo", progress: .pending, execution: .idle),
+        ]),
+        BoardTask(title: "Corrigir login", stage: flow.backlog, enteredStageAt: tuesday, subtasks: [
+            Subtask(title: "Sessão", progress: .pending, execution: .finished),
+        ]),
+    ])
+
+    #expect(try savedAndReopened(board) == board)
 }

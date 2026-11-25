@@ -5,15 +5,25 @@ import Workflow
 extension SQLiteBoardRepository {
     private static let taskColumns = [
         "id", "project_id", "stage_id", "title", "details", "origin_app", "origin_key", "entered_stage_at",
-        "execution", "agent_moves_in_a_row", "history", "pendencies",
+        "execution", "agent_moves_in_a_row", "session_id", "history", "pendencies",
     ]
 
-    @discardableResult
-    static func deleteTasks(of project: ProjectID, in connection: Connection) throws -> Set<TaskID> {
-        let ids = try connection.query("DELETE FROM tasks WHERE project_id = ? RETURNING id", [key(project)]) {
-            UUID(uuidString: $0.text(0)).map(TaskID.init)
+    static func deleteTasks(of project: ProjectID, in connection: Connection) throws -> [TaskID: ChatID] {
+        let links = try connection.query("""
+            DELETE FROM tasks WHERE project_id = ? RETURNING id, session_id
+            """, [key(project)]) { row -> (TaskID, ChatID)? in
+            guard let task = UUID(uuidString: row.text(0)),
+                  let chat = row[1].textValue.flatMap(UUID.init(uuidString:)) else { return nil }
+            return (TaskID(rawValue: task), ChatID(rawValue: chat))
         }
-        return Set(ids.compactMap(\.self))
+        return Dictionary(uniqueKeysWithValues: links.compactMap(\.self))
+    }
+
+    static func deleteChats(of stored: [TaskID: ChatID], keeping board: Board, in connection: Connection) throws {
+        let kept = Set(board.tasks.map(\.id))
+        for (task, chat) in stored where !kept.contains(task) {
+            try connection.execute("DELETE FROM sessions WHERE id = ?", [key(chat)])
+        }
     }
 
     static func insert(_ tasks: [BoardTask], of project: ProjectID, in connection: Connection) throws {
@@ -22,14 +32,16 @@ extension SQLiteBoardRepository {
         for task in tasks {
             let values = record(of: task, in: project)
             try connection.execute(sql, taskColumns.map { values[$0] ?? .null })
+            try insert(task.subtasks, of: task.id, in: connection)
         }
     }
 
     static func tasks(of project: ProjectID, in connection: Connection) throws -> [BoardTask] {
-        try connection.query("""
+        let subtasks = try subtasks(of: project, in: connection)
+        return try connection.query("""
             SELECT \(taskColumns.joined(separator: ", ")) FROM tasks WHERE project_id = ? ORDER BY rowid
             """, [key(project)]) { row in
-            task(from: StoredRecord(row, columns: taskColumns))
+            task(from: StoredRecord(row, columns: taskColumns), subtasks: subtasks)
         }.compactMap(\.self)
     }
 
@@ -46,6 +58,9 @@ extension SQLiteBoardRepository {
             "history": .text(TaskJournal.stored(task.history)),
             "pendencies": .text(TaskJournal.stored(task.pendencies)),
         ]
+        if let chat = task.chat {
+            values["session_id"] = key(chat)
+        }
         if case .external(let app, let originKey) = task.origin {
             values["origin_app"] = .text(app)
             values["origin_key"] = .text(originKey)
@@ -53,20 +68,23 @@ extension SQLiteBoardRepository {
         return values
     }
 
-    private static func task(from record: StoredRecord) -> BoardTask? {
-        guard let id = UUID(uuidString: record.text("id")), let stage = UUID(uuidString: record.text("stage_id")),
+    private static func task(from record: StoredRecord, subtasks: [TaskID: [Subtask]]) -> BoardTask? {
+        guard let id = UUID(uuidString: record.text("id")).map(TaskID.init),
+              let stage = UUID(uuidString: record.text("stage_id")),
               let execution = Execution(stored: record.text("execution")) else { return nil }
         return BoardTask(
-            id: TaskID(rawValue: id),
+            id: id,
             title: record.text("title"),
             details: record.text("details"),
             origin: origin(app: record["origin_app"], key: record["origin_key"]),
             stage: StageID(rawValue: stage),
             enteredStageAt: Date(timeIntervalSince1970: record["entered_stage_at"].realValue ?? 0),
             execution: execution,
+            subtasks: subtasks[id] ?? [],
             pendencies: TaskJournal.pendencies(from: record.text("pendencies")),
             history: TaskJournal.history(from: record.text("history")),
-            agentMovesInARow: Int(record["agent_moves_in_a_row"].integerValue ?? 0)
+            agentMovesInARow: Int(record["agent_moves_in_a_row"].integerValue ?? 0),
+            chat: record["session_id"].textValue.flatMap(UUID.init(uuidString:)).map(ChatID.init)
         )
     }
 

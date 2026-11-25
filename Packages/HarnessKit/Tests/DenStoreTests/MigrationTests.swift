@@ -22,7 +22,7 @@ extension ScratchStore {
 
     #expect(opened.setAside == nil)
     #expect(try await opened.repositories.sessions.list().map(\.id) == [session.id])
-    #expect(try scratch.raw().read { try $0.query("PRAGMA user_version") { $0[0] } } == [.integer(5)])
+    #expect(try scratch.raw().read { try $0.query("PRAGMA user_version") { $0[0] } } == [.integer(7)])
     let columns = try scratch.raw().read {
         try $0.query("SELECT name FROM pragma_table_info('projects') ORDER BY cid") { $0[0].textValue ?? "" }
     }
@@ -71,10 +71,10 @@ extension ScratchStore {
     #expect(try boards.board(of: project.id) == board)
 }
 
-@Test func aTaskFromAVersionFourStoreLoadsWithNoHistoryAndNothingOpen() throws {
+@Test func aTaskFromAVersionSixStoreLoadsWithNoHistoryAndNothingOpen() throws {
     let scratch = try ScratchStore()
     defer { scratch.remove() }
-    let (project, stage) = try scratch.projectWithAStage(atVersion: 4)
+    let (project, stage) = try scratch.projectWithAStage(atVersion: 6)
     try scratch.raw().write {
         try $0.execute("""
             INSERT INTO tasks (id, project_id, stage_id, title, details, entered_stage_at, execution,
