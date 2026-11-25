@@ -1,5 +1,13 @@
 enum Schema {
-    static let migrations = [initial]
+    static let migrations = [initial, projects]
+
+    private static let projects = """
+        CREATE TABLE projects (
+            id   TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            root TEXT NOT NULL UNIQUE
+        ) STRICT;
+        """
 
     private static let initial = """
         CREATE TABLE folders (

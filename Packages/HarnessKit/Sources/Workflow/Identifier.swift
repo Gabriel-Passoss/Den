@@ -11,6 +11,8 @@ public extension WorkflowIdentifier {
     }
 }
 
+public struct ProjectID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
+
 public struct StageID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
 
 public struct TaskID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
