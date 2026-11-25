@@ -1,28 +1,23 @@
 enum Schema {
-    static let migrations = [initial, projects, stages, tasks, taskChats, subtasks, taskJournal]
+    static let migrations = [initial, boards]
 
-    private static let taskJournal = """
-        ALTER TABLE tasks ADD COLUMN history TEXT NOT NULL DEFAULT '[]';
-        ALTER TABLE tasks ADD COLUMN pendencies TEXT NOT NULL DEFAULT '[]';
-        """
-
-    private static let subtasks = """
-        CREATE TABLE subtasks (
-            id        TEXT PRIMARY KEY,
-            task_id   TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-            position  INTEGER NOT NULL,
-            title     TEXT NOT NULL,
-            progress  TEXT NOT NULL,
-            execution TEXT NOT NULL,
-            UNIQUE (task_id, position)
+    private static let boards = """
+        CREATE TABLE projects (
+            id   TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            root TEXT NOT NULL UNIQUE
         ) STRICT;
-        """
 
-    private static let taskChats = """
-        ALTER TABLE tasks ADD COLUMN session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL;
-        """
+        CREATE TABLE stages (
+            id         TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            position   INTEGER NOT NULL,
+            name       TEXT NOT NULL,
+            agent      TEXT,
+            is_final   INTEGER NOT NULL,
+            UNIQUE (project_id, position)
+        ) STRICT;
 
-    private static let tasks = """
         CREATE TABLE tasks (
             id                   TEXT PRIMARY KEY,
             project_id           TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -34,27 +29,20 @@ enum Schema {
             entered_stage_at     REAL NOT NULL,
             execution            TEXT NOT NULL,
             agent_moves_in_a_row INTEGER NOT NULL,
+            session_id           TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+            history              TEXT NOT NULL,
+            pendencies           TEXT NOT NULL,
             UNIQUE (project_id, origin_app, origin_key)
         ) STRICT;
-        """
 
-    private static let stages = """
-        CREATE TABLE stages (
-            id         TEXT PRIMARY KEY,
-            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-            position   INTEGER NOT NULL,
-            name       TEXT NOT NULL,
-            agent      TEXT,
-            is_final   INTEGER NOT NULL,
-            UNIQUE (project_id, position)
-        ) STRICT;
-        """
-
-    private static let projects = """
-        CREATE TABLE projects (
-            id   TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            root TEXT NOT NULL UNIQUE
+        CREATE TABLE subtasks (
+            id        TEXT PRIMARY KEY,
+            task_id   TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+            position  INTEGER NOT NULL,
+            title     TEXT NOT NULL,
+            progress  TEXT NOT NULL,
+            execution TEXT NOT NULL,
+            UNIQUE (task_id, position)
         ) STRICT;
         """
 
