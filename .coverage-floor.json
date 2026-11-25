@@ -5,5 +5,6 @@
   "HarnessCore": 96,
   "HarnessProbeArguments": 90,
   "OpenCodeHarness": 64,
-  "SQLiteKit": 96
+  "SQLiteKit": 96,
+  "Workflow": 99
 }
