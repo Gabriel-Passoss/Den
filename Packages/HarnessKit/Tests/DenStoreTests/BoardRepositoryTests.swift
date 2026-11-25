@@ -201,20 +201,21 @@ private func savedAndReopened(_ board: Board) throws -> Board {
     #expect(try boards.board(of: other.id) == second.board)
 }
 
-@Test func deletingAProjectTakesItsTasksAlong() throws {
+@Test func deletingAProjectTakesItsTasksAndTheirChatsAlong() async throws {
     let scratch = try ScratchStore()
     defer { scratch.remove() }
-    let boards = try scratch.open().repositories.boards
-    let project = try denProject(in: boards)
-    var flow = try Flow()
-    _ = try flow.task(in: flow.doing)
-    try boards.save(flow.board, of: project.id)
+    let repositories = try scratch.open().repositories
+    let project = try denProject(in: repositories.boards)
+    let session = try await saved(in: repositories)
+    let flow = try Flow()
+    let task = BoardTask(title: "Exportar relatório", stage: flow.doing, enteredStageAt: monday,
+                         chat: ChatID(rawValue: session.id))
+    try repositories.boards.save(Board(stages: flow.board.stages, tasks: [task]), of: project.id)
 
-    try scratch.raw().write {
-        try $0.execute("DELETE FROM projects WHERE id = ?", [.text(project.id.rawValue.uuidString)])
-    }
+    try scratch.raw().write { try $0.execute("DELETE FROM projects WHERE id = ?", [stored(project.id)]) }
 
     #expect(try scratch.raw().read { try $0.query("SELECT count(*) FROM tasks") { $0[0] } } == [.integer(0)])
+    #expect(try await scratch.open().repositories.sessions.list().isEmpty)
 }
 
 @Test func subtasksComeBackInOrderWithTheirProgressAndExecutionAfterReopeningTheStore() throws {

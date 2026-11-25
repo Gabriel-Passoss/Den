@@ -3,6 +3,7 @@ import Synchronization
 import HarnessCore
 import DenStore
 import SQLiteKit
+import Workflow
 
 let harnessA = HarnessID(rawValue: "harness-a")
 let harnessB = HarnessID(rawValue: "harness-b")
@@ -73,4 +74,8 @@ func texts(of session: Session) -> [String] {
 func saved(_ session: Session = conversation(), in repositories: Repositories) async throws -> Session {
     try await repositories.sessions.saveMetadata(session)
     return session
+}
+
+func stored(_ id: some WorkflowIdentifier) -> Value {
+    .text(id.rawValue.uuidString)
 }

@@ -44,6 +44,11 @@ enum Schema {
             execution TEXT NOT NULL,
             UNIQUE (task_id, position)
         ) STRICT;
+
+        CREATE TRIGGER deleting_a_project_deletes_its_task_chats BEFORE DELETE ON projects
+        BEGIN
+            DELETE FROM sessions WHERE id IN (SELECT session_id FROM tasks WHERE project_id = OLD.id);
+        END;
         """
 
     private static let initial = """
