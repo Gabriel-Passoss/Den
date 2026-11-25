@@ -55,13 +55,6 @@ private struct StoredPendency: Codable {
         case id, kind, decision, passage, destination, problem, refusal, subtask, message
     }
 
-    private static let decisions: [String: Decision] = ["permission": .permission, "question": .question]
-
-    private static let refusals: [String: MoveRefusal] = [
-        "unknownStage": .unknownStage, "sameStage": .sameStage,
-        "missingPassage": .missingPassage, "openSubtasks": .openSubtasks,
-    ]
-
     let id: UUID
     var kind = ""
     var decision: String?
@@ -77,7 +70,7 @@ private struct StoredPendency: Codable {
         switch pendency.kind {
         case .decision(let decision):
             kind = "decision"
-            self.decision = Self.decisions.first { $0.value == decision }?.key
+            self.decision = decision.stored
         case .stageFinished:
             kind = "stageFinished"
         case .returned(let passage):
@@ -97,7 +90,7 @@ private struct StoredPendency: Codable {
         switch problem {
         case .moveRefused(let refusal):
             self.problem = "moveRefused"
-            self.refusal = Self.refusals.first { $0.value == refusal }?.key
+            self.refusal = refusal.stored
         case .passageFailed:
             self.problem = "passageFailed"
         case .subagentFailed(let subtask):
@@ -119,7 +112,7 @@ private struct StoredPendency: Codable {
 
     private var pendencyKind: Pendency.Kind? {
         switch kind {
-        case "decision": decision.flatMap { Self.decisions[$0] }.map { .decision($0) }
+        case "decision": decision.flatMap(Decision.init(stored:)).map { .decision($0) }
         case "stageFinished": .stageFinished
         case "returned": passage.flatMap(Passage.init).map { .returned($0) }
         case "chainLimitReached": chainLimit
@@ -135,7 +128,7 @@ private struct StoredPendency: Codable {
 
     private var storedProblem: Problem? {
         switch problem {
-        case "moveRefused": refusal.flatMap { Self.refusals[$0] }.map { .moveRefused($0) }
+        case "moveRefused": refusal.flatMap(MoveRefusal.init(stored:)).map { .moveRefused($0) }
         case "passageFailed": .passageFailed
         case "subagentFailed": subtask.map { .subagentFailed(SubtaskID(rawValue: $0)) }
         case "executionFailed": message.map { .executionFailed($0) }

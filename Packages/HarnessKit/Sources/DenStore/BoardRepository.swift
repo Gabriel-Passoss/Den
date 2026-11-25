@@ -17,6 +17,10 @@ public protocol BoardRepository: Sendable {
 }
 
 struct SQLiteBoardRepository: BoardRepository {
+    private static let stageTable = StoredTable(name: "stages", columns: [
+        "id", "project_id", "position", "name", "agent", "is_final",
+    ])
+
     let database: Database
 
     func createProject(named name: String, at root: URL) throws -> Project {
@@ -62,21 +66,27 @@ struct SQLiteBoardRepository: BoardRepository {
 
     private static func stages(of project: ProjectID, in connection: Connection) throws -> [Stage] {
         try connection.query("""
-            SELECT id, name, agent, is_final FROM stages WHERE project_id = ? ORDER BY position
+            SELECT \(stageTable.selection) FROM stages WHERE project_id = ? ORDER BY position
             """, [key(project)]) { row in
-            UUID(uuidString: row.text(0)).map {
-                Stage(id: StageID(rawValue: $0), name: row.text(1), agent: row[2].textValue.map(AgentID.init),
-                      isFinal: row[3] == .integer(1))
+            let record = stageTable.record(row)
+            let id: StageID? = record.id("id")
+            return id.map {
+                Stage(id: $0, name: record.text("name"), agent: record["agent"].textValue.map(AgentID.init),
+                      isFinal: record["is_final"] == .integer(1))
             }
         }.compactMap(\.self)
     }
 
     private static func insert(_ stages: [Stage], of project: ProjectID, in connection: Connection) throws {
         for (position, stage) in stages.enumerated() {
-            try connection.execute("""
-                INSERT INTO stages (id, project_id, position, name, agent, is_final) VALUES (?, ?, ?, ?, ?, ?)
-                """, [key(stage.id), key(project), .integer(Int64(position)), .text(stage.name),
-                      stage.agent.map { .text($0.rawValue) } ?? .null, .integer(stage.isFinal ? 1 : 0)])
+            try stageTable.insert([
+                "id": key(stage.id),
+                "project_id": key(project),
+                "position": .integer(Int64(position)),
+                "name": .text(stage.name),
+                "agent": stage.agent.map { .text($0.rawValue) } ?? .null,
+                "is_final": .integer(stage.isFinal ? 1 : 0),
+            ], in: connection)
         }
     }
 

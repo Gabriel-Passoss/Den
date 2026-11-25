@@ -3,49 +3,34 @@ import SQLiteKit
 import Workflow
 
 extension SQLiteBoardRepository {
+    private static let subtaskTable = StoredTable(name: "subtasks", columns: [
+        "id", "task_id", "position", "title", "progress", "execution",
+    ])
+
     static func insert(_ subtasks: [Subtask], of task: TaskID, in connection: Connection) throws {
         for (position, subtask) in subtasks.enumerated() {
-            try connection.execute("""
-                INSERT INTO subtasks (id, task_id, position, title, progress, execution) VALUES (?, ?, ?, ?, ?, ?)
-                """, [
-                    key(subtask.id), key(task), .integer(Int64(position)), .text(subtask.title),
-                    .text(subtask.progress.stored), .text(subtask.execution.stored),
-                ])
+            try subtaskTable.insert([
+                "id": key(subtask.id),
+                "task_id": key(task),
+                "position": .integer(Int64(position)),
+                "title": .text(subtask.title),
+                "progress": .text(subtask.progress.stored),
+                "execution": .text(subtask.execution.stored),
+            ], in: connection)
         }
     }
 
     static func subtasks(of project: ProjectID, in connection: Connection) throws -> [TaskID: [Subtask]] {
         let rows = try connection.query("""
-            SELECT subtasks.task_id, subtasks.id, subtasks.title, subtasks.progress, subtasks.execution
-            FROM subtasks JOIN tasks ON tasks.id = subtasks.task_id
+            SELECT \(subtaskTable.selection) FROM subtasks JOIN tasks ON tasks.id = subtasks.task_id
             WHERE tasks.project_id = ? ORDER BY subtasks.task_id, subtasks.position
             """, [key(project)]) { row -> (TaskID, Subtask)? in
-            guard let task = UUID(uuidString: row.text(0)), let id = UUID(uuidString: row.text(1)),
-                  let progress = SubtaskProgress(stored: row.text(3)),
-                  let execution = Execution(stored: row.text(4)) else { return nil }
-            let subtask = Subtask(id: SubtaskID(rawValue: id), title: row.text(2), progress: progress,
-                                  execution: execution)
-            return (TaskID(rawValue: task), subtask)
+            let record = subtaskTable.record(row)
+            guard let task: TaskID = record.id("task_id"), let id: SubtaskID = record.id("id"),
+                  let progress = SubtaskProgress(stored: record.text("progress")),
+                  let execution = Execution(stored: record.text("execution")) else { return nil }
+            return (task, Subtask(id: id, title: record.text("title"), progress: progress, execution: execution))
         }
         return Dictionary(grouping: rows.compactMap(\.self), by: \.0).mapValues { $0.map(\.1) }
-    }
-}
-
-extension SubtaskProgress {
-    var stored: String {
-        switch self {
-        case .pending: "pending"
-        case .inProgress: "in_progress"
-        case .done: "done"
-        }
-    }
-
-    init?(stored: String) {
-        switch stored {
-        case "pending": self = .pending
-        case "in_progress": self = .inProgress
-        case "done": self = .done
-        default: return nil
-        }
     }
 }
