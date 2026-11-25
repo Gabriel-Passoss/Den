@@ -16,8 +16,8 @@ struct TaskCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.space8) {
-            if !card.key.isEmpty {
-                Text(card.key)
+            if let key = card.key {
+                Text(key)
                     .font(.system(size: Theme.font11, weight: .medium).monospacedDigit())
                     .foregroundStyle(Theme.textTertiary)
             }
@@ -85,7 +85,7 @@ private struct SubtaskProgressBar: View {
     }
 }
 
-private func taskCardPreview(key: String = "", title: String = "Exportar relatório", status: TaskStatus = .stopped,
+private func taskCardPreview(key: String? = nil, title: String = "Exportar relatório", status: TaskStatus = .stopped,
                              subtasks: [Subtask] = [], rows: [TaskStatus] = [], selected: Bool = false,
                              dragging: Bool = false, expanded: Bool = false) -> some View {
     let subtaskRows = zip(subtasks, rows).map { SubtaskDisplay(id: $0.id, title: $0.title, status: $1) }

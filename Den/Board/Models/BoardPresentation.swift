@@ -14,7 +14,7 @@ nonisolated enum BoardPresentation {
     }
 
     private static func card(for task: BoardTask, in stage: Stage) -> CardDisplay {
-        CardDisplay(id: task.id, title: task.title, status: status(of: task, in: stage),
+        CardDisplay(id: task.id, key: nil, title: task.title, status: status(of: task, in: stage),
                     subtasks: SubtaskCount(task.subtasks),
                     subtaskRows: task.subtasks.map { row(for: $0, of: task) })
     }
@@ -67,7 +67,7 @@ nonisolated struct ColumnDisplay: Equatable, Identifiable {
 
 nonisolated struct CardDisplay: Equatable, Identifiable {
     let id: TaskID
-    var key = ""
+    let key: String?
     let title: String
     let status: TaskStatus
     let subtasks: SubtaskCount?

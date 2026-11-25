@@ -32,7 +32,7 @@ import WorkflowTestSupport
     let display = try #require(card(id, on: flow.board))
 
     #expect(display.title == "Exportar relatório")
-    #expect(display.key.isEmpty)
+    #expect(display.key == nil)
 }
 
 @Test func theCardsOfAStageKeepTheDomainOrder() throws {
