@@ -1,18 +1,23 @@
 import Foundation
 
-// periphery:ignore
-public struct Identifier<Subject>: Hashable, Sendable, Codable {
-    public let rawValue: UUID
+public protocol WorkflowIdentifier: Hashable, Sendable, Codable {
+    var rawValue: UUID { get }
+    init(rawValue: UUID)
+}
 
-    public init(_ rawValue: UUID = UUID()) {
-        self.rawValue = rawValue
+public extension WorkflowIdentifier {
+    init() {
+        self.init(rawValue: UUID())
     }
 }
 
-public typealias StageID = Identifier<Stage>
-public typealias TaskID = Identifier<BoardTask>
-public typealias SubtaskID = Identifier<Subtask>
-public typealias PendencyID = Identifier<Pendency>
+public struct StageID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
+
+public struct TaskID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
+
+public struct SubtaskID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
+
+public struct PendencyID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
 
 public struct AgentID: Hashable, Sendable, Codable {
     public let rawValue: String
