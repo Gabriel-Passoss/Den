@@ -4,7 +4,7 @@ Den é um app macOS que orquestra harnesses de agentes de código a partir de um
 
 ## Workflow
 
-**Task** (`Task`):
+**Task** (`BoardTask`):
 Uma unidade de trabalho que atravessa o workflow, criada no Den ou trazida de uma integração externa.
 _Avoid_: card (é só como a task aparece no board), tarefa, ticket, issue
 
