@@ -1,5 +1,10 @@
 enum Schema {
-    static let migrations = [initial, projects, stages, tasks]
+    static let migrations = [initial, projects, stages, tasks, taskJournal]
+
+    private static let taskJournal = """
+        ALTER TABLE tasks ADD COLUMN history TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE tasks ADD COLUMN pendencies TEXT NOT NULL DEFAULT '[]';
+        """
 
     private static let tasks = """
         CREATE TABLE tasks (

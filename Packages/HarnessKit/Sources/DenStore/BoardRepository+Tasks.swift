@@ -5,7 +5,7 @@ import Workflow
 extension SQLiteBoardRepository {
     private static let taskColumns = [
         "id", "project_id", "stage_id", "title", "details", "origin_app", "origin_key", "entered_stage_at",
-        "execution", "agent_moves_in_a_row",
+        "execution", "agent_moves_in_a_row", "history", "pendencies",
     ]
 
     @discardableResult
@@ -43,6 +43,8 @@ extension SQLiteBoardRepository {
             "entered_stage_at": .real(task.enteredStageAt.timeIntervalSince1970),
             "execution": .text(task.execution.stored),
             "agent_moves_in_a_row": .integer(Int64(task.agentMovesInARow)),
+            "history": .text(TaskJournal.stored(task.history)),
+            "pendencies": .text(TaskJournal.stored(task.pendencies)),
         ]
         if case .external(let app, let originKey) = task.origin {
             values["origin_app"] = .text(app)
@@ -62,6 +64,8 @@ extension SQLiteBoardRepository {
             stage: StageID(rawValue: stage),
             enteredStageAt: Date(timeIntervalSince1970: record["entered_stage_at"].realValue ?? 0),
             execution: execution,
+            pendencies: TaskJournal.pendencies(from: record.text("pendencies")),
+            history: TaskJournal.history(from: record.text("history")),
             agentMovesInARow: Int(record["agent_moves_in_a_row"].integerValue ?? 0)
         )
     }

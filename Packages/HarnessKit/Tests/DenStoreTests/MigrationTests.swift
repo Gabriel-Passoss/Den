@@ -22,7 +22,7 @@ extension ScratchStore {
 
     #expect(opened.setAside == nil)
     #expect(try await opened.repositories.sessions.list().map(\.id) == [session.id])
-    #expect(try scratch.raw().read { try $0.query("PRAGMA user_version") { $0[0] } } == [.integer(4)])
+    #expect(try scratch.raw().read { try $0.query("PRAGMA user_version") { $0[0] } } == [.integer(5)])
     let columns = try scratch.raw().read {
         try $0.query("SELECT name FROM pragma_table_info('projects') ORDER BY cid") { $0[0].textValue ?? "" }
     }
@@ -44,16 +44,24 @@ extension ScratchStore {
     #expect(try boards.board(of: project.id) == board)
 }
 
+extension ScratchStore {
+    func projectWithAStage(atVersion version: Int) throws -> (project: Project, stage: StageID) {
+        let project = try olderStore(atVersion: version).boards
+            .createProject(named: "Den", at: URL(filePath: "/tmp/den/repo"))
+        let stage = StageID()
+        try raw().write {
+            try $0.execute("""
+                INSERT INTO stages (id, project_id, position, name, is_final) VALUES (?, ?, 0, 'Backlog', 0)
+                """, [.text(stage.rawValue.uuidString), .text(project.id.rawValue.uuidString)])
+        }
+        return (project, stage)
+    }
+}
+
 @Test func stagesFromAVersionThreeStoreCanTakeTasksAfterMigrating() throws {
     let scratch = try ScratchStore()
     defer { scratch.remove() }
-    let project = try scratch.olderStore(atVersion: 3).boards
-        .createProject(named: "Den", at: URL(filePath: "/tmp/den/repo"))
-    let stage = StageID()
-    try scratch.raw().write {
-        try $0.execute("INSERT INTO stages (id, project_id, position, name, is_final) VALUES (?, ?, 0, 'Backlog', 0)",
-                       [.text(stage.rawValue.uuidString), .text(project.id.rawValue.uuidString)])
-    }
+    let (project, _) = try scratch.projectWithAStage(atVersion: 3)
 
     let boards = try scratch.open().repositories.boards
     var board = try boards.board(of: project.id)
@@ -61,4 +69,23 @@ extension ScratchStore {
     try boards.save(board, of: project.id)
 
     #expect(try boards.board(of: project.id) == board)
+}
+
+@Test func aTaskFromAVersionFourStoreLoadsWithNoHistoryAndNothingOpen() throws {
+    let scratch = try ScratchStore()
+    defer { scratch.remove() }
+    let (project, stage) = try scratch.projectWithAStage(atVersion: 4)
+    try scratch.raw().write {
+        try $0.execute("""
+            INSERT INTO tasks (id, project_id, stage_id, title, details, entered_stage_at, execution,
+                               agent_moves_in_a_row)
+            VALUES (?, ?, ?, 'Exportar relatório', '', 1000, 'idle', 0)
+            """, [.text(UUID().uuidString), .text(project.id.rawValue.uuidString), .text(stage.rawValue.uuidString)])
+    }
+
+    let task = try #require(scratch.open().repositories.boards.board(of: project.id).tasks.first)
+
+    #expect(task.title == "Exportar relatório")
+    #expect(task.history.isEmpty)
+    #expect(!task.needsMe)
 }
