@@ -62,7 +62,7 @@ public struct Board: Sendable, Equatable {
 
     public func isConcluded(_ id: TaskID) -> Bool {
         guard let task = task(id) else { return false }
-        return stage(task.stage)?.isFinal ?? false
+        return stage(task.stage)?.isFinal == true
     }
 
     func stageIndex(_ id: StageID) throws -> Int {
