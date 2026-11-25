@@ -21,7 +21,7 @@ env:
 jobs:
   static:
     name: Format, lint, duplication, secrets
-    runs-on: [self-hosted, macOS]
+    runs-on: xcode-27
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -30,10 +30,17 @@ jobs:
       - uses: ./.github/actions/select-xcode
         with:
           version: ${{ env.XCODE_VERSION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - uses: actions/cache@v4
         with:
-          path: .build/quality-tools
-          key: quality-static-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-${{ hashFiles('Scripts/quality/tool') }}
+          path: |
+            ~/.cache/pre-commit
+            .build/quality-tools
+          key: quality-static-${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-${{ hashFiles('.pre-commit-config.yaml', 'Scripts/quality/tool') }}
+      - name: Install pre-commit
+        run: pip install pre-commit==4.6.2
       # The same hooks a commit runs, on every file.
       - name: Run the commit hooks on the whole tree
         run: pre-commit run --all-files --show-diff-on-failure --color=always
@@ -55,7 +62,7 @@ jobs:
 
   compiled:
     name: Warnings as errors, unused code
-    runs-on: [self-hosted, macOS]
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +85,7 @@ jobs:
   mutation:
     name: Mutation testing (changed lines)
     if: github.event_name == 'pull_request'
-    runs-on: [self-hosted, macOS]
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +102,7 @@ jobs:
   mutation-full:
     name: Mutation testing (whole package)
     if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, macOS]
+    runs-on: xcode-27
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
