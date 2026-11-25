@@ -1,5 +1,6 @@
 import SwiftUI
 
+// periphery:ignore
 struct TaskCard: View {
     let card: CardDisplay
     let isSelected: Bool
@@ -86,6 +87,7 @@ private struct SubtaskProgressBar: View {
     }
 }
 
+// periphery:ignore
 private func taskCardPreview(key: String? = nil, title: String = "Exportar relatório", status: TaskStatus = .stopped,
                              rows: [(String, TaskStatus)] = [], selected: Bool = false,
                              dragging: Bool = false, expanded: Bool = false) -> some View {

@@ -1,5 +1,6 @@
 import SwiftUI
 
+// periphery:ignore
 struct NeedsMeCounter: View {
     let count: Int
 

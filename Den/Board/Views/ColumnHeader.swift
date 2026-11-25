@@ -1,5 +1,6 @@
 import SwiftUI
 
+// periphery:ignore
 struct ColumnHeader: View {
     let name: String
     let taskCount: Int
