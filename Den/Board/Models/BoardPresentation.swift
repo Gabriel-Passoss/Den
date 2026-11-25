@@ -1,13 +1,16 @@
 import Workflow
 
 nonisolated enum BoardPresentation {
-    static func columns(for board: Board) -> [ColumnDisplay] {
-        board.stages.map { stage in
-            ColumnDisplay(id: stage.id,
-                          name: stage.name,
-                          isFinal: stage.isFinal,
-                          cards: board.tasks(in: stage.id).map { card(for: $0, in: stage) })
-        }
+    static func display(of board: Board) -> BoardDisplay {
+        BoardDisplay(columns: board.stages.map { column(for: $0, on: board) },
+                     needsMeCount: board.tasks.count(where: \.needsMe))
+    }
+
+    private static func column(for stage: Stage, on board: Board) -> ColumnDisplay {
+        ColumnDisplay(id: stage.id,
+                      name: stage.name,
+                      isFinal: stage.isFinal,
+                      cards: board.tasks(in: stage.id).map { card(for: $0, in: stage) })
     }
 
     private static func card(for task: BoardTask, in stage: Stage) -> CardDisplay {
@@ -42,6 +45,11 @@ nonisolated enum BoardPresentation {
         if case .problem = pendency.kind { return true }
         return false
     }
+}
+
+nonisolated struct BoardDisplay: Equatable {
+    let columns: [ColumnDisplay]
+    let needsMeCount: Int
 }
 
 nonisolated struct ColumnDisplay: Equatable, Identifiable {

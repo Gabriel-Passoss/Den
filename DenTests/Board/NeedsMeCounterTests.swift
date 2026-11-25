@@ -11,7 +11,7 @@ import WorkflowTestSupport
     _ = try flow.runningTask(in: flow.doing)
 
     #expect(try #require(flow.board.task(twice)).pendencies.count == 2)
-    #expect(BoardPresentation.needsMeCount(on: flow.board) == 2)
+    #expect(BoardPresentation.display(of: flow.board).needsMeCount == 2)
 }
 
 @Test func aBoardWithNothingPendingNeedsMeForNothing() throws {
@@ -19,8 +19,8 @@ import WorkflowTestSupport
     _ = try flow.runningTask(in: flow.doing)
     _ = try flow.task()
 
-    #expect(BoardPresentation.needsMeCount(on: flow.board) == 0)
-    #expect(BoardPresentation.needsMeCount(on: Board()) == 0)
+    #expect(BoardPresentation.display(of: flow.board).needsMeCount == 0)
+    #expect(BoardPresentation.display(of: Board()).needsMeCount == 0)
 }
 
 @Test func theCounterDisappearsWhenNothingNeedsMe() {

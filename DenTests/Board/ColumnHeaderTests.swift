@@ -9,7 +9,7 @@ import WorkflowTestSupport
     _ = try flow.task(in: flow.doing)
     _ = try flow.task(in: flow.testing)
 
-    let columns = BoardPresentation.columns(for: flow.board)
+    let columns = BoardPresentation.display(of: flow.board).columns
 
     #expect(columns.map(\.name) == ["Backlog", "Em andamento", "Testes", "Pronto"])
     #expect(columns.map(\.taskCount) == [0, 2, 1, 0])
@@ -18,7 +18,7 @@ import WorkflowTestSupport
 @Test func onlyTheFinalStageIsMarkedAsFinal() throws {
     let flow = try Flow()
 
-    let columns = BoardPresentation.columns(for: flow.board)
+    let columns = BoardPresentation.display(of: flow.board).columns
 
     #expect(columns.map(\.isFinal) == [false, false, false, true])
 }

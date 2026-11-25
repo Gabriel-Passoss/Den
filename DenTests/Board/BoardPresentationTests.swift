@@ -9,7 +9,7 @@ import WorkflowTestSupport
     let newer = try flow.task(in: flow.doing, at: tuesday)
     let (waiting, _) = try flow.taskWaitingWithAProblem()
 
-    let columns = BoardPresentation.columns(for: flow.board)
+    let columns = BoardPresentation.display(of: flow.board).columns
 
     #expect(columns.map(\.id) == [flow.backlog, flow.doing, flow.testing, flow.done])
     #expect(columns[1].cards.map(\.id) == [waiting, older, newer])
