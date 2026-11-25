@@ -61,7 +61,7 @@ import WorkflowTestSupport
     let (id, first) = try flow.runningTaskWithSubtask()
     let second = try flow.board.addSubtask(titled: "API", to: id)
 
-    let rows = try #require(cardWithRows(id, on: flow.board)).subtaskRows
+    let rows = try #require(card(id, on: flow.board)).subtaskRows
 
     #expect(rows.map(\.id) == [first, second])
     #expect(rows.map(\.title) == ["Tela", "API"])
@@ -71,13 +71,9 @@ import WorkflowTestSupport
     var flow = try Flow()
     let id = try flow.task(in: flow.doing)
 
-    #expect(try #require(cardWithRows(id, on: flow.board)).subtaskRows.isEmpty)
-}
-
-private func cardWithRows(_ id: TaskID, on board: Board) -> CardDisplay? {
-    BoardPresentation.columns(for: board).flatMap(\.cards).first { $0.id == id }
+    #expect(try #require(card(id, on: flow.board)).subtaskRows.isEmpty)
 }
 
 private func subtaskStatus(_ subtask: SubtaskID, of id: TaskID, on board: Board) throws -> TaskStatus {
-    try #require(cardWithRows(id, on: board)?.subtaskRows.first { $0.id == subtask }).status
+    try #require(card(id, on: board)?.subtaskRows.first { $0.id == subtask }).status
 }

@@ -11,7 +11,7 @@ import WorkflowTestSupport
     try flow.board.setProgress(.done, of: first)
     try flow.board.setProgress(.inProgress, of: second)
 
-    let progress = try #require(taskCard(id, on: flow.board)?.subtasks)
+    let progress = try #require(card(id, on: flow.board)?.subtasks)
 
     #expect(progress.done == 1)
     #expect(progress.total == 3)
@@ -22,17 +22,17 @@ import WorkflowTestSupport
     var flow = try Flow()
     let id = try flow.task(in: flow.doing)
 
-    #expect(taskCard(id, on: flow.board)?.subtasks == nil)
+    #expect(card(id, on: flow.board)?.subtasks == nil)
 }
 
 @Test func theCardCarriesTheTitleAndNoKeyUntilTheTaskHasOne() throws {
     var flow = try Flow()
     let id = try flow.task(in: flow.doing)
 
-    let card = try #require(taskCard(id, on: flow.board))
+    let display = try #require(card(id, on: flow.board))
 
-    #expect(card.title == "Exportar relatório")
-    #expect(card.key.isEmpty)
+    #expect(display.title == "Exportar relatório")
+    #expect(display.key.isEmpty)
 }
 
 @Test func theCardsOfAStageKeepTheDomainOrder() throws {
@@ -44,8 +44,4 @@ import WorkflowTestSupport
     let doing = try #require(BoardPresentation.columns(for: board).first { $0.id == flow.doing })
 
     #expect(doing.cards.map(\.title) == ["Antiga", "Nova"])
-}
-
-private func taskCard(_ id: TaskID, on board: Board) -> CardDisplay? {
-    BoardPresentation.columns(for: board).flatMap(\.cards).first { $0.id == id }
 }

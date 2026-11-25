@@ -33,10 +33,6 @@ import WorkflowTestSupport
     #expect(status(of: id, on: flow.board) == .running)
 }
 
-private func card(_ id: TaskID, on board: Board) -> CardDisplay? {
-    BoardPresentation.columns(for: board).flatMap(\.cards).first { $0.id == id }
-}
-
 private func status(of id: TaskID, on board: Board) -> TaskStatus? {
     card(id, on: board)?.status
 }
