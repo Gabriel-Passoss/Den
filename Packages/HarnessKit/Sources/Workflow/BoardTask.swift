@@ -37,6 +37,7 @@ public struct BoardTask: Sendable, Equatable, Identifiable {
     public let title: String
     public let details: String
     public let origin: Origin
+    public let chat: ChatID?
     public internal(set) var stage: StageID
     public internal(set) var enteredStageAt: Date
     public internal(set) var execution: Execution
@@ -48,7 +49,7 @@ public struct BoardTask: Sendable, Equatable, Identifiable {
     public init(id: TaskID = TaskID(), title: String, details: String = "", origin: Origin = .den,
                 stage: StageID, enteredStageAt: Date, execution: Execution = .idle,
                 subtasks: [Subtask] = [], pendencies: [Pendency] = [], history: [Movement] = [],
-                agentMovesInARow: Int = 0) {
+                agentMovesInARow: Int = 0, chat: ChatID? = nil) {
         self.id = id
         self.title = title
         self.details = details
@@ -60,6 +61,7 @@ public struct BoardTask: Sendable, Equatable, Identifiable {
         self.pendencies = pendencies
         self.history = history
         self.agentMovesInARow = agentMovesInARow
+        self.chat = chat
     }
 
     public var needsMe: Bool {

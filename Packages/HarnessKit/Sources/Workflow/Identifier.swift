@@ -21,6 +21,8 @@ public struct SubtaskID: WorkflowIdentifier { public let rawValue: UUID; public 
 
 public struct PendencyID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
 
+public struct ChatID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
+
 public struct AgentID: Hashable, Sendable, Codable {
     public let rawValue: String
 
