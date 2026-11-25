@@ -18,6 +18,11 @@ runs:
           version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/version.plist" 2>/dev/null) || continue
           if [ "$version" = "$WANTED" ]; then
             echo "DEVELOPER_DIR=$app/Contents/Developer" >> "$GITHUB_ENV"
+            # The app under test runs /usr/bin/git without DEVELOPER_DIR, so the
+            # shim follows xcode-select. A hosted runner allows sudo; point it here.
+            if sudo -n true 2>/dev/null; then
+              sudo xcode-select --switch "$app/Contents/Developer"
+            fi
             echo "Building with Xcode $version from $app"
             exit 0
           fi
