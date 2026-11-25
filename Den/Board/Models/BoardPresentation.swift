@@ -8,7 +8,8 @@ nonisolated enum BoardPresentation {
     }
 
     private static func card(for task: BoardTask, in stage: Stage) -> CardDisplay {
-        CardDisplay(id: task.id, status: status(of: task, in: stage))
+        CardDisplay(id: task.id, title: task.title, status: status(of: task, in: stage),
+                    subtasks: SubtaskCount(task.subtasks))
     }
 
     private static func status(of task: BoardTask, in stage: Stage) -> TaskStatus {
@@ -36,10 +37,28 @@ nonisolated struct ColumnDisplay: Equatable, Identifiable {
 
 nonisolated struct CardDisplay: Equatable, Identifiable {
     let id: TaskID
+    var key = ""
+    let title: String
     let status: TaskStatus
+    let subtasks: SubtaskCount?
 
     var isActive: Bool {
         status == .running
+    }
+}
+
+nonisolated struct SubtaskCount: Equatable {
+    let done: Int
+    let total: Int
+
+    init?(_ subtasks: [Subtask]) {
+        guard !subtasks.isEmpty else { return nil }
+        done = subtasks.count { $0.progress == .done }
+        total = subtasks.count
+    }
+
+    var label: String {
+        "\(done)/\(total)"
     }
 }
 
