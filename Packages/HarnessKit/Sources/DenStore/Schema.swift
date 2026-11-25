@@ -1,5 +1,17 @@
 enum Schema {
-    static let migrations = [initial, projects, stages, tasks]
+    static let migrations = [initial, projects, stages, tasks, subtasks]
+
+    private static let subtasks = """
+        CREATE TABLE subtasks (
+            id        TEXT PRIMARY KEY,
+            task_id   TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+            position  INTEGER NOT NULL,
+            title     TEXT NOT NULL,
+            progress  TEXT NOT NULL,
+            execution TEXT NOT NULL,
+            UNIQUE (task_id, position)
+        ) STRICT;
+        """
 
     private static let tasks = """
         CREATE TABLE tasks (

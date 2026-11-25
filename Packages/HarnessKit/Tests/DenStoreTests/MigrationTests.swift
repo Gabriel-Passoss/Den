@@ -22,7 +22,7 @@ extension ScratchStore {
 
     #expect(opened.setAside == nil)
     #expect(try await opened.repositories.sessions.list().map(\.id) == [session.id])
-    #expect(try scratch.raw().read { try $0.query("PRAGMA user_version") { $0[0] } } == [.integer(4)])
+    #expect(try scratch.raw().read { try $0.query("PRAGMA user_version") { $0[0] } } == [.integer(5)])
     let columns = try scratch.raw().read {
         try $0.query("SELECT name FROM pragma_table_info('projects') ORDER BY cid") { $0[0].textValue ?? "" }
     }
