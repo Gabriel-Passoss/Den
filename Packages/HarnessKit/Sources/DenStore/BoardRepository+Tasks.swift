@@ -5,15 +5,25 @@ import Workflow
 extension SQLiteBoardRepository {
     private static let taskColumns = [
         "id", "project_id", "stage_id", "title", "details", "origin_app", "origin_key", "entered_stage_at",
-        "execution", "agent_moves_in_a_row",
+        "execution", "agent_moves_in_a_row", "session_id",
     ]
 
-    @discardableResult
-    static func deleteTasks(of project: ProjectID, in connection: Connection) throws -> Set<TaskID> {
-        let ids = try connection.query("DELETE FROM tasks WHERE project_id = ? RETURNING id", [key(project)]) {
-            UUID(uuidString: $0.text(0)).map(TaskID.init)
+    static func deleteTasks(of project: ProjectID, in connection: Connection) throws -> [TaskID: ChatID] {
+        let links = try connection.query("""
+            DELETE FROM tasks WHERE project_id = ? RETURNING id, session_id
+            """, [key(project)]) { row -> (TaskID, ChatID)? in
+            guard let task = UUID(uuidString: row.text(0)),
+                  let chat = row[1].textValue.flatMap(UUID.init(uuidString:)) else { return nil }
+            return (TaskID(rawValue: task), ChatID(rawValue: chat))
         }
-        return Set(ids.compactMap(\.self))
+        return Dictionary(uniqueKeysWithValues: links.compactMap(\.self))
+    }
+
+    static func deleteChats(of stored: [TaskID: ChatID], keeping board: Board, in connection: Connection) throws {
+        let kept = Set(board.tasks.map(\.id))
+        for (task, chat) in stored where !kept.contains(task) {
+            try connection.execute("DELETE FROM sessions WHERE id = ?", [key(chat)])
+        }
     }
 
     static func insert(_ tasks: [BoardTask], of project: ProjectID, in connection: Connection) throws {
@@ -46,6 +56,9 @@ extension SQLiteBoardRepository {
             "execution": .text(task.execution.stored),
             "agent_moves_in_a_row": .integer(Int64(task.agentMovesInARow)),
         ]
+        if let chat = task.chat {
+            values["session_id"] = key(chat)
+        }
         if case .external(let app, let originKey) = task.origin {
             values["origin_app"] = .text(app)
             values["origin_key"] = .text(originKey)
@@ -66,7 +79,8 @@ extension SQLiteBoardRepository {
             enteredStageAt: Date(timeIntervalSince1970: record["entered_stage_at"].realValue ?? 0),
             execution: execution,
             subtasks: subtasks[id] ?? [],
-            agentMovesInARow: Int(record["agent_moves_in_a_row"].integerValue ?? 0)
+            agentMovesInARow: Int(record["agent_moves_in_a_row"].integerValue ?? 0),
+            chat: record["session_id"].textValue.flatMap(UUID.init(uuidString:)).map(ChatID.init)
         )
     }
 

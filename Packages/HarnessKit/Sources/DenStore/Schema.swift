@@ -1,5 +1,5 @@
 enum Schema {
-    static let migrations = [initial, projects, stages, tasks, subtasks]
+    static let migrations = [initial, projects, stages, tasks, taskChats, subtasks]
 
     private static let subtasks = """
         CREATE TABLE subtasks (
@@ -11,6 +11,10 @@ enum Schema {
             execution TEXT NOT NULL,
             UNIQUE (task_id, position)
         ) STRICT;
+        """
+
+    private static let taskChats = """
+        ALTER TABLE tasks ADD COLUMN session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL;
         """
 
     private static let tasks = """

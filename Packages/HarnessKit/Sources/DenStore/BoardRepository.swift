@@ -50,7 +50,8 @@ struct SQLiteBoardRepository: BoardRepository {
 
     func save(_ board: Board, of project: ProjectID) throws {
         try database.write { connection in
-            try Self.deleteTasks(of: project, in: connection)
+            let stored = try Self.deleteTasks(of: project, in: connection)
+            try Self.deleteChats(of: stored, keeping: board, in: connection)
             try connection.execute("DELETE FROM stages WHERE project_id = ?", [Self.key(project)])
             try Self.insert(board.stages, of: project, in: connection)
             try Self.insert(board.tasks, of: project, in: connection)
