@@ -1,3 +1,4 @@
+import Foundation
 import Workflow
 
 nonisolated enum BoardPresentation {
@@ -7,7 +8,7 @@ nonisolated enum BoardPresentation {
     }
 
     private static func column(for stage: Stage, on board: Board) -> ColumnDisplay {
-        ColumnDisplay(id: stage.id,
+        ColumnDisplay(id: stage.id.rawValue,
                       name: stage.name,
                       isFinal: stage.isFinal,
                       cards: board.tasks(in: stage.id).map { card(for: $0, in: stage) })
@@ -15,15 +16,20 @@ nonisolated enum BoardPresentation {
 
     private static func card(for task: BoardTask, in stage: Stage) -> CardDisplay {
         let status = status(of: task, in: stage)
-        return CardDisplay(id: task.id, key: nil, title: task.title, status: status,
-                           subtasks: SubtaskCount(task.subtasks),
+        return CardDisplay(id: task.id.rawValue, key: nil, title: task.title, status: status,
+                           subtasks: progress(of: task.subtasks),
                            subtaskRows: task.subtasks.map { row(for: $0, of: task, onActiveCard: status == .running) })
     }
 
     private static func row(for subtask: Subtask, of task: BoardTask, onActiveCard: Bool) -> SubtaskDisplay {
         let status = status(of: subtask, in: task)
-        return SubtaskDisplay(id: subtask.id, title: subtask.title, status: status,
+        return SubtaskDisplay(id: subtask.id.rawValue, title: subtask.title, status: status,
                               isAnimated: onActiveCard && status == .running)
+    }
+
+    private static func progress(of subtasks: [Subtask]) -> SubtaskCount? {
+        guard !subtasks.isEmpty else { return nil }
+        return SubtaskCount(done: subtasks.count { $0.progress == .done }, total: subtasks.count)
     }
 
     private static func status(of subtask: Subtask, in task: BoardTask) -> TaskStatus {
@@ -58,7 +64,7 @@ nonisolated struct BoardDisplay: Equatable {
 nonisolated struct ColumnDisplay: Equatable, Identifiable {
     static let finalStageLabel = "Etapa final"
 
-    let id: StageID
+    let id: UUID
     let name: String
     let isFinal: Bool
     let cards: [CardDisplay]
@@ -69,7 +75,7 @@ nonisolated struct ColumnDisplay: Equatable, Identifiable {
 }
 
 nonisolated struct CardDisplay: Equatable, Identifiable {
-    let id: TaskID
+    let id: UUID
     let key: String?
     let title: String
     let status: TaskStatus
@@ -82,7 +88,7 @@ nonisolated struct CardDisplay: Equatable, Identifiable {
 }
 
 nonisolated struct SubtaskDisplay: Equatable, Identifiable {
-    let id: SubtaskID
+    let id: UUID
     let title: String
     let status: TaskStatus
     let isAnimated: Bool
@@ -91,12 +97,6 @@ nonisolated struct SubtaskDisplay: Equatable, Identifiable {
 nonisolated struct SubtaskCount: Equatable {
     let done: Int
     let total: Int
-
-    init?(_ subtasks: [Subtask]) {
-        guard !subtasks.isEmpty else { return nil }
-        done = subtasks.count { $0.progress == .done }
-        total = subtasks.count
-    }
 
     var label: String {
         "\(done)/\(total)"

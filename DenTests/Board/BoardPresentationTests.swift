@@ -11,8 +11,8 @@ import WorkflowTestSupport
 
     let columns = BoardPresentation.display(of: flow.board).columns
 
-    #expect(columns.map(\.id) == [flow.backlog, flow.doing, flow.testing, flow.done])
-    #expect(columns[1].cards.map(\.id) == [waiting, older, newer])
+    #expect(columns.map(\.id) == [flow.backlog, flow.doing, flow.testing, flow.done].map(\.rawValue))
+    #expect(columns[1].cards.map(\.id) == [waiting, older, newer].map(\.rawValue))
     #expect(columns[0].cards.isEmpty)
 }
 

@@ -1,5 +1,4 @@
 import SwiftUI
-import Workflow
 
 struct SubtaskRow: View {
     let subtask: SubtaskDisplay
@@ -20,7 +19,7 @@ struct SubtaskRow: View {
 #Preview("Estados") {
     VStack(alignment: .leading, spacing: Theme.space8) {
         ForEach([TaskStatus.failed, .running, .concluded, .notStarted], id: \.self) { status in
-            SubtaskRow(subtask: SubtaskDisplay(id: SubtaskID(), title: "Tela de exportação", status: status,
+            SubtaskRow(subtask: SubtaskDisplay(id: UUID(), title: "Tela de exportação", status: status,
                                                   isAnimated: status == .running))
         }
     }

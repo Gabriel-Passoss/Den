@@ -1,5 +1,4 @@
 import SwiftUI
-import Workflow
 
 struct TaskCard: View {
     let card: CardDisplay
@@ -86,13 +85,15 @@ private struct SubtaskProgressBar: View {
 }
 
 private func taskCardPreview(key: String? = nil, title: String = "Exportar relatório", status: TaskStatus = .stopped,
-                             subtasks: [Subtask] = [], rows: [TaskStatus] = [], selected: Bool = false,
+                             rows: [(String, TaskStatus)] = [], selected: Bool = false,
                              dragging: Bool = false, expanded: Bool = false) -> some View {
-    let subtaskRows = zip(subtasks, rows).map {
-        SubtaskDisplay(id: $0.id, title: $0.title, status: $1, isAnimated: status == .running && $1 == .running)
+    let subtaskRows = rows.map { title, rowStatus in
+        SubtaskDisplay(id: UUID(), title: title, status: rowStatus,
+                       isAnimated: status == .running && rowStatus == .running)
     }
-    return TaskCard(card: CardDisplay(id: TaskID(), key: key, title: title, status: status,
-                                      subtasks: SubtaskCount(subtasks), subtaskRows: subtaskRows),
+    let progress = rows.isEmpty ? nil : SubtaskCount(done: rows.count { $0.1 == .concluded }, total: rows.count)
+    return TaskCard(card: CardDisplay(id: UUID(), key: key, title: title, status: status,
+                                      subtasks: progress, subtaskRows: subtaskRows),
                     isSelected: selected, isDragging: dragging, isExpanded: expanded)
         .frame(width: 260)
         .padding(Theme.space24)
@@ -116,20 +117,15 @@ private func taskCardPreview(key: String? = nil, title: String = "Exportar relat
 
 #Preview("Recolhido com progresso") {
     taskCardPreview(key: "DEN-42", status: .running,
-                    subtasks: [Subtask(title: "Tela", progress: .done), Subtask(title: "API", execution: .running),
-                               Subtask(title: "Testes")],
-                    rows: [.concluded, .running, .notStarted])
+                    rows: [("Tela", .concluded), ("API", .running), ("Testes", .notStarted)])
 }
 
 #Preview("Expandido com uma falha") {
     taskCardPreview(key: "DEN-42", status: .failed,
-                    subtasks: [Subtask(title: "Tela", progress: .done), Subtask(title: "API"),
-                               Subtask(title: "Testes")],
-                    rows: [.concluded, .failed, .notStarted], expanded: true)
+                    rows: [("Tela", .concluded), ("API", .failed), ("Testes", .notStarted)], expanded: true)
 }
 
 #Preview("Todas concluídas") {
     taskCardPreview(key: "DEN-42", status: .concluded,
-                    subtasks: [Subtask(title: "Tela", progress: .done), Subtask(title: "API", progress: .done)],
-                    rows: [.concluded, .concluded], expanded: true)
+                    rows: [("Tela", .concluded), ("API", .concluded)], expanded: true)
 }

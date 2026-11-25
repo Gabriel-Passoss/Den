@@ -41,7 +41,7 @@ import WorkflowTestSupport
     let newer = BoardTask(title: "Nova", stage: flow.doing, enteredStageAt: tuesday)
     let board = Board(stages: flow.board.stages, tasks: [newer, older])
 
-    let doing = try #require(BoardPresentation.display(of: board).columns.first { $0.id == flow.doing })
+    let doing = try #require(BoardPresentation.display(of: board).columns.first { $0.id == flow.doing.rawValue })
 
     #expect(doing.cards.map(\.title) == ["Antiga", "Nova"])
 }

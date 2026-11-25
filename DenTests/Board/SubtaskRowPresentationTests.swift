@@ -63,7 +63,7 @@ import WorkflowTestSupport
 
     let rows = try #require(card(id, on: flow.board)).subtaskRows
 
-    #expect(rows.map(\.id) == [first, second])
+    #expect(rows.map(\.id) == [first, second].map(\.rawValue))
     #expect(rows.map(\.title) == ["Tela", "API"])
 }
 
@@ -101,7 +101,7 @@ import WorkflowTestSupport
 }
 
 private func subtaskRow(_ subtask: SubtaskID, of id: TaskID, on board: Board) throws -> SubtaskDisplay {
-    try #require(card(id, on: board)?.subtaskRows.first { $0.id == subtask })
+    try #require(card(id, on: board)?.subtaskRows.first { $0.id == subtask.rawValue })
 }
 
 private func subtaskStatus(_ subtask: SubtaskID, of id: TaskID, on board: Board) throws -> TaskStatus {
