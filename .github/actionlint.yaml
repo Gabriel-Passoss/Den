@@ -1,0 +1,5 @@
+# Runner labels actionlint does not ship with: GitHub's Xcode 27 macOS image.
+self-hosted-runner:
+  labels:
+    - xcode-27
+    - xcode-27-xlarge
