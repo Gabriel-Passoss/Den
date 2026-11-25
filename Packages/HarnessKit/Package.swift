@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "OpenCodeHarness", targets: ["OpenCodeHarness"]),
         .library(name: "DenStore", targets: ["DenStore"]),
         .library(name: "Workflow", targets: ["Workflow"]),
+        .library(name: "WorkflowTestSupport", targets: ["WorkflowTestSupport"]),
         .executable(name: "harness-probe", targets: ["harness-probe"]),
     ],
     targets: [
@@ -42,7 +43,8 @@ let package = Package(
         .testTarget(name: "DenStoreTests", dependencies: ["DenStore", "HarnessCore", "SQLiteKit", "Workflow"]),
 
         .target(name: "Workflow"),
-        .testTarget(name: "WorkflowTests", dependencies: ["Workflow"]),
+        .target(name: "WorkflowTestSupport", dependencies: ["Workflow"]),
+        .testTarget(name: "WorkflowTests", dependencies: ["Workflow", "WorkflowTestSupport"]),
 
         .target(name: "HarnessProbeArguments"),
         .testTarget(name: "HarnessProbeArgumentsTests", dependencies: ["HarnessProbeArguments"]),

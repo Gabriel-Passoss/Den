@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = Path("Packages/HarnessKit")
 SOURCES = PACKAGE / "Sources"
-EXCLUDED_TARGETS = ("HarnessTestSupport", "harness-probe")
+EXCLUDED_TARGETS = ("HarnessTestSupport", "WorkflowTestSupport", "harness-probe")
 BASELINE_FILE = ROOT / ".mutation-baseline.json"
 TEST_TIMEOUT = 120
 
