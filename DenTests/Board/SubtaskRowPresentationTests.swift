@@ -74,6 +74,36 @@ import WorkflowTestSupport
     #expect(try #require(card(id, on: flow.board)).subtaskRows.isEmpty)
 }
 
+@Test func onlyTheRunningSubtaskOfAnActiveCardAnimates() throws {
+    var flow = try Flow()
+    let (id, running) = try flow.runningTaskWithSubtask()
+    let waiting = try flow.board.addSubtask(titled: "API", to: id)
+    try flow.board.startSubagent(for: running)
+
+    #expect(try subtaskRow(running, of: id, on: flow.board).isAnimated)
+    #expect(try !subtaskRow(waiting, of: id, on: flow.board).isAnimated)
+}
+
+@Test func aRunningSubtaskStaysStillOnACardThatNeedsMeOrFailed() throws {
+    var flow = try Flow()
+    let (asking, askingSubtask) = try flow.runningTaskWithSubtask()
+    let (failing, failingSubtask) = try flow.runningTaskWithSubtask()
+    try flow.board.startSubagent(for: askingSubtask)
+    try flow.board.startSubagent(for: failingSubtask)
+    try flow.board.openDecision(.permission, on: asking)
+    try flow.board.reportProblem(.executionFailed("sem rede"), on: failing)
+
+    for (subtask, task) in [(askingSubtask, asking), (failingSubtask, failing)] {
+        let row = try subtaskRow(subtask, of: task, on: flow.board)
+        #expect(row.status == .running)
+        #expect(!row.isAnimated)
+    }
+}
+
+private func subtaskRow(_ subtask: SubtaskID, of id: TaskID, on board: Board) throws -> SubtaskDisplay {
+    try #require(card(id, on: board)?.subtaskRows.first { $0.id == subtask })
+}
+
 private func subtaskStatus(_ subtask: SubtaskID, of id: TaskID, on board: Board) throws -> TaskStatus {
-    try #require(card(id, on: board)?.subtaskRows.first { $0.id == subtask }).status
+    try subtaskRow(subtask, of: id, on: board).status
 }

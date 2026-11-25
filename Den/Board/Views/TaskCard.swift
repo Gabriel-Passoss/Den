@@ -26,7 +26,7 @@ struct TaskCard: View {
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-            StatusIndicator(status: card.status)
+            StatusIndicator(status: card.status, isAnimated: card.isActive)
             if let subtasks = card.subtasks {
                 SubtaskProgressBar(count: subtasks)
                 expandToggle
@@ -88,7 +88,9 @@ private struct SubtaskProgressBar: View {
 private func taskCardPreview(key: String? = nil, title: String = "Exportar relatório", status: TaskStatus = .stopped,
                              subtasks: [Subtask] = [], rows: [TaskStatus] = [], selected: Bool = false,
                              dragging: Bool = false, expanded: Bool = false) -> some View {
-    let subtaskRows = zip(subtasks, rows).map { SubtaskDisplay(id: $0.id, title: $0.title, status: $1) }
+    let subtaskRows = zip(subtasks, rows).map {
+        SubtaskDisplay(id: $0.id, title: $0.title, status: $1, isAnimated: status == .running && $1 == .running)
+    }
     return TaskCard(card: CardDisplay(id: TaskID(), key: key, title: title, status: status,
                                       subtasks: SubtaskCount(subtasks), subtaskRows: subtaskRows),
                     isSelected: selected, isDragging: dragging, isExpanded: expanded)

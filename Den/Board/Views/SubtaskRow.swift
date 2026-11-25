@@ -11,7 +11,7 @@ struct SubtaskRow: View {
                 .foregroundStyle(Theme.textSecondary)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            StatusIndicator(status: subtask.status)
+            StatusIndicator(status: subtask.status, isAnimated: subtask.isAnimated)
         }
         .accessibilityElement(children: .combine)
     }
@@ -20,7 +20,8 @@ struct SubtaskRow: View {
 #Preview("Estados") {
     VStack(alignment: .leading, spacing: Theme.space8) {
         ForEach([TaskStatus.failed, .running, .concluded, .notStarted], id: \.self) { status in
-            SubtaskRow(subtask: SubtaskDisplay(id: SubtaskID(), title: "Tela de exportação", status: status))
+            SubtaskRow(subtask: SubtaskDisplay(id: SubtaskID(), title: "Tela de exportação", status: status,
+                                                  isAnimated: status == .running))
         }
     }
     .frame(width: 260)

@@ -14,13 +14,16 @@ nonisolated enum BoardPresentation {
     }
 
     private static func card(for task: BoardTask, in stage: Stage) -> CardDisplay {
-        CardDisplay(id: task.id, key: nil, title: task.title, status: status(of: task, in: stage),
-                    subtasks: SubtaskCount(task.subtasks),
-                    subtaskRows: task.subtasks.map { row(for: $0, of: task) })
+        let status = status(of: task, in: stage)
+        return CardDisplay(id: task.id, key: nil, title: task.title, status: status,
+                           subtasks: SubtaskCount(task.subtasks),
+                           subtaskRows: task.subtasks.map { row(for: $0, of: task, onActiveCard: status == .running) })
     }
 
-    private static func row(for subtask: Subtask, of task: BoardTask) -> SubtaskDisplay {
-        SubtaskDisplay(id: subtask.id, title: subtask.title, status: status(of: subtask, in: task))
+    private static func row(for subtask: Subtask, of task: BoardTask, onActiveCard: Bool) -> SubtaskDisplay {
+        let status = status(of: subtask, in: task)
+        return SubtaskDisplay(id: subtask.id, title: subtask.title, status: status,
+                              isAnimated: onActiveCard && status == .running)
     }
 
     private static func status(of subtask: Subtask, in task: BoardTask) -> TaskStatus {
@@ -82,6 +85,7 @@ nonisolated struct SubtaskDisplay: Equatable, Identifiable {
     let id: SubtaskID
     let title: String
     let status: TaskStatus
+    let isAnimated: Bool
 }
 
 nonisolated struct SubtaskCount: Equatable {

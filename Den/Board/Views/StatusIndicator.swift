@@ -2,13 +2,14 @@ import SwiftUI
 
 struct StatusIndicator: View {
     let status: TaskStatus
+    let isAnimated: Bool
 
     var body: some View {
         HStack(spacing: Theme.space4) {
             ZStack {
                 Image(systemName: status.symbol)
                     .font(.system(size: Theme.font11, weight: .semibold))
-                if status == .running {
+                if isAnimated {
                     ActivityPulse(color: status.color)
                 }
             }
@@ -39,14 +40,14 @@ private struct ActivityPulse: View {
     }
 }
 
-#Preview("Falhou") { StatusIndicator(status: .failed).padding() }
+#Preview("Falhou") { StatusIndicator(status: .failed, isAnimated: false).padding() }
 
-#Preview("Precisa de você") { StatusIndicator(status: .needsMe).padding() }
+#Preview("Precisa de você") { StatusIndicator(status: .needsMe, isAnimated: false).padding() }
 
-#Preview("Em execução") { StatusIndicator(status: .running).padding() }
+#Preview("Em execução") { StatusIndicator(status: .running, isAnimated: true).padding() }
 
-#Preview("Concluído") { StatusIndicator(status: .concluded).padding() }
+#Preview("Concluído") { StatusIndicator(status: .concluded, isAnimated: false).padding() }
 
-#Preview("Parada") { StatusIndicator(status: .stopped).padding() }
+#Preview("Parada") { StatusIndicator(status: .stopped, isAnimated: false).padding() }
 
-#Preview("Não iniciada") { StatusIndicator(status: .notStarted).padding() }
+#Preview("Não iniciada") { StatusIndicator(status: .notStarted, isAnimated: false).padding() }
