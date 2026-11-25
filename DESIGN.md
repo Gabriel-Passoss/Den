@@ -112,6 +112,28 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 - 2026-11-23 — `textFaint` passa de `#555C6C` para `#767D90`, com 4,6:1 sobre `canvas` — ele já é usado em estados e metadados, que precisam ser legíveis.
 - 2026-11-23 — Tipografia, espaçamento e raio ganham escalas a partir dos valores mais usados no código — as views atuais migram aos poucos, durante o redesenho.
 - 2026-11-23 — O foco de `DenButtonStyle` é um contorno interno de 2 pt em `accentSoft`, com o raio do botão — segue o estado desenhado no Penpot.
+- 2026-11-24 — Etapas definidas pelo usuário: cada projeto tem um board que começa vazio, e o usuário cria as etapas e vincula a cada uma um agente seu, ou nenhum — substitui as entradas "Sete colunas" e "um agente por etapa, sem criar ou excluir agentes". Ver `docs/adr/0001-etapas-definidas-pelo-usuario.md`.
+- 2026-11-24 — Agentes são criados pelo usuário, e o mesmo agente pode atender mais de uma etapa — decisão do autor (#31).
+- 2026-11-24 — "Precisa de mim" é derivado só das pendências da task (decisão pedida pelo agente ou problema), e não de uma etapa — sem etapas fixas, não existe uma Aguardando para o domínio reconhecer.
+- 2026-11-24 — Uma etapa marcada como final conclui as tasks que estão nela — o usuário monta a própria coluna de conclusão.
+- 2026-11-24 — A task pode ser criada no Den, e o Jira passa a ser uma das integrações possíveis com apps de tarefas externos — o M1 roda o workflow inteiro sem integração.
+- 2026-11-24 — Subagentes são execuções que o Den abre, uma por sub-task e no worktree dela, a pedido do agente principal. Não são os subagentes internos do harness — assim o Den continua orquestrando e consegue mostrar cada sub-task. O agente de qualquer etapa pode criar sub-tasks, e eu não as crio à mão no M1.
+- 2026-11-24 — Sub-tasks têm progresso próprio (pendente, em andamento, concluída) e nenhuma etapa. Quem muda o progresso é o agente que orquestra as sub-tasks, e mover a task pai não o altera — o card mostra quantas sub-tasks estão concluídas.
+- 2026-11-24 — O movimento manual é livre entre etapas, para frente, para trás ou pulando etapas — a ordem sugere a próxima etapa, mas não proíbe nenhuma.
+- 2026-11-24 — Uma etapa com tasks não pode ser excluída, o board sempre tem pelo menos uma etapa, reordenar etapas não move tasks e uma task nova entra na primeira etapa — regras de edição do board.
+- 2026-11-24 — O domínio do workflow fica num target próprio do `HarnessKit`, sem dependência de `HarnessCore` — o board não precisa saber o que é um harness.
+- 2026-11-24 — Cada agente tem um encaminhamento: a instrução de para onde a task segue quando ele considera a etapa concluída. Ele pode mover a task para outra etapa do board ou devolvê-la para mim — o fluxo entre etapas é decidido pelos agentes, não fixado no domínio.
+- 2026-11-24 — Todo movimento feito por agente leva uma passagem para quem continua. Quando eu movo a task para uma etapa com agente, o agente da etapa de origem é acionado para escrever a passagem — o próximo agente recebe só o contexto que importa. "Passagem" se distingue do `Handoff.briefing` do HarnessKit, que é da troca de harness.
+- 2026-11-24 — Entrar numa etapa com agente dispara esse agente, não importa quem moveu a task. Depois de N movimentos seguidos de agentes sem ação minha (limite de encadeamento, padrão 5, configurável nas preferências do app), o próximo movimento vira pendência — evita ciclos que gastam tokens.
+- 2026-11-24 — Agente sem encaminhamento, ou que não decidiu nada, deixa a task na etapa com a pendência "etapa concluída" — "precisa de mim" só vem de pendências.
+- 2026-11-24 — O histórico da task registra cada movimento com autor, origem, destino e horário. O Desfazer vale só para movimentos meus — um movimento de agente é revertido movendo a task à mão.
+- 2026-11-24 — A task tem uma execução (nenhuma, executando, terminada), e movê-la à mão encerra a execução em andamento quando o Desfazer expira.
+- 2026-11-24 — Uma decisão fecha quando é respondida ou vira "não vale mais". Pendências de etapa concluída, de limite de encadeamento e de devolução fecham quando movo a task ou disparo o agente de novo. Problemas fecham pela ação que os resolve.
+- 2026-11-24 — Um agente não pode mover uma task para uma etapa final com sub-tasks abertas, e a tentativa vira pendência. Eu posso.
+- 2026-11-24 — Na passagem manual: sem agente na origem não há passagem, e sem agente no destino ela não é pedida. A ordem é Desfazer, encerrar a execução da origem, escrever a passagem e disparar o destino. Se a passagem falhar, a task ganha uma pendência com "tentar de novo" e "seguir sem passagem". Qualquer ação minha na task zera o limite de encadeamento.
+- 2026-11-24 — Dentro de uma etapa, a ordem das tasks é automática: as que precisam de mim primeiro, depois as que entraram há mais tempo — sem ordem manual para guardar.
+- 2026-11-24 — Uma task pode ser excluída com confirmação, o que encerra as execuções dela e das sub-tasks e apaga o histórico.
+- 2026-11-24 — O subagente roda com a configuração do agente principal (contextos, skills, harness e modelo) e recebe a sub-task como pedido. Quando a task pai sai da etapa, as execuções dos subagentes são encerradas junto com a do agente principal, e o progresso fica como estava — o agente da nova etapa pode retomá-lo.
 
 ## Open questions
 
