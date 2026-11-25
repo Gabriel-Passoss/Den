@@ -1,10 +1,15 @@
 import Testing
 import Foundation
 import DenStore
+import SQLiteKit
 import Workflow
 import WorkflowTestSupport
 
 private let repo = URL(filePath: "/tmp/den/repo", directoryHint: .isDirectory)
+
+private func denProject(in boards: any BoardRepository) throws -> Project {
+    try boards.createProject(named: "Den", at: repo)
+}
 
 @Test func aCreatedProjectIsListed() throws {
     let boards = try DenStore.inMemory().boards
@@ -124,4 +129,84 @@ private let repo = URL(filePath: "/tmp/den/repo", directoryHint: .isDirectory)
     }
 
     #expect(try boards.board(of: project.id) == flow.board)
+}
+
+@Test func savedTasksComeBackInTheirStagesAfterReopeningTheStore() throws {
+    let scratch = try ScratchStore()
+    defer { scratch.remove() }
+    let boards = try scratch.open().repositories.boards
+    let project = try denProject(in: boards)
+    let flow = try Flow()
+    let board = Board(stages: flow.board.stages, tasks: [
+        BoardTask(title: "Exportar relatório", details: "em CSV", stage: flow.backlog, enteredStageAt: monday),
+        BoardTask(title: "Corrigir login", origin: .external(app: "jira", key: "DEN-7"), stage: flow.doing,
+                  enteredStageAt: Date(timeIntervalSince1970: 1_234.5), execution: .running, agentMovesInARow: 2),
+        BoardTask(title: "Revisar textos", stage: flow.testing, enteredStageAt: tuesday, execution: .finished),
+        BoardTask(title: "Publicar", origin: .external(app: "jira", key: "DEN-8"), stage: flow.done,
+                  enteredStageAt: wednesday),
+    ])
+
+    try boards.save(board, of: project.id)
+
+    #expect(try scratch.open().repositories.boards.board(of: project.id) == board)
+}
+
+@Test func aTaskRemovedFromTheBoardIsGoneAfterTheNextSave() throws {
+    let boards = try DenStore.inMemory().boards
+    let project = try denProject(in: boards)
+    var flow = try Flow()
+    let kept = try flow.task(in: flow.doing)
+    let removed = try flow.task(at: tuesday)
+    try boards.save(flow.board, of: project.id)
+
+    try flow.board.deleteTask(removed)
+    try boards.save(flow.board, of: project.id)
+
+    #expect(try boards.board(of: project.id).tasks.map(\.id) == [kept])
+}
+
+@Test func theSameExternalOriginTwiceInAProjectIsRefused() throws {
+    let boards = try DenStore.inMemory().boards
+    let project = try denProject(in: boards)
+    var flow = try Flow()
+    try boards.save(flow.board, of: project.id)
+    let jira = Origin.external(app: "jira", key: "DEN-7")
+    try flow.board.createTask(titled: "Corrigir login", origin: jira, at: monday)
+    try flow.board.createTask(titled: "Corrigir login de novo", origin: jira, at: tuesday)
+
+    #expect(throws: (any Error).self) { try boards.save(flow.board, of: project.id) }
+
+    #expect(try boards.board(of: project.id).tasks.isEmpty)
+}
+
+@Test func theSameExternalOriginCanBeInTwoProjects() throws {
+    let boards = try DenStore.inMemory().boards
+    let den = try boards.createProject(named: "Den", at: repo)
+    let other = try boards.createProject(named: "Outro", at: URL(filePath: "/tmp/outro"))
+    var first = try Flow()
+    var second = try Flow()
+    try first.board.createTask(titled: "Corrigir login", origin: .external(app: "jira", key: "DEN-7"), at: monday)
+    try second.board.createTask(titled: "Corrigir login", origin: .external(app: "jira", key: "DEN-7"), at: monday)
+
+    try boards.save(first.board, of: den.id)
+    try boards.save(second.board, of: other.id)
+
+    #expect(try boards.board(of: den.id) == first.board)
+    #expect(try boards.board(of: other.id) == second.board)
+}
+
+@Test func deletingAProjectTakesItsTasksAlong() throws {
+    let scratch = try ScratchStore()
+    defer { scratch.remove() }
+    let boards = try scratch.open().repositories.boards
+    let project = try denProject(in: boards)
+    var flow = try Flow()
+    _ = try flow.task(in: flow.doing)
+    try boards.save(flow.board, of: project.id)
+
+    try scratch.raw().write {
+        try $0.execute("DELETE FROM projects WHERE id = ?", [.text(project.id.rawValue.uuidString)])
+    }
+
+    #expect(try scratch.raw().read { try $0.query("SELECT count(*) FROM tasks") { $0[0] } } == [.integer(0)])
 }

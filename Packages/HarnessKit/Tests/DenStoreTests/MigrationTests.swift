@@ -22,7 +22,7 @@ extension ScratchStore {
 
     #expect(opened.setAside == nil)
     #expect(try await opened.repositories.sessions.list().map(\.id) == [session.id])
-    #expect(try scratch.raw().read { try $0.query("PRAGMA user_version") { $0[0] } } == [.integer(3)])
+    #expect(try scratch.raw().read { try $0.query("PRAGMA user_version") { $0[0] } } == [.integer(4)])
     let columns = try scratch.raw().read {
         try $0.query("SELECT name FROM pragma_table_info('projects') ORDER BY cid") { $0[0].textValue ?? "" }
     }
@@ -41,5 +41,24 @@ extension ScratchStore {
     try boards.save(board, of: project.id)
 
     #expect(try boards.projects().map(\.id) == [project.id])
+    #expect(try boards.board(of: project.id) == board)
+}
+
+@Test func stagesFromAVersionThreeStoreCanTakeTasksAfterMigrating() throws {
+    let scratch = try ScratchStore()
+    defer { scratch.remove() }
+    let project = try scratch.olderStore(atVersion: 3).boards
+        .createProject(named: "Den", at: URL(filePath: "/tmp/den/repo"))
+    let stage = StageID()
+    try scratch.raw().write {
+        try $0.execute("INSERT INTO stages (id, project_id, position, name, is_final) VALUES (?, ?, 0, 'Backlog', 0)",
+                       [.text(stage.rawValue.uuidString), .text(project.id.rawValue.uuidString)])
+    }
+
+    let boards = try scratch.open().repositories.boards
+    var board = try boards.board(of: project.id)
+    try board.createTask(titled: "Exportar relatório", at: Date(timeIntervalSince1970: 1_000))
+    try boards.save(board, of: project.id)
+
     #expect(try boards.board(of: project.id) == board)
 }

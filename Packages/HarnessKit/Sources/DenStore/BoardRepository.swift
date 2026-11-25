@@ -43,14 +43,17 @@ struct SQLiteBoardRepository: BoardRepository {
 
     func board(of project: ProjectID) throws -> Board {
         try database.read { connection in
-            Board(stages: try Self.stages(of: project, in: connection))
+            Board(stages: try Self.stages(of: project, in: connection),
+                  tasks: try Self.tasks(of: project, in: connection))
         }
     }
 
     func save(_ board: Board, of project: ProjectID) throws {
         try database.write { connection in
+            try Self.deleteTasks(of: project, in: connection)
             try connection.execute("DELETE FROM stages WHERE project_id = ?", [Self.key(project)])
             try Self.insert(board.stages, of: project, in: connection)
+            try Self.insert(board.tasks, of: project, in: connection)
         }
     }
 
@@ -74,7 +77,7 @@ struct SQLiteBoardRepository: BoardRepository {
         }
     }
 
-    private static func key(_ id: some WorkflowIdentifier) -> Value {
+    static func key(_ id: some WorkflowIdentifier) -> Value {
         .text(id.rawValue.uuidString)
     }
 
