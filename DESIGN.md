@@ -9,13 +9,12 @@ Den é um app macOS que orquestra harnesses de agentes de código (hoje Claude C
 O Den passa a ser organizado por um workflow kanban:
 
 - A visualização principal é o board.
-- Colunas: **Backlog, Especificação, Aguardando, Em andamento, Testes, Padrões e PR**.
-- Cada etapa do kanban tem um agente responsável, com contexto específico configurável.
-- Mover um card para uma etapa dispara o agente dela automaticamente.
-- **Aguardando** é onde o card espera por mim. É o ponto de maior atenção do board e não tem agente.
-- Issues do Jira atribuídas ao usuário viram cards no Den. Por enquanto, o Den só lê o Jira.
-- O card passa por grill-me-with-docs, depois pela especificação, e pode virar sub-tasks.
-- As sub-tasks ficam englobadas pelo card principal vindo do Jira e existem só no Den, sem ticket próprio. Cada tarefa tem o próprio worktree e, por enquanto, as sub-tasks usam o chat do card pai.
+- Cada projeto tem um board que começa vazio. Eu crio as etapas e os agentes, e vinculo a cada etapa um agente ou nenhum (ver `docs/adr/0001-etapas-definidas-pelo-usuario.md`). Uma etapa pode ser marcada como final.
+- Entrar numa etapa com agente dispara esse agente, não importa quem moveu a task.
+- "Precisa de mim" vem só das pendências da task (uma decisão pedida pelo agente ou um problema). Nenhuma etapa significa "espera por mim".
+- A origem é escolhida na criação do projeto: tasks criadas no Den ou importadas de um app externo, como o Jira, que o Den só lê. Um projeto com origem externa não cria tasks no Den.
+- Toda task tem um ID legível: o herdado da origem, ou o prefixo do projeto seguido de um número crescente.
+- O agente de qualquer etapa pode criar sub-tasks, que existem só no Den, acompanham a task pai sem etapa própria e mostram o progresso no card. Cada task e cada sub-task tem o próprio worktree, e as sub-tasks usam o chat da task pai.
 - A sidebar segue esta ordem: seletor de projeto na linha dos botões da janela, busca, Início (o board), Agentes e tasks alocadas com acesso ao chat.
 - O botão Agentes abre uma tela com a lista dos agentes existentes, onde cada um tem seus contextos e as skills que pode carregar.
 
@@ -47,10 +46,11 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 - Componentes base: `DenButtonStyle` (primary, secondary, ghost), `PillLabel`, `ChipLabel`, `IconLabel`, `ChipSurface`, `DenMenu`.
 - Fonte do sistema e SF Symbols, como já usados nas views.
 - `waiting` e os tokens de alerta já existem e são candidatos naturais ao sinal de "precisa de mim" (assumed).
+- Peças do board: `StatusIndicator`, `TaskCard`, `SubtaskRow`, `ColumnHeader` e `NeedsMeCounter`.
 
 ## References
 
-- **Linear** — pegar: cor só como sinal, card enxuto com ID curto (a chave do Jira), sub-issues agrupadas no card pai com progresso resumido. Evitar: contraste muito baixo, recursos de time, muitas views e filtros.
+- **Linear** — pegar: cor só como sinal, card enxuto com ID curto, sub-issues agrupadas no card pai com progresso resumido. Evitar: contraste muito baixo, recursos de time, muitas views e filtros.
 - **Sidebar de referência enviada pelo autor** — pegar: seletor ao lado dos botões da janela, busca logo abaixo e navegação simples com seções. Evitar: tema claro e rodapé de conta, porque o Den é escuro e sem contas (assumed).
 
 - **Painel de agente enviado pelo autor** — pegar: avatar no topo, nome, "o que faz" e configurações em grupos de linhas com valor resumido e seta.
@@ -58,11 +58,11 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 ## Constraints
 
 - macOS 26.6 ou superior, SwiftUI, janela mínima de 860×560.
-- O board usa rolagem horizontal quando as sete colunas não couberem na janela.
+- O board usa rolagem horizontal quando as colunas não couberem na janela.
 - Somente tema escuro, como o app força hoje.
 - Ícones em SF Symbols.
-- Movimento: um indicador pequeno e contínuo só nos cards em execução, e transições curtas ao mudar de coluna. Respeitar Reduzir Movimento.
-- Status legível de relance, nunca apenas por cor.
+- Movimento: um indicador pequeno e contínuo só nos cards ativos (a task ou alguma sub-task executando, sem nada que precise de mim), e transições curtas ao mudar de coluna. Respeitar Reduzir Movimento.
+- Status legível de relance, nunca apenas por cor: cada status tem ícone e texto.
 - O que varia por harness deve vir de `HarnessCapabilities`: a UI oculta o que o harness não suporta.
 
 ## Decisions log
@@ -134,6 +134,16 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 - 2026-11-24 — Dentro de uma etapa, a ordem das tasks é automática: as que precisam de mim primeiro, depois as que entraram há mais tempo — sem ordem manual para guardar.
 - 2026-11-24 — Uma task pode ser excluída com confirmação, o que encerra as execuções dela e das sub-tasks e apaga o histórico.
 - 2026-11-24 — O subagente roda com a configuração do agente principal (contextos, skills, harness e modelo) e recebe a sub-task como pedido. Quando a task pai sai da etapa, as execuções dos subagentes são encerradas junto com a do agente principal, e o progresso fica como estava — o agente da nova etapa pode retomá-lo.
+- 2026-11-24 — Product e Constraints reescritos conforme o ADR-0001: sem sete colunas fixas, sem Aguardando e sem um agente por etapa — o brief contradizia o domínio (#33).
+- 2026-11-24 — O status do card é derivado só do domínio: Não iniciada (nenhuma execução), Em execução, Parada (execução terminada sem pendência), Precisa de você, Falhou (pendência de problema) e Concluído (etapa final; na sub-task, progresso concluída). Prioridade: Falhou, Precisa de você, Em execução. Na fila, Pausado e Agente lento saem do desenho — não existem no domínio e, se fizerem falta, entram nele primeiro.
+- 2026-11-24 — O card é ativo quando a task ou alguma sub-task está executando e nada precisa de mim. Só o card ativo anima — um agente esperando por mim não está trabalhando.
+- 2026-11-24 — O ColumnHeader é sempre neutro (nome, contagem e marca de etapa final), sem a variante de alerta de Aguardando — nenhuma etapa significa "espera por mim".
+- 2026-11-24 — AttentionCounter passa a se chamar NeedsMeCounter e conta tasks, não pendências — "atenção" é termo evitado para "precisa de mim", e é a task que eu abro.
+- 2026-11-24 — As peças do board recebem valores de exibição, e o mapeamento da `BoardTask` para o status é uma função pura com teste — as peças ficam fáceis de visualizar em preview antes de o board existir.
+- 2026-11-24 — O pet sai do TaskCard e do ColumnHeader até a #43 definir a regra de identidade dele.
+- 2026-11-24 — Toda task tem um ID legível (`TaskKey`), e a identidade interna continua sendo um UUID. Uma task importada herda o ID da origem e o acompanha, com a troca registrada no histórico. Uma task criada no Den recebe o prefixo do projeto, escolhido na criação e com 3 letras do nome como padrão, e o próximo número de um contador que só sobe. Trocar o prefixo vale só para as tasks novas, e sub-tasks não têm ID.
+- 2026-11-24 — A origem é do projeto: um projeto ligado a um app externo não cria tasks no Den, por enquanto — evita IDs repetidos no mesmo board.
+- 2026-11-24 — O Den atual é descartado no redesenho, sem migração, porque não tem usuários ativos.
 - 2026-11-26 — O movimento manual só vale quando a janela de Desfazer fecha: até lá a task continua na etapa de origem no domínio, com a execução rodando, e só aparece no destino. Desfazer apenas descarta o movimento, que nunca entra no histórico — segue a ordem "Desfazer, encerrar a execução, passagem, disparo". Ver `docs/adr/0002-movimento-vale-quando-o-desfazer-fecha.md` (#35).
 - 2026-11-26 — Há uma janela de Desfazer por vez. Mover outra task conclui na hora o movimento que estava aberto; mover a mesma task de novo mantém a origem e reinicia os 5 segundos, e devolvê-la à origem cancela o movimento — um só "Desfazer" na tela, sem fila de toasts (#35).
 - 2026-11-26 — A janela é [0, 5) segundos: aos 5 segundos exatos o movimento já não pode ser desfeito. O movimento é registrado com o horário do arraste, que é quando a task entrou na etapa e a posição em que o card já estava (#35).

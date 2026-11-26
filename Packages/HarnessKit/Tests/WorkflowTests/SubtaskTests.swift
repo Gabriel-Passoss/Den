@@ -1,5 +1,6 @@
 import Testing
 import Workflow
+import WorkflowTestSupport
 
 @Test func theRunningAgentCreatesSubtasks() throws {
     var flow = try Flow()

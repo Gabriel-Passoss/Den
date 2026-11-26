@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import Workflow
+import WorkflowTestSupport
 
 @Test func aTaskNeedsAStageToLandIn() {
     var board = Board()

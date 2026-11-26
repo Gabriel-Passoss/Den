@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import Workflow
+import WorkflowTestSupport
 
 private func seconds(_ value: TimeInterval) -> Date {
     monday.addingTimeInterval(value)
