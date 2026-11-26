@@ -15,6 +15,8 @@ public enum Problem: Sendable, Equatable {
     case passageFailed
     case subagentFailed(SubtaskID)
     case executionFailed(String)
+    case interrupted
+    case unreadable
 }
 
 public struct Pendency: Sendable, Equatable, Identifiable {

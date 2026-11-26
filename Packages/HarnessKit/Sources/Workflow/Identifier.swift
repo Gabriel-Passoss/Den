@@ -11,6 +11,8 @@ public extension WorkflowIdentifier {
     }
 }
 
+public struct ProjectID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
+
 public struct StageID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
 
 public struct TaskID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
@@ -18,6 +20,8 @@ public struct TaskID: WorkflowIdentifier { public let rawValue: UUID; public ini
 public struct SubtaskID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
 
 public struct PendencyID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
+
+public struct ChatID: WorkflowIdentifier { public let rawValue: UUID; public init(rawValue: UUID) { self.rawValue = rawValue } }
 
 public struct AgentID: Hashable, Sendable, Codable {
     public let rawValue: String

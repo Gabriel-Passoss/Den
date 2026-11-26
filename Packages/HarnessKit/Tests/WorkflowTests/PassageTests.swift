@@ -1,5 +1,6 @@
 import Testing
 import Workflow
+import WorkflowTestSupport
 
 @Test func aPassageIsTrimmedTextThatIsNotBlank() {
     #expect(Passage("  terminei a tela \n")?.text == "terminei a tela")

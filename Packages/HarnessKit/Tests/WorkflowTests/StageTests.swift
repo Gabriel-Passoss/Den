@@ -1,5 +1,6 @@
 import Testing
 import Workflow
+import WorkflowTestSupport
 
 @Test func aNewBoardHasNoStagesAndNoTasks() {
     let board = Board()
