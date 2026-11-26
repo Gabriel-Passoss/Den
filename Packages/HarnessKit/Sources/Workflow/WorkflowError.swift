@@ -12,4 +12,5 @@ public enum WorkflowError: Error, Sendable, Equatable {
     case executionAlreadyRunning
     case notADecision
     case noPassageAwaited
+    case nothingToUndo
 }

@@ -56,6 +56,10 @@ _Avoid_: workflow (é o processo do board inteiro), roteamento, próxima etapa
 A ida de uma task de uma etapa para outra, feita pelo usuário ou por um agente, e registrada no histórico da task.
 _Avoid_: transição, mudança de status
 
+**Janela de Desfazer** (`UndoWindow`):
+Os 5 segundos depois de um movimento meu em que ele ainda pode ser desfeito. Durante a janela a task aparece na etapa de destino, mas o movimento só vale, e só entra no histórico, quando ela fecha.
+_Avoid_: movimento pendente (pendência é outra coisa), rascunho, undo
+
 **Passagem**:
 O que um agente escreve ao entregar uma task: o que fez e o que importa para quem continua, seja o agente da próxima etapa ou o usuário.
 _Avoid_: briefing e handoff (são da troca de harness dentro de uma conversa), resumo

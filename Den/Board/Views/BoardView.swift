@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct BoardView: View {
@@ -24,9 +25,20 @@ struct BoardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .overlay(alignment: .bottom) {
+            if let notice = model.moveNotice {
+                MoveUndoBar(notice: notice, undo: model.undo)
+                    .padding(.bottom, Theme.space16)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy, value: model.moveNotice)
         .background(Theme.canvas)
         .navigationTitle("")
         .task { model.load() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            model.finishMove()
+        }
     }
 
     private func counter(_ count: Int, proxy: ScrollViewProxy) -> some View {
@@ -66,7 +78,8 @@ struct BoardView: View {
         ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: Theme.space12) {
                 ForEach(columns) { column in
-                    BoardColumn(column: column, selectedTaskID: model.selectedTaskID, select: model.select)
+                    BoardColumn(column: column, selectedTaskID: model.selectedTaskID, select: model.select,
+                                destinations: columns, move: model.move)
                         .id(column.id)
                 }
             }

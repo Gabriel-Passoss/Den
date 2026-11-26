@@ -6,7 +6,10 @@ struct BoardColumn: View {
     let column: ColumnDisplay
     let selectedTaskID: UUID?
     let select: (UUID) -> Void
+    var destinations: [ColumnDisplay] = []
+    var move: (UUID, UUID) -> Void = { _, _ in }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -25,6 +28,19 @@ struct BoardColumn: View {
         .frame(width: Self.width, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Theme.sidebar, in: RoundedRectangle(cornerRadius: Theme.radius12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.radius12, style: .continuous)
+                .strokeBorder(Theme.accent, lineWidth: isTargeted ? 2 : 0)
+        }
+        .dropDestination(for: String.self) { items, _ in
+            let cards = items.compactMap(UUID.init(uuidString:))
+            cards.forEach { move($0, column.id) }
+            return !cards.isEmpty
+        } isTargeted: { isTargeted = $0 }
+    }
+
+    private var otherColumns: [ColumnDisplay] {
+        destinations.filter { $0.id != column.id }
     }
 
     private var cards: some View {
@@ -36,6 +52,22 @@ struct BoardColumn: View {
                             .contentShape(.rect)
                             .onTapGesture { select(card.id) }
                             .accessibilityAddTraits(.isButton)
+                            .draggable(card.id.uuidString) {
+                                TaskCard(card: card, isDragging: true)
+                                    .frame(width: Self.width - 2 * Theme.space8)
+                            }
+                            .contextMenu {
+                                Menu("Mover para") {
+                                    ForEach(otherColumns) { other in
+                                        Button(other.name) { move(card.id, other.id) }
+                                    }
+                                }
+                            }
+                            .accessibilityActions {
+                                ForEach(otherColumns) { other in
+                                    Button("Mover para \(other.name)") { move(card.id, other.id) }
+                                }
+                            }
                             .id(card.id)
                     }
                 }

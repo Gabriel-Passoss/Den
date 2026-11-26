@@ -151,6 +151,13 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 - 2026-11-26 — O board sem etapas explica que a primeira etapa nasce nas configurações do projeto, sem botão até a configuração das etapas existir (#63) — um botão que não leva a nada mentiria.
 - 2026-11-26 — Clicar no NeedsMeCounter seleciona e rola até a próxima task que precisa de mim, na ordem do board, e recomeça depois da última — o contador leva a cada uma delas, não só à primeira.
 - 2026-11-26 — Clicar num card só o seleciona (ou tira a seleção) até a tela da task existir — a seleção já serve ao contador.
+- 2026-11-26 — O movimento manual só vale quando a janela de Desfazer fecha: até lá a task continua na etapa de origem no domínio, com a execução rodando, e só aparece no destino. Desfazer apenas descarta o movimento, que nunca entra no histórico — segue a ordem "Desfazer, encerrar a execução, passagem, disparo". Ver `docs/adr/0002-movimento-vale-quando-o-desfazer-fecha.md` (#35).
+- 2026-11-26 — Há uma janela de Desfazer por vez. Mover outra task conclui na hora o movimento que estava aberto; mover a mesma task de novo mantém a origem e reinicia os 5 segundos, e devolvê-la à origem cancela o movimento — um só "Desfazer" na tela, sem fila de toasts (#35).
+- 2026-11-26 — A janela é [0, 5) segundos: aos 5 segundos exatos o movimento já não pode ser desfeito. O movimento é registrado com o horário do arraste, que é quando a task entrou na etapa e a posição em que o card já estava (#35).
+- 2026-11-26 — Se a task for excluída durante a janela, o movimento cai. Se um agente a mover nesse meio tempo, o meu movimento ainda vale ao fechar a janela, a partir de onde ela estiver — a minha intenção é a mais recente (#35).
+- 2026-11-26 — A alternativa acessível ao arraste é o menu "Mover para" no card (clique secundário e ações do VoiceOver), que segue o mesmo caminho do arraste. ⌘Z desfaz enquanto a janela está aberta, e o aviso "Desfazer" é anunciado pelo VoiceOver (#35).
+- 2026-11-26 — Fechar o app com a janela aberta conclui o movimento, porque o arraste já expressou a decisão (#35).
+- 2026-11-26 — O aviso de Desfazer fica na parte de baixo do board, numa cápsula branca com texto escuro e "Desfazer" em `action` — pedido do autor, para o aviso se destacar do board escuro durante os 5 segundos (#35).
 
 ## Open questions
 
