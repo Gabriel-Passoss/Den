@@ -1,5 +1,55 @@
 enum Schema {
-    static let migrations = [initial]
+    static let migrations = [initial, boards]
+
+    private static let boards = """
+        CREATE TABLE projects (
+            id   TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            root TEXT NOT NULL UNIQUE
+        ) STRICT;
+
+        CREATE TABLE stages (
+            id         TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            position   INTEGER NOT NULL,
+            name       TEXT NOT NULL,
+            agent      TEXT,
+            is_final   INTEGER NOT NULL,
+            UNIQUE (project_id, position)
+        ) STRICT;
+
+        CREATE TABLE tasks (
+            id                   TEXT PRIMARY KEY,
+            project_id           TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            stage_id             TEXT NOT NULL REFERENCES stages(id),
+            title                TEXT NOT NULL,
+            details              TEXT NOT NULL,
+            origin_app           TEXT,
+            origin_key           TEXT,
+            entered_stage_at     REAL NOT NULL,
+            execution            TEXT NOT NULL,
+            agent_moves_in_a_row INTEGER NOT NULL,
+            session_id           TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+            history              TEXT NOT NULL,
+            pendencies           TEXT NOT NULL,
+            UNIQUE (project_id, origin_app, origin_key)
+        ) STRICT;
+
+        CREATE TABLE subtasks (
+            id        TEXT PRIMARY KEY,
+            task_id   TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+            position  INTEGER NOT NULL,
+            title     TEXT NOT NULL,
+            progress  TEXT NOT NULL,
+            execution TEXT NOT NULL,
+            UNIQUE (task_id, position)
+        ) STRICT;
+
+        CREATE TRIGGER deleting_a_project_deletes_its_task_chats BEFORE DELETE ON projects
+        BEGIN
+            DELETE FROM sessions WHERE id IN (SELECT session_id FROM tasks WHERE project_id = OLD.id);
+        END;
+        """
 
     private static let initial = """
         CREATE TABLE folders (

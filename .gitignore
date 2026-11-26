@@ -16,5 +16,5 @@ skills-lock.json
 # Xcode (per-user state)
 xcuserdata/
 
-# Tickets locais (/to-tickets)
+# Local tickets, one subfolder per worktree
 .tickets/

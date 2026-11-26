@@ -29,7 +29,7 @@ jobs:
         run: Scripts/quality/coverage package
 
   app:
-    name: App (unit + pipeline E2E)
+    name: App (unit)
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
@@ -37,6 +37,8 @@ jobs:
       - uses: ./.github/actions/select-xcode
         with:
           version: ${{ env.XCODE_VERSION }}
+      - name: List the end-to-end tests to skip
+        run: Scripts/quality/end-to-end-tests > "$RUNNER_TEMP/end-to-end"
       # The build goes in the workspace, which the checkout wipes. The runner's
       # shared DerivedData keeps products from other commits, and a module left
       # there (HarnessCore.swiftmodule, from before the package had targets
@@ -50,6 +52,7 @@ jobs:
             -derivedDataPath build/DerivedData \
             -enableCodeCoverage YES \
             -resultBundlePath build/app.xcresult \
+            "-skip-testing:@$RUNNER_TEMP/end-to-end" \
             $SIGNING
       - name: Check the coverage floor
         run: Scripts/quality/coverage app build/app.xcresult
@@ -71,6 +74,8 @@ jobs:
       # A data race fails either command on its own; no sanitizer option is needed.
       - name: Test the package under Thread Sanitizer
         run: swift test --package-path Packages/HarnessKit --sanitize=thread
+      - name: List the end-to-end tests to skip
+        run: Scripts/quality/end-to-end-tests > "$RUNNER_TEMP/end-to-end"
       - name: Test the app under Thread Sanitizer
         run: |
           # shellcheck disable=SC2086 # $SIGNING is a list of build settings
@@ -80,6 +85,7 @@ jobs:
             -derivedDataPath build/DerivedData \
             -enableThreadSanitizer YES \
             -resultBundlePath build/tsan.xcresult \
+            "-skip-testing:@$RUNNER_TEMP/end-to-end" \
             $SIGNING
       - uses: actions/upload-artifact@v4
         if: failure()
