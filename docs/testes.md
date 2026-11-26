@@ -1,6 +1,7 @@
 # Testes
 
-Três alvos: `DenTests` (unidade e ponta a ponta do app), `DenUITests` (XCUITest,
+Três alvos: `DenTests` (unidade e ponta a ponta do app; o CI pula os de ponta a
+ponta, listados por `Scripts/quality/end-to-end-tests`), `DenUITests` (XCUITest,
 que roda do Xcode e não no CI — ver `docs/quality.md`) e os testes do pacote em
 `Packages/HarnessKit/Tests`. `DenTestSupport` guarda o que os dois primeiros
 compartilham, com destaque para o `FakeCLI` (ver `docs/fake-cli.md`).
