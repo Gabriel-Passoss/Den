@@ -1,6 +1,5 @@
 import SwiftUI
 
-// periphery:ignore
 struct TaskCard: View {
     let card: CardDisplay
     let isSelected: Bool

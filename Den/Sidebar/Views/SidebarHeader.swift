@@ -29,6 +29,15 @@ struct SidebarHeader: View {
     var body: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 4)
+            Button { workspace.selectedID = nil } label: {
+                Image(systemName: "house")
+                    .font(.system(size: 14))
+                    .foregroundStyle(workspace.selectedID == nil ? Theme.accent : Theme.textMuted)
+                    .iconLabel()
+            }
+            .buttonStyle(.denGhost)
+            .help("Início")
+            .accessibilityLabel("Início")
             DenMenuChip(sections: newSections) {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 14))
