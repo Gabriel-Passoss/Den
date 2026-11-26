@@ -1,0 +1,8 @@
+#!/bin/sh
+# Prints the identifier of every end-to-end test in DenTests/EndToEnd, one per
+# line, for `xcodebuild -skip-testing:@<file>`. CI leaves them out to spare the
+# runner; run them locally with the plain `xcodebuild test`.
+set -eu
+cd "$(dirname "$0")/../.."
+
+grep -ho '@Test func [A-Za-z0-9_]*' DenTests/EndToEnd/*.swift | sed 's|@Test func |DenTests/|; s|$|()|'
