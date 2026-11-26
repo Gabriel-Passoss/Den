@@ -54,6 +54,8 @@ enum Theme {
     static let alertBorder = Color(hex: 0x4D3F1F)
     static let alertText = Color(hex: 0xEBC46A)
 
+    static let liftShadow = Color(hex: 0x000000, opacity: 0.45)
+
     static let petSpec = Color(hex: 0x5AA9F2)
     static let petImpl = Color(hex: 0xC98A5A)
     static let petTest = Color(hex: 0x2FBFA8)
@@ -86,6 +88,8 @@ enum Theme {
     static let radius16: CGFloat = 16
 
     static let focusRingWidth: CGFloat = 2
+    static let emphasisStroke: CGFloat = 1.5
+    static let dragTilt: Double = 1.5
 
     static let headerHeight: CGFloat = 52
     static let trafficLightsInset: CGFloat = 78

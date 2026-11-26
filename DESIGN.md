@@ -40,7 +40,7 @@ Design system source: `Den/Shared/Theme/Theme.swift`; the Penpot guide mirrors i
 
 No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só para o desenho.
 
-- 42 tokens de cor: superfícies, bordas, texto, accent, estados de diff, alerta e pets.
+- 43 tokens de cor: superfícies, bordas, texto, accent, estados de diff, alerta, sombra e pets.
 - Escalas em pontos: tipografia (`font10` a `font24`), espaçamento (`space2` a `space24`) e raio (`radius4` a `radius16`).
 - Acento índigo (`accent` `#8B93FF`, `action` `#6E78F7`) sobre neutros escuros (`canvas` `#0F1115`).
 - Componentes base: `DenButtonStyle` (primary, secondary, ghost), `PillLabel`, `ChipLabel`, `IconLabel`, `ChipSurface`, `DenMenu`.
