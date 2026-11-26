@@ -2,16 +2,16 @@ import Foundation
 import Workflow
 
 nonisolated enum BoardPresentation {
-    static func display(of board: Board) -> BoardDisplay {
-        BoardDisplay(columns: board.stages.map { column(for: $0, on: board) },
+    static func display(of board: Board, showing move: UndoableMove? = nil) -> BoardDisplay {
+        BoardDisplay(columns: board.stages.map { column(for: $0, on: board, showing: move) },
                      needsMeCount: board.tasks.count(where: \.needsMe))
     }
 
-    private static func column(for stage: Stage, on board: Board) -> ColumnDisplay {
+    private static func column(for stage: Stage, on board: Board, showing move: UndoableMove?) -> ColumnDisplay {
         ColumnDisplay(id: stage.id.rawValue,
                       name: stage.name,
                       isFinal: stage.isFinal,
-                      cards: board.tasks(in: stage.id).map { card(for: $0, in: stage) })
+                      cards: board.tasks(in: stage.id, showing: move).map { card(for: $0, in: stage) })
     }
 
     private static func card(for task: BoardTask, in stage: Stage) -> CardDisplay {
