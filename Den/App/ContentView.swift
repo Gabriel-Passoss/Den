@@ -1,9 +1,10 @@
 import SwiftUI
-import HarnessCore
 import DenStore
 
 struct ContentView: View {
     @State private var workspace: WorkspaceModel
+
+    @State private var board: BoardModel
 
     @State private var gitChanges = GitChangesModel()
 
@@ -17,6 +18,7 @@ struct ContentView: View {
     init(environment: any AppEnvironment, repositories: Repositories, storeFailure: String? = nil) {
         self.storeFailure = storeFailure
         _workspace = State(initialValue: WorkspaceModel.live(environment, repositories: repositories))
+        _board = State(initialValue: BoardModel(repository: repositories.boards))
     }
 
     var body: some View {
@@ -66,12 +68,8 @@ struct ContentView: View {
         } else if workspace.selectedID != nil {
             sessionLoading
         } else {
-            empty
+            BoardView(model: board)
         }
-    }
-
-    private func startFirstConversation() {
-        Task { await workspace.newSession() }
     }
 
     @State private var loadingSpinnerVisible = false
@@ -90,38 +88,6 @@ struct ContentView: View {
             try? await Task.sleep(for: .milliseconds(400))
             loadingSpinnerVisible = true
         }
-    }
-
-    private var empty: some View {
-        VStack(spacing: 0) {
-            EmptyHeader()
-            VStack(spacing: 14) {
-                Image(systemName: "bubble.left.and.bubble.right")
-                    .font(.system(size: 26, weight: .light))
-                    .foregroundStyle(Theme.accent)
-                    .frame(width: 68, height: 68)
-                    .background(Theme.raised, in: RoundedRectangle(cornerRadius: 16,
-                                                                   style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Theme.borderStrong, lineWidth: 1))
-                VStack(spacing: 4) {
-                    Text("Nenhuma conversa aberta")
-                        .font(.system(size: 15, weight: .semibold))
-                    Text("Comece uma sessão nova ou escolha uma na barra lateral.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-                Button { startFirstConversation() } label: {
-                    Label("Nova conversa", systemImage: "plus")
-                        .labelStyle(.titleAndIcon)
-                        .pillLabel()
-                }
-                .buttonStyle(.denPrimary)
-                .padding(.top, 4)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .navigationTitle("")
     }
 }
 
