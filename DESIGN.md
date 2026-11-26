@@ -157,6 +157,7 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 - 2026-11-26 — Se a task for excluída durante a janela, o movimento cai. Se um agente a mover nesse meio tempo, o meu movimento ainda vale ao fechar a janela, a partir de onde ela estiver — a minha intenção é a mais recente (#35).
 - 2026-11-26 — A alternativa acessível ao arraste é o menu "Mover para" no card (clique secundário e ações do VoiceOver), que segue o mesmo caminho do arraste. ⌘Z desfaz enquanto a janela está aberta, e o aviso "Desfazer" é anunciado pelo VoiceOver (#35).
 - 2026-11-26 — Fechar o app com a janela aberta conclui o movimento, porque o arraste já expressou a decisão (#35).
+- 2026-11-26 — O aviso de Desfazer fica na parte de baixo do board, numa cápsula branca com texto escuro e "Desfazer" em `action` — pedido do autor, para o aviso se destacar do board escuro durante os 5 segundos (#35).
 
 ## Open questions
 
