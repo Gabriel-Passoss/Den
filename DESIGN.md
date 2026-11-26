@@ -40,7 +40,7 @@ Design system source: `Den/Shared/Theme/Theme.swift`; the Penpot guide mirrors i
 
 No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só para o desenho.
 
-- 42 tokens de cor: superfícies, bordas, texto, accent, estados de diff, alerta e pets.
+- 43 tokens de cor: superfícies, bordas, texto, accent, estados de diff, alerta, sombra e pets.
 - Escalas em pontos: tipografia (`font10` a `font24`), espaçamento (`space2` a `space24`) e raio (`radius4` a `radius16`).
 - Acento índigo (`accent` `#8B93FF`, `action` `#6E78F7`) sobre neutros escuros (`canvas` `#0F1115`).
 - Componentes base: `DenButtonStyle` (primary, secondary, ghost), `PillLabel`, `ChipLabel`, `IconLabel`, `ChipSurface`, `DenMenu`.
@@ -144,6 +144,13 @@ No Penpot, a fonte do sistema (SF Pro) é substituída por Inter. Isso vale só 
 - 2026-11-24 — Toda task tem um ID legível (`TaskKey`), e a identidade interna continua sendo um UUID. Uma task importada herda o ID da origem e o acompanha, com a troca registrada no histórico. Uma task criada no Den recebe o prefixo do projeto, escolhido na criação e com 3 letras do nome como padrão, e o próximo número de um contador que só sobe. Trocar o prefixo vale só para as tasks novas, e sub-tasks não têm ID.
 - 2026-11-24 — A origem é do projeto: um projeto ligado a um app externo não cria tasks no Den, por enquanto — evita IDs repetidos no mesmo board.
 - 2026-11-24 — O Den atual é descartado no redesenho, sem migração, porque não tem usuários ativos.
+- 2026-11-26 — O board ocupa a área principal sempre que nenhuma conversa está aberta, no lugar de "Nenhuma conversa aberta", e um botão Início na barra lateral volta a ele — o board é a visualização principal e o Den não terá conversas livres. A linha Início definitiva é da sidebar nova (#36).
+- 2026-11-26 — Até o seletor de projeto existir (#36), o board mostra o primeiro projeto cadastrado, e sem projeto mostra "Nenhum projeto" sem ação — criar projetos é da #68.
+- 2026-11-26 — Colunas com largura fixa de 280 pt, alinhadas à esquerda e da altura da janela. Cada coluna rola as próprias tasks na vertical e o board rola na horizontal. Com uma etapa, a coluna não se estica — a largura do card não muda com a janela.
+- 2026-11-26 — Coluna sem tasks mostra "Nenhuma task" em `textFaint`, sem "Mostrar mais N": as tasks rolam dentro da coluna — o volume já aparece na contagem do cabeçalho.
+- 2026-11-26 — O board sem etapas explica que a primeira etapa nasce nas configurações do projeto, sem botão até a configuração das etapas existir (#63) — um botão que não leva a nada mentiria.
+- 2026-11-26 — Clicar no NeedsMeCounter seleciona e rola até a próxima task que precisa de mim, na ordem do board, e recomeça depois da última — o contador leva a cada uma delas, não só à primeira.
+- 2026-11-26 — Clicar num card só o seleciona (ou tira a seleção) até a tela da task existir — a seleção já serve ao contador.
 - 2026-11-26 — O movimento manual só vale quando a janela de Desfazer fecha: até lá a task continua na etapa de origem no domínio, com a execução rodando, e só aparece no destino. Desfazer apenas descarta o movimento, que nunca entra no histórico — segue a ordem "Desfazer, encerrar a execução, passagem, disparo". Ver `docs/adr/0002-movimento-vale-quando-o-desfazer-fecha.md` (#35).
 - 2026-11-26 — Há uma janela de Desfazer por vez. Mover outra task conclui na hora o movimento que estava aberto; mover a mesma task de novo mantém a origem e reinicia os 5 segundos, e devolvê-la à origem cancela o movimento — um só "Desfazer" na tela, sem fila de toasts (#35).
 - 2026-11-26 — A janela é [0, 5) segundos: aos 5 segundos exatos o movimento já não pode ser desfeito. O movimento é registrado com o horário do arraste, que é quando a task entrou na etapa e a posição em que o card já estava (#35).

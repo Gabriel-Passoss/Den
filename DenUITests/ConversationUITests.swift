@@ -66,8 +66,11 @@ final class ConversationUITests: XCTestCase {
 
     @MainActor
     private func openComposer(in app: XCUIApplication) -> XCUIElement {
-        require(app.staticTexts["Nenhuma conversa aberta"], in: app)
-        app.buttons["Nova conversa"].click()
+        require(app.staticTexts["Nenhum projeto"], in: app)
+        app.buttons["Nova"].click()
+        let menu = app.popovers.firstMatch.scrollViews["den-menu"]
+        require(menu.buttons["Nova sessão"], in: app)
+        menu.buttons["Nova sessão"].click()
         let composer = app.textViews["Peça uma alteração…"]
         require(composer, in: app)
         composer.click()
@@ -336,7 +339,7 @@ final class ConversationUITests: XCTestCase {
     }
 
     @MainActor
-    func testDeletingASessionAsksFirstAndEmptiesTheWindow() throws {
+    func testDeletingASessionAsksFirstAndGoesBackToTheBoard() throws {
         try claude.on(FakeCLI.userTurn, reply: RecordedSession.claude("hello"))
         try claude.answerTitles(with: "Saudação curta")
         let app = launch()
@@ -346,7 +349,7 @@ final class ConversationUITests: XCTestCase {
         require(confirm, in: app)
         confirm.click()
 
-        require(app.staticTexts["Nenhuma conversa aberta"], in: app)
+        require(app.staticTexts["Nenhum projeto"], in: app)
         XCTAssertFalse(sidebarRow("Saudação curta", in: app).exists)
     }
 }
